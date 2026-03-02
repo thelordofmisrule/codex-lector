@@ -85,8 +85,9 @@ export default function MyLibraryPage() {
             {reading.map(p => {
               const pct = p.total_lines > 0 ? Math.min(100, (p.max_line_reached / p.total_lines * 100)) : 0;
               const isComplete = pct >= 90;
+              const resumeLine = Math.max(1, parseInt(p.max_line_reached, 10) || 1);
               return (
-                <Link key={p.slug} to={`/read/${p.slug}`} style={{
+                <Link key={p.slug} to={{ pathname:`/read/${p.slug}`, search:`?line=${resumeLine}` }} style={{
                   padding:"14px 18px", background:"var(--surface)", borderRadius:8,
                   border:"1px solid var(--border-light)", textDecoration:"none", color:"var(--text)",
                   display:"block", transition:"border-color 0.15s",

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { works as worksApi, annotations as annotsApi, discussions as discApi, bookmarks as bmApi, progress as progApi, layers as layersApi } from "../lib/api";
 import { parsePlayShakespeareXML } from "../lib/textParser";
@@ -208,6 +208,7 @@ function PoetryView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, e
 /* ─── Main ReaderPage ─── */
 export default function ReaderPage() {
   const { slug } = useParams();
+  const location = useLocation();
   const { user } = useAuth();
   const isAdmin = user?.isAdmin;
   const userId = user?.id;
@@ -222,6 +223,7 @@ export default function ReaderPage() {
   const [wordLookup, setWordLookup] = useState(null); // { word, position:{x,y} }
   const [myLayers, setMyLayers] = useState([]);
   const progressRef = useRef({ maxLine:0, total:0, slug:null });
+  const resumeLine = Math.max(0, parseInt(new URLSearchParams(location.search).get("line") || "0", 10) || 0);
 
   const showAnnots = annotMode !== "off";
 
@@ -283,13 +285,24 @@ export default function ReaderPage() {
 
   // Scroll to bookmark on load
   useEffect(() => {
-    if (bookmark && !loading) {
+    if (bookmark && !loading && !resumeLine) {
       setTimeout(() => {
         const el = document.getElementById(bookmark);
         if (el) el.scrollIntoView({ behavior:"smooth", block:"center" });
       }, 300);
     }
-  }, [bookmark, loading]);
+  }, [bookmark, loading, resumeLine]);
+
+  // Resume from explicit line number in URL query (?line=123)
+  useEffect(() => {
+    if (loading || !resumeLine) return;
+    setTimeout(() => {
+      const lines = document.querySelectorAll("[data-lineid]");
+      if (!lines.length) return;
+      const target = lines[Math.min(lines.length - 1, Math.max(0, resumeLine - 1))];
+      if (target) target.scrollIntoView({ behavior:"smooth", block:"center" });
+    }, 250);
+  }, [loading, slug, resumeLine, work?.id]);
 
   const handleSelect = useCallback(() => {
     const sel = window.getSelection();
