@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { words as api } from "../lib/api";
 
-export default function WordLookup({ word, position, onClose }) {
+export default function WordLookup({ word, position, onClose, onAnnotate }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -98,6 +98,18 @@ export default function WordLookup({ word, position, onClose }) {
               </div>
             )}
           </>
+        )}
+
+        {onAnnotate && (
+          <div style={{ marginTop:12, paddingTop:10, borderTop:"1px solid var(--border-light)" }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => onAnnotate()}
+              style={{ width:"100%", color:"var(--text)" }}
+            >
+              Annotate this word
+            </button>
+          </div>
         )}
       </div>
     </>

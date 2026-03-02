@@ -92,10 +92,10 @@ function AnnotTooltip({ pos, onSave, onCancel, myLayers }) {
   const [color, setColor] = useState(0);
   const [layerId, setLayerId] = useState("");
   return (
-    <div style={{
-      position:"fixed", top:pos.y+8, left:Math.max(12,Math.min(pos.x,window.innerWidth-340)),
-      background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:12,
-      boxShadow:"0 8px 24px var(--shadow)", width:320, zIndex:200,
+      <div style={{
+        position:"fixed", top:pos.y+8, left:Math.max(12,Math.min(pos.x,window.innerWidth-340)),
+        background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:12,
+        boxShadow:"0 8px 24px var(--shadow)", width:320, zIndex:200,
     }}>
       <div style={{ fontSize:12, color:"var(--text-light)", marginBottom:6, fontStyle:"italic" }}>"{pos.text.slice(0,60)}{pos.text.length>60?"…":""}"</div>
       <div style={{ display:"flex", gap:4, marginBottom:6, flexWrap:"wrap" }}>
@@ -103,6 +103,7 @@ function AnnotTooltip({ pos, onSave, onCancel, myLayers }) {
           <button key={i} onClick={()=>setColor(i)} className="btn btn-sm" style={{
             fontSize:11, border: i===color ? "2px solid var(--accent)" : "2px solid transparent",
             background: i===color ? "var(--accent-faint)" : "var(--bg)",
+            color: i===color ? "var(--text)" : "var(--text-muted)",
           }}>{t.icon} {t.label}</button>
         ))}
       </div>
@@ -310,18 +311,24 @@ export default function ReaderPage() {
     const text = sel.toString().trim();
     if (text.length < 2) return;
     const rect = sel.getRangeAt(0).getBoundingClientRect();
+    let node = sel.getRangeAt(0).startContainer;
+    while (node && !node.dataset?.lineid) node = node.parentElement;
+    const lineId = node?.dataset?.lineid || "u";
 
     // Single word with no spaces → word lookup (works for everyone)
     if (!text.includes(" ") && text.length < 30) {
-      setWordLookup({ word:text.toLowerCase().replace(/[^a-z']/g,""), position:{ x:rect.left+rect.width/2, y:rect.bottom } });
+      setWordLookup({
+        word:text.toLowerCase().replace(/[^a-z']/g,""),
+        selectedText:text,
+        lineId,
+        position:{ x:rect.left+rect.width/2, y:rect.bottom },
+      });
       return;
     }
 
     // Multi-word selection → annotation (requires sign-in)
     if (!user) return;
-    let node = sel.getRangeAt(0).startContainer;
-    while (node && !node.dataset?.lineid) node = node.parentElement;
-    setTooltip({ x:rect.left+rect.width/2-160, y:rect.bottom, text, lineId:node?.dataset?.lineid||"u" });
+    setTooltip({ x:rect.left+rect.width/2-160, y:rect.bottom, text, lineId });
   }, [user]);
 
   const saveAnnot = async (note, color, layerId) => {
@@ -465,7 +472,22 @@ export default function ReaderPage() {
       }
 
       {tooltip && <AnnotTooltip pos={tooltip} onSave={saveAnnot} onCancel={()=>{setTooltip(null);window.getSelection()?.removeAllRanges();}} myLayers={myLayers} />}
-      {wordLookup && <WordLookup word={wordLookup.word} position={wordLookup.position} onClose={()=>{setWordLookup(null);window.getSelection()?.removeAllRanges();}} />}
+      {wordLookup && (
+        <WordLookup
+          word={wordLookup.word}
+          position={wordLookup.position}
+          onClose={()=>{setWordLookup(null);window.getSelection()?.removeAllRanges();}}
+          onAnnotate={user ? () => {
+            setTooltip({
+              x:wordLookup.position.x - 160,
+              y:wordLookup.position.y,
+              text:wordLookup.selectedText || wordLookup.word,
+              lineId:wordLookup.lineId || "u",
+            });
+            setWordLookup(null);
+          } : undefined}
+        />
+      )}
       <ThreadedComments comments={disc} onPost={postComment} onEdit={editComment} onDelete={deleteComment} label="Discussion" />
     </div>
   );
