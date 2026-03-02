@@ -101,7 +101,7 @@ function parsePlay(root, title) {
     const actTitle = act.querySelector("acttitle");
     result.push({ type: "act", text: actTitle ? txt(actTitle) : `Act ${actNum}` });
 
-    act.querySelectorAll(":scope > scene, :scope > prologue, :scope > epilogue").forEach(scene => {
+    act.querySelectorAll(":scope > scene, :scope > sceneref, :scope > prologue, :scope > epilogue").forEach(scene => {
       const sceneTag = scene.tagName.toLowerCase();
       const sceneNum = scene.getAttribute("num");
       const sceneTitle = scene.querySelector("scenetitle");
