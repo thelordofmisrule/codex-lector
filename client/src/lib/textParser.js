@@ -82,10 +82,11 @@ function escapeHtml(s) {
 
 function renderDramatis(personae) {
   if (!personae?.length) return "";
-  return personae.map((p) => {
-    const desc = p.desc ? ` <span style="color:var(--text-light);font-style:italic">(${escapeHtml(p.desc)})</span>` : "";
-    return `<div style="margin-bottom:4px">${escapeHtml(p.name || "")}${desc}</div>`;
+  const items = personae.map((p) => {
+    const desc = p.desc ? ` <span style="color:var(--text-light);font-size:0.95em">(${escapeHtml(p.desc)})</span>` : "";
+    return `<div style="break-inside:avoid;margin-bottom:8px;line-height:1.55"><span style="color:var(--accent);font-weight:600">${escapeHtml(p.name || "")}</span>${desc}</div>`;
   }).join("");
+  return `<div style="column-width:240px;column-gap:28px;font-family:var(--font-body);font-style:normal">${items}</div>`;
 }
 
 /* ── Parse a play ── */
