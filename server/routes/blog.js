@@ -6,6 +6,7 @@ const db = require("../db");
 const { requireAuth, requireAdmin } = require("../auth");
 const { notifyReply } = require("../notify");
 const { createRateLimit } = require("../rateLimit");
+const { submitIndexNow } = require("../indexNow");
 const r = express.Router();
 const blogCreateLimit = createRateLimit({
   windowMs: 60 * 60 * 1000,
@@ -82,6 +83,7 @@ r.post("/", requireAdmin, blogCreateLimit, (req, res) => {
   const { title, body, headerImage } = req.body;
   if (!title?.trim()||!body?.trim()) return res.status(400).json({ error:"Title and body required." });
   const result = db.prepare("INSERT INTO blog_posts (user_id,title,header_image,body) VALUES (?,?,?,?)").run(req.user.id, title.trim(), (headerImage||"").trim(), body.trim());
+  submitIndexNow([`/blog/${result.lastInsertRowid}`]);
   res.json({ id:result.lastInsertRowid });
 });
 
@@ -89,6 +91,7 @@ r.put("/:id", requireAdmin, (req, res) => {
   const { title, body, headerImage } = req.body;
   db.prepare("UPDATE blog_posts SET title=COALESCE(?,title), header_image=COALESCE(?,header_image), body=COALESCE(?,body), updated_at=datetime('now') WHERE id=?")
     .run(title||null, headerImage ?? null, body||null, req.params.id);
+  submitIndexNow([`/blog/${req.params.id}`]);
   res.json({ ok:true });
 });
 

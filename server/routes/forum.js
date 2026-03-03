@@ -3,6 +3,7 @@ const db = require("../db");
 const { requireAuth } = require("../auth");
 const { notifyReply } = require("../notify");
 const { createRateLimit } = require("../rateLimit");
+const { submitIndexNow } = require("../indexNow");
 const r = express.Router();
 const threadLimit = createRateLimit({
   windowMs: 60 * 60 * 1000,
@@ -106,6 +107,7 @@ r.post("/", requireAuth, threadLimit, (req, res) => {
     const ins = db.prepare("INSERT OR IGNORE INTO forum_thread_tags (thread_id, tag_id) VALUES (?,?)");
     tagIds.forEach(tid => ins.run(threadId, tid));
   }
+  submitIndexNow([`/forum/${threadId}`]);
   res.json({ id: threadId });
 });
 
@@ -122,6 +124,7 @@ r.put("/:id", requireAuth, (req, res) => {
     const ins = db.prepare("INSERT OR IGNORE INTO forum_thread_tags (thread_id, tag_id) VALUES (?,?)");
     tagIds.forEach(tid => ins.run(req.params.id, tid));
   }
+  submitIndexNow([`/forum/${req.params.id}`]);
   res.json({ ok:true });
 });
 

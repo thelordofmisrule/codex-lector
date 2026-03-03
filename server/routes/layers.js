@@ -1,6 +1,7 @@
 const express = require("express");
 const db = require("../db");
 const { requireAuth, optionalAuth } = require("../auth");
+const { submitIndexNow } = require("../indexNow");
 const r = express.Router();
 
 /* List public layers, optionally include user's own */
@@ -76,6 +77,7 @@ r.put("/:id", requireAuth, (req, res) => {
   if (name !== undefined) db.prepare("UPDATE annotation_layers SET name=? WHERE id=?").run(name.trim().slice(0,80), layer.id);
   if (description !== undefined) db.prepare("UPDATE annotation_layers SET description=? WHERE id=?").run(description.trim().slice(0,300), layer.id);
   if (isPublic !== undefined) db.prepare("UPDATE annotation_layers SET is_public=? WHERE id=?").run(isPublic?1:0, layer.id);
+  if (isPublic) submitIndexNow([`/layers/${layer.id}`]);
   res.json({ ok:true });
 });
 
