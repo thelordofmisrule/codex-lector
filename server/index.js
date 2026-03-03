@@ -1,5 +1,6 @@
 // Load environment variables before anything else
 try { require("dotenv").config(); } catch {}
+require("./logger").initLogger();
 
 const express = require("express");
 const cors = require("cors");
@@ -10,6 +11,7 @@ const fs = require("fs");
 const { optionalAuth } = require("./auth");
 const { passport } = require("./passport");
 const db = require("./db");
+const { initBackupScheduler } = require("./backupScheduler");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -189,4 +191,5 @@ app.use((err,req,res,next) => { console.error(err); res.status(500).json({ error
 
 console.log("\n  Codex Lector");
 console.log("  ────────────");
+initBackupScheduler();
 app.listen(PORT, () => console.log(`  → http://localhost:${PORT}\n`));

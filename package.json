@@ -9,6 +9,10 @@
     "build": "cd client && npx vite build",
     "start": "NODE_ENV=production node server/index.js",
     "setup": "node scripts/setup-db.js",
+    "backup:db": "node scripts/backup-db.js",
+    "restore:db": "node scripts/restore-db.js",
+    "deploy:safe": "bash scripts/deploy-safe.sh",
+    "rollback": "bash scripts/rollback-release.sh",
     "import": "node scripts/import-texts.js",
     "build-words": "node scripts/build-word-index.js"
   },
