@@ -12,6 +12,7 @@ export default function AdminReportsPage() {
   const toast = useToast();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showResolved, setShowResolved] = useState(false);
 
   const load = () => {
     if (!user?.isAdmin) return;
@@ -43,6 +44,7 @@ export default function AdminReportsPage() {
       toast?.error(e.message || "Could not resolve report.");
     }
   };
+  const visibleReports = showResolved ? reports : reports.filter(item => item.status === "open");
 
   return (
     <div className="animate-in" style={{ maxWidth:920, margin:"0 auto", padding:"40px 24px 80px" }}>
@@ -57,17 +59,22 @@ export default function AdminReportsPage() {
         <p style={{ color:"var(--text-muted)", fontFamily:"var(--font-fell)", fontStyle:"italic" }}>
           Review flagged annotations, threads, and replies.
         </p>
+        <div style={{ marginTop:10 }}>
+          <button className={`btn btn-sm ${showResolved ? "btn-primary" : "btn-secondary"}`} onClick={() => setShowResolved(v => !v)}>
+            {showResolved ? "Hide Resolved" : "Show Resolved"}
+          </button>
+        </div>
       </div>
 
       {loading && <div style={{ textAlign:"center", padding:30 }}><div className="spinner" /></div>}
 
-      {!loading && reports.length === 0 && (
+      {!loading && visibleReports.length === 0 && (
         <div style={{ padding:28, textAlign:"center", background:"var(--surface)", border:"1px solid var(--border-light)", borderRadius:8, color:"var(--text-light)" }}>
-          No reports right now.
+          {showResolved ? "No reports to show." : "No open reports right now."}
         </div>
       )}
 
-      {!loading && reports.map(item => (
+      {!loading && visibleReports.map(item => (
         <div key={item.id} style={{ padding:16, marginBottom:10, background:"var(--surface)", border:"1px solid var(--border-light)", borderRadius:8 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:6 }}>
             <div style={{ fontSize:14 }}>

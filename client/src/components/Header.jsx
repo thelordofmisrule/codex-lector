@@ -43,7 +43,7 @@ export default function Header() {
     if (!user) return;
     try {
       const d = await notifApi.list();
-      setNotifs(d.notifications || []);
+      setNotifs((d.notifications || []).filter(n => !n.read));
       setUnread(d.unreadCount || 0);
     } catch {}
   }, [user]);
@@ -54,20 +54,26 @@ export default function Header() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const openNotif = async (n) => {
+  const markNotifRead = async (n) => {
     if (!n.read) {
       const prevNotifs = notifs;
       const prevUnread = unread;
       setUnread(u=>Math.max(0,u-1));
-      setNotifs(prev=>prev.map(x=>x.id===n.id?{...x,read:1}:x));
+      setNotifs(prev=>prev.filter(x=>x.id!==n.id));
       try {
         await notifApi.markRead(n.id);
       } catch (e) {
         setNotifs(prevNotifs);
         setUnread(prevUnread);
         toast?.error(e.message || "Could not update notification.");
+        return false;
       }
     }
+    return true;
+  };
+  const openNotif = async (n) => {
+    const ok = await markNotifRead(n);
+    if (!ok) return;
     setShowNotifs(false);
     if (n.link) nav(n.link);
   };
@@ -75,7 +81,7 @@ export default function Header() {
     const prevNotifs = notifs;
     const prevUnread = unread;
     setUnread(0);
-    setNotifs(prev=>prev.map(x=>({...x,read:1})));
+    setNotifs([]);
     try {
       await notifApi.markAllRead();
     } catch (e) {
@@ -156,12 +162,24 @@ export default function Header() {
                     {notifs.length === 0 ? (
                       <div style={{ padding:20, textAlign:"center", color:"var(--text-light)", fontStyle:"italic", fontSize:14 }}>No notifications yet.</div>
                     ) : notifs.slice(0,20).map(n => (
-                      <div key={n.id} onClick={()=>openNotif(n)} style={{
-                        padding:"10px 14px", cursor:"pointer", borderBottom:"1px solid var(--border-light)",
-                        background: n.read ? "transparent" : "var(--accent-faint)",
+                      <div key={n.id} style={{
+                        padding:"10px 14px", borderBottom:"1px solid var(--border-light)",
+                        background:"var(--accent-faint)",
                         transition:"background 0.1s",
-                      }} onMouseEnter={e=>e.currentTarget.style.background="var(--gold-faint)"} onMouseLeave={e=>e.currentTarget.style.background=n.read?"transparent":"var(--accent-faint)"}>
-                        <div style={{ fontSize:14, lineHeight:1.5, color:"var(--text)" }}>{n.message}</div>
+                      }} onMouseEnter={e=>e.currentTarget.style.background="var(--gold-faint)"} onMouseLeave={e=>e.currentTarget.style.background="var(--accent-faint)"}>
+                        <div style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
+                          <button className="btn btn-ghost btn-sm" onClick={()=>openNotif(n)} style={{ flex:1, textAlign:"left", padding:0, fontSize:14, lineHeight:1.5, color:"var(--text)" }}>
+                            {n.message}
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={(e)=>{ e.stopPropagation(); markNotifRead(n); }}
+                            style={{ fontSize:11, color:"var(--text-light)", whiteSpace:"nowrap", padding:"2px 4px" }}
+                            title="Mark as read"
+                          >
+                            Mark read
+                          </button>
+                        </div>
                         <div style={{ fontSize:11, color:"var(--text-light)", marginTop:2 }}>{new Date(n.created_at).toLocaleDateString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div>
                       </div>
                     ))}
