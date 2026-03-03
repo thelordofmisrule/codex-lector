@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
-import { works as worksApi, annotations as annotsApi, discussions as discApi, bookmarks as bmApi, progress as progApi, layers as layersApi } from "../lib/api";
+import { works as worksApi, annotations as annotsApi, discussions as discApi, bookmarks as bmApi, progress as progApi, layers as layersApi, analytics as analyticsApi } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import { parsePlayShakespeareXML } from "../lib/textParser";
@@ -246,7 +246,9 @@ export default function ReaderPage() {
   const [bookmark, setBookmark] = useState(null);
   const [wordLookup, setWordLookup] = useState(null); // { word, position:{x,y} }
   const [myLayers, setMyLayers] = useState([]);
+  const [showReaderHint, setShowReaderHint] = useState(() => localStorage.getItem("codex-reader-hint-dismissed") !== "true");
   const progressRef = useRef({ maxLine:0, total:0, slug:null });
+  const trackedSlugRef = useRef("");
   const resumeLine = Math.max(0, parseInt(new URLSearchParams(location.search).get("line") || "0", 10) || 0);
   const copyPageLink = async () => {
     try {
@@ -270,6 +272,21 @@ export default function ReaderPage() {
   useEffect(() => {
     if (!user && annotMode === "mine") setAnnotMode("all");
   }, [user, annotMode]);
+
+  useEffect(() => {
+    if (!work?.id || trackedSlugRef.current === slug) return;
+    trackedSlugRef.current = slug;
+    let visitorId = localStorage.getItem("codex-visitor-id");
+    if (!visitorId) {
+      visitorId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `visitor-${Date.now()}`;
+      localStorage.setItem("codex-visitor-id", visitorId);
+    }
+    analyticsApi.event("work_view", {
+      visitorId,
+      path: window.location.pathname,
+      meta: { workSlug: slug },
+    }).catch(() => {});
+  }, [work?.id, slug]);
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -504,10 +521,31 @@ export default function ReaderPage() {
 
   const modeLabels = { all:"All", mine:"Mine", off:"Off" };
   const modeOrder = user ? ["all","mine","off"] : ["all","off"];
+  const dismissReaderHint = () => {
+    localStorage.setItem("codex-reader-hint-dismissed", "true");
+    setShowReaderHint(false);
+  };
 
   return (
     <div className="animate-in" onMouseUp={handleSelect}
       style={{ maxWidth: showAnnots && annots.length > 0 ? 1020 : 740, margin:"0 auto", padding:"40px 24px 100px", fontSize, lineHeight:1.85, transition:"max-width 0.3s" }}>
+
+      {showReaderHint && (
+        <div style={{ marginBottom:18, padding:"14px 16px", background:"var(--surface)", border:"1px solid var(--border-light)", borderRadius:10 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:8 }}>
+            <div style={{ fontSize:12, fontFamily:"var(--font-display)", letterSpacing:2, color:"var(--accent)", textTransform:"uppercase" }}>
+              First Time Here?
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={dismissReaderHint} style={{ color:"var(--text-light)" }}>Dismiss</button>
+          </div>
+          <div style={{ display:"grid", gap:4, fontSize:14, color:"var(--text-muted)", lineHeight:1.6 }}>
+            <div>Select a phrase to annotate it.</div>
+            <div>Click a single word for lookup, then choose to annotate if you want.</div>
+            <div>Press <strong>b</strong> to bookmark your place.</div>
+            <div>Switch annotation layers or open the discussion below the text.</div>
+          </div>
+        </div>
+      )}
 
       {/* Sticky bottom toolbar */}
       <div style={{
@@ -579,7 +617,7 @@ export default function ReaderPage() {
       {/* Title */}
       <h1 style={{ textAlign:"center", fontFamily:"var(--font-display)", fontSize:"1.8em", fontWeight:400, letterSpacing:3, color:"var(--accent)", marginBottom:4 }}>{parsed.title || work.title}</h1>
       <div style={{ textAlign:"center", fontFamily:"var(--font-fell)", fontStyle:"italic", color:"var(--text-light)", fontSize:15, marginBottom:8 }}>William Shakespeare</div>
-      <div style={{ textAlign:"center", color:"var(--border)", fontSize:14, letterSpacing:8, marginBottom:28 }}>❧ ❦ ❧</div>
+      <div style={{ textAlign:"center", color:"var(--border)", fontSize:14, letterSpacing:8, marginBottom:28 }}>☙ ❦ ❧</div>
 
       {/* Content */}
       {parsed.type === "poetry"

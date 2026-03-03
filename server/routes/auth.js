@@ -4,11 +4,25 @@ const pp = require("passport");
 const db = require("../db");
 const { createToken, requireAuth, requireAdmin } = require("../auth");
 const { enabledProviders } = require("../passport");
+const { createRateLimit } = require("../rateLimit");
+const { logEvent } = require("../analytics");
 const r = express.Router();
 
 const COOKIE = { httpOnly:true, secure:process.env.NODE_ENV==="production", sameSite:"lax", maxAge:30*86400000 };
 const AVATAR_COLORS = ["#7A1E2E","#2E5A3C","#1E3A5F","#5C3D6E","#8B6914","#6B3A2E","#2E6B6B","#4A4A6A"];
 const FRONTEND = process.env.SITE_URL || process.env.BASE_URL || "http://localhost:5173";
+const loginLimit = createRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 12,
+  message: "Too many login attempts. Please wait a few minutes and try again.",
+  keyFn: (req) => `auth:login:${req.ip}`,
+});
+const accountChangeLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: "Too many account changes. Please wait before trying again.",
+  keyFn: (req) => `auth:acct:${req.ip}:${req.user?.id || "anon"}`,
+});
 
 /* ── Which providers are available? (used by frontend to show buttons) ── */
 r.get("/providers", (req, res) => {
@@ -16,12 +30,13 @@ r.get("/providers", (req, res) => {
 });
 
 /* ── Admin local login (password-based — admin only) ── */
-r.post("/login", (req, res) => {
+r.post("/login", loginLimit, (req, res) => {
   const { username, password } = req.body;
   const u = db.prepare("SELECT * FROM users WHERE username=?").get(username?.toLowerCase());
   if (!u || !u.password_hash || !bcrypt.compareSync(password || "", u.password_hash))
     return res.status(401).json({ error: "Invalid credentials." });
   res.cookie("token", createToken(u), COOKIE);
+  logEvent({ eventType:"login", userId:u.id, path:"/auth/login" });
   res.json({ id:u.id, username:u.username, displayName:u.display_name, isAdmin:!!u.is_admin });
 });
 
@@ -63,7 +78,7 @@ r.get("/me", requireAuth, (req, res) => {
 r.post("/logout", (req, res) => { res.clearCookie("token"); res.json({ ok:true }); });
 
 /* ── Onboarding: new OAuth users choose username + display name ── */
-r.post("/onboard", requireAuth, (req, res) => {
+r.post("/onboard", requireAuth, accountChangeLimit, (req, res) => {
   const { username, displayName } = req.body;
   if (!username?.trim() || !displayName?.trim()) return res.status(400).json({ error:"Username and display name required." });
   const clean = username.trim().toLowerCase();
@@ -76,11 +91,12 @@ r.post("/onboard", requireAuth, (req, res) => {
   db.prepare("UPDATE users SET username=?, display_name=?, needs_onboarding=0 WHERE id=?")
     .run(clean, displayName.trim().slice(0,50), req.user.id);
   const u = db.prepare("SELECT id,username,display_name,is_admin,bio,avatar_color,oauth_provider,oauth_avatar,needs_onboarding FROM users WHERE id=?").get(req.user.id);
+  logEvent({ eventType:"account_created", userId:req.user.id, path:"/auth/onboard" });
   res.json({ id:u.id, username:u.username, displayName:u.display_name, isAdmin:!!u.is_admin, needsOnboarding:false });
 });
 
 /* ── Change username (any user, once set up) ── */
-r.post("/change-username", requireAuth, (req, res) => {
+r.post("/change-username", requireAuth, accountChangeLimit, (req, res) => {
   const { username } = req.body;
   if (!username?.trim()) return res.status(400).json({ error:"Username required." });
   const clean = username.trim().toLowerCase();
@@ -94,7 +110,7 @@ r.post("/change-username", requireAuth, (req, res) => {
 });
 
 /* ── Change password (only for users who have a password, i.e. admin) ── */
-r.post("/change-password", requireAuth, (req, res) => {
+r.post("/change-password", requireAuth, accountChangeLimit, (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword) return res.status(400).json({ error: "Both fields required." });
   if (newPassword.length < 6) return res.status(400).json({ error: "New password: 6+ chars." });

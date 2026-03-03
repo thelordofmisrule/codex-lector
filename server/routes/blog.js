@@ -5,7 +5,20 @@ const crypto = require("crypto");
 const db = require("../db");
 const { requireAuth, requireAdmin } = require("../auth");
 const { notifyReply } = require("../notify");
+const { createRateLimit } = require("../rateLimit");
 const r = express.Router();
+const blogCreateLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 8,
+  message: "Too many blog posts. Please wait before publishing another.",
+  keyFn: (req) => `blog:create:${req.ip}:${req.user?.id || "anon"}`,
+});
+const blogReplyLimit = createRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 25,
+  message: "Too many responses. Please wait before posting again.",
+  keyFn: (req) => `blog:reply:${req.ip}:${req.user?.id || "anon"}`,
+});
 
 r.get("/", (req, res) => {
   const posts = db.prepare(`
@@ -65,7 +78,7 @@ r.post("/upload-image", requireAdmin, (req, res) => {
   res.json({ url:`/media/blog/${name}` });
 });
 
-r.post("/", requireAdmin, (req, res) => {
+r.post("/", requireAdmin, blogCreateLimit, (req, res) => {
   const { title, body, headerImage } = req.body;
   if (!title?.trim()||!body?.trim()) return res.status(400).json({ error:"Title and body required." });
   const result = db.prepare("INSERT INTO blog_posts (user_id,title,header_image,body) VALUES (?,?,?,?)").run(req.user.id, title.trim(), (headerImage||"").trim(), body.trim());
@@ -79,7 +92,7 @@ r.put("/:id", requireAdmin, (req, res) => {
   res.json({ ok:true });
 });
 
-r.post("/:id/reply", requireAuth, (req, res) => {
+r.post("/:id/reply", requireAuth, blogReplyLimit, (req, res) => {
   const { body, parentId } = req.body;
   if (!body?.trim()) return res.status(400).json({ error:"Body required." });
   const result = db.prepare("INSERT INTO blog_replies (post_id,user_id,parent_id,body) VALUES (?,?,?,?)")

@@ -17,6 +17,9 @@ import LayersPage from "./pages/LayersPage";
 import LayerDetailPage from "./pages/LayerDetailPage";
 import AnnotationDetailPage from "./pages/AnnotationDetailPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
+import AdminReportsPage from "./pages/AdminReportsPage";
+import AdminAnalyticsPage from "./pages/AdminAnalyticsPage";
+import HowToPage from "./pages/HowToPage";
 
 export default function App() {
   const { user, refreshUser } = useAuth();
@@ -44,6 +47,9 @@ export default function App() {
           <Route path="/layers/:id" element={<LayerDetailPage />} />
           <Route path="/annotation/:id" element={<AnnotationDetailPage />} />
           <Route path="/admin-login" element={<AdminLoginPage />} />
+          <Route path="/admin-reports" element={<AdminReportsPage />} />
+          <Route path="/admin-analytics" element={<AdminAnalyticsPage />} />
+          <Route path="/how-to" element={<HowToPage />} />
         </Routes>
       </main>
       <footer style={{ textAlign:"center", padding:"24px", borderTop:"1px solid var(--border-light)", color:"var(--text-light)", fontSize:13, fontFamily:"var(--font-fell)", fontStyle:"italic" }}>

@@ -1,7 +1,15 @@
 const express = require("express");
 const db = require("../db");
 const { requireAuth, optionalAuth } = require("../auth");
+const { createRateLimit } = require("../rateLimit");
+const { logEvent } = require("../analytics");
 const r = express.Router();
+const annotationLimit = createRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  message: "Too many annotations. Please pause before adding more.",
+  keyFn: (req) => `annotation:${req.ip}:${req.user?.id || "anon"}`,
+});
 
 /* Get all of current user's annotations across all works — MUST be before /:workSlug */
 r.get("/my/all", requireAuth, (req, res) => {
@@ -55,14 +63,16 @@ r.get("/:workSlug", optionalAuth, (req, res) => {
 });
 
 /* Create annotation — any signed-in user. Admin creates global. */
-r.post("/", requireAuth, (req, res) => {
+r.post("/", requireAuth, annotationLimit, (req, res) => {
   const { workId, lineId, note, color, selectedText } = req.body;
   if (!workId || !lineId || !note) return res.status(400).json({ error: "workId, lineId, note required." });
   const isGlobal = req.user.isAdmin ? 1 : 0;
   try {
+    const priorCount = db.prepare("SELECT COUNT(*) AS n FROM annotations WHERE user_id=?").get(req.user.id)?.n || 0;
     const result = db.prepare(
       "INSERT INTO annotations (work_id, user_id, line_id, note, color, selected_text, is_global) VALUES (?,?,?,?,?,?,?)"
     ).run(workId, req.user.id, lineId, note, color || 0, selectedText || "", isGlobal);
+    if (priorCount === 0) logEvent({ eventType:"first_annotation", userId:req.user.id, path:"/annotations" });
     res.json(db.prepare("SELECT a.*, u.display_name as author_name, u.is_admin as author_is_admin FROM annotations a JOIN users u ON a.user_id=u.id WHERE a.id=?").get(result.lastInsertRowid));
   } catch (e) {
     console.error("Annotation create error:", e);

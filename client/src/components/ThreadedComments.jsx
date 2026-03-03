@@ -2,12 +2,13 @@ import { useState } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
+import ReportButton from "./ReportButton";
 
 function fmt(iso) {
   return new Date(iso).toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" });
 }
 
-function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed, draftKeyBase }) {
+function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed, draftKeyBase, reportType, reportLabel }) {
   const { user } = useAuth();
   const { confirm } = useConfirm();
   const toast = useToast();
@@ -84,6 +85,7 @@ function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed, draftK
         </div>
         <div style={{ display:"flex", gap:4 }}>
           {user && <button className="btn btn-ghost btn-sm" onClick={()=>{setReplying(!replying);setEditing(false);}}>Reply</button>}
+          {user && reportType && user.id !== c.userId && <ReportButton targetType={reportType} targetId={c.id} label={reportLabel || "Report"} />}
           {canModify && <button className="btn btn-ghost btn-sm" onClick={()=>{setEditing(!editing);setReplying(false);setEditBodyDraft(editDraftKey ? (localStorage.getItem(editDraftKey) || c.body) : c.body);}}>Edit</button>}
           {canModify && onDelete && <button className="btn btn-ghost btn-sm" style={{color:"var(--danger)"}} onClick={handleDelete}>✕</button>}
         </div>
@@ -116,13 +118,13 @@ function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed, draftK
       )}
 
       {!collapsed && c.children?.map(child => (
-        <Comment key={child.id} c={child} depth={depth+1} onReply={onReply} onEdit={onEdit} onDelete={onDelete} defaultCollapsed={depth >= 2} draftKeyBase={draftKeyBase} />
+        <Comment key={child.id} c={child} depth={depth+1} onReply={onReply} onEdit={onEdit} onDelete={onDelete} defaultCollapsed={depth >= 2} draftKeyBase={draftKeyBase} reportType={reportType} reportLabel={reportLabel} />
       ))}
     </div>
   );
 }
 
-export default function ThreadedComments({ comments, onPost, onEdit, onDelete, label="Discussion", draftKey="" }) {
+export default function ThreadedComments({ comments, onPost, onEdit, onDelete, label="Discussion", draftKey="", reportType="", reportLabel="" }) {
   const { user } = useAuth();
   const toast = useToast();
   const [body, setBody] = useState(() => draftKey ? (localStorage.getItem(`${draftKey}:top`) || "") : "");
@@ -168,7 +170,7 @@ export default function ThreadedComments({ comments, onPost, onEdit, onDelete, l
       )}
 
       {roots.length === 0 && <p style={{ color:"var(--text-light)", fontStyle:"italic", fontFamily:"var(--font-fell)" }}>No comments yet. Be the first to share your thoughts.</p>}
-      {roots.map(c => <Comment key={c.id} c={c} depth={0} onReply={handleReply} onEdit={onEdit} onDelete={onDelete} defaultCollapsed={false} draftKeyBase={draftKey} />)}
+      {roots.map(c => <Comment key={c.id} c={c} depth={0} onReply={handleReply} onEdit={onEdit} onDelete={onDelete} defaultCollapsed={false} draftKeyBase={draftKey} reportType={reportType} reportLabel={reportLabel} />)}
     </div>
   );
 }

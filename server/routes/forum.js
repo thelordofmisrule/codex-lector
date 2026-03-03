@@ -2,7 +2,20 @@ const express = require("express");
 const db = require("../db");
 const { requireAuth } = require("../auth");
 const { notifyReply } = require("../notify");
+const { createRateLimit } = require("../rateLimit");
 const r = express.Router();
+const threadLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: "Too many new threads. Please wait before posting another.",
+  keyFn: (req) => `forum:thread:${req.ip}:${req.user?.id || "anon"}`,
+});
+const replyLimit = createRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 35,
+  message: "Too many replies. Please wait a bit before posting again.",
+  keyFn: (req) => `forum:reply:${req.ip}:${req.user?.id || "anon"}`,
+});
 
 // Get all tags
 r.get("/tags", (req, res) => {
@@ -84,7 +97,7 @@ r.get("/:id", (req, res) => {
 });
 
 // Create thread (with tags)
-r.post("/", requireAuth, (req, res) => {
+r.post("/", requireAuth, threadLimit, (req, res) => {
   const { title, body, tagIds } = req.body;
   if (!title?.trim()||!body?.trim()) return res.status(400).json({ error:"Title and body required." });
   const result = db.prepare("INSERT INTO forum_threads (user_id,title,body) VALUES (?,?,?)").run(req.user.id, title.trim(), body.trim());
@@ -113,7 +126,7 @@ r.put("/:id", requireAuth, (req, res) => {
 });
 
 // Reply to thread
-r.post("/:id/reply", requireAuth, (req, res) => {
+r.post("/:id/reply", requireAuth, replyLimit, (req, res) => {
   const { body, parentId } = req.body;
   if (!body?.trim()) return res.status(400).json({ error:"Body required." });
   // Also bump thread updated_at

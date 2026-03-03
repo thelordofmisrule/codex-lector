@@ -24,6 +24,7 @@ export default function Header() {
 
   const links = [
     { to:"/", label:"Works" },
+    { to:"/how-to", label:"How To" },
     { to:"/layers", label:"Layers" },
     { to:"/forum", label:"Forum" },
     { to:"/blog", label:"Blog" },
@@ -207,6 +208,12 @@ export default function Header() {
                     <button className="btn btn-ghost" onClick={()=>{nav("/my-bookmarks");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>🔖 My Bookmarks</button>
                     <button className="btn btn-ghost" onClick={()=>{nav("/my-library");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>📊 My Library</button>
                     <button className="btn btn-ghost" onClick={()=>{nav("/layers");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>📚 Annotation Layers</button>
+                    {user.isAdmin && (
+                      <>
+                        <button className="btn btn-ghost" onClick={()=>{nav("/admin-analytics");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>📈 Admin Analytics</button>
+                        <button className="btn btn-ghost" onClick={()=>{nav("/admin-reports");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>🚩 Moderation Reports</button>
+                      </>
+                    )}
                     {!user.oauthProvider && (
                       <button className="btn btn-ghost" onClick={()=>setChangePw(!changePw)} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>🔑 Change Password</button>
                     )}

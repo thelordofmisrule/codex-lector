@@ -143,7 +143,7 @@ export default function BlogPostPage() {
               </>
             )}
           </div>
-          <div style={{ textAlign:"center", color:"var(--border)", fontSize:14, letterSpacing:8, margin:"20px 0 28px" }}>❧ ❦ ❧</div>
+          <div style={{ textAlign:"center", color:"var(--border)", fontSize:14, letterSpacing:8, margin:"20px 0 28px" }}>☙ ❦ ❧</div>
           {post.headerImage && <img src={post.headerImage} alt="" style={{ width:"100%", maxHeight:340, objectFit:"cover", borderRadius:10, border:"1px solid var(--border-light)", marginBottom:24 }} />}
           <div style={{ fontSize:18, lineHeight:1.9 }}>
             <RichText text={post.body} />
@@ -151,7 +151,7 @@ export default function BlogPostPage() {
         </>
       )}
 
-      <ThreadedComments comments={replies} onPost={postReply} onEdit={editReply} onDelete={deleteReply} label="Responses" draftKey={`blog:${id}:responses`} />
+      <ThreadedComments comments={replies} onPost={postReply} onEdit={editReply} onDelete={deleteReply} label="Responses" draftKey={`blog:${id}:responses`} reportType="blog_reply" reportLabel="Report" />
     </div>
   );
 }

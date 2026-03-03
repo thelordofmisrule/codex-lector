@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { annotationDetail as api } from "../lib/api";
 import ThreadedComments from "../components/ThreadedComments";
+import ReportButton from "../components/ReportButton";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 
@@ -17,7 +18,6 @@ function fmt(iso) { try { return new Date(iso).toLocaleDateString("en-GB",{day:"
 
 export default function AnnotationDetailPage() {
   const { id } = useParams();
-  const nav = useNavigate();
   const { user } = useAuth();
   const { confirm } = useConfirm();
   const toast = useToast();
@@ -144,6 +144,7 @@ export default function AnnotationDetailPage() {
                 by <strong style={{color:"var(--accent)"}}>{ann.authorName}</strong>
               </Link>
             )}
+            {user && user.id !== ann.user_id && <ReportButton targetType="annotation" targetId={ann.id} />}
             <button className="btn btn-sm btn-ghost" onClick={copyPageLink} style={{ fontSize:11, color:"var(--text-light)" }}>
               Copy Link
             </button>

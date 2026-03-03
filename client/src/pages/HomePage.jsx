@@ -33,8 +33,12 @@ export default function HomePage() {
           Annotated and presented for the studious reader.<br/>
           <span style={{ fontSize:14, color:"var(--text-light)" }}>Texts from PlayShakespeare.com · GFDL Licensed</span>
         </p>
+        <div style={{ display:"flex", justifyContent:"center", gap:10, marginTop:18, flexWrap:"wrap" }}>
+          <button className="btn btn-primary" onClick={() => nav("/how-to")}>How It Works</button>
+          <button className="btn btn-secondary" onClick={() => nav("/layers")}>Featured Layers</button>
+        </div>
         <div style={{ margin:"24px auto 0", display:"flex", justifyContent:"center", gap:8, color:"var(--border)" }}>
-          <span>❧</span><span style={{color:"var(--gold)"}}>❦</span><span>❧</span>
+          <span>☙</span><span style={{color:"var(--gold)"}}>❦</span><span>❧</span>
         </div>
       </div>
 

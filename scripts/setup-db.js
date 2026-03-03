@@ -202,6 +202,29 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME
   );
+
+  CREATE TABLE IF NOT EXISTS content_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    target_type TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    details TEXT DEFAULT '',
+    status TEXT DEFAULT 'open',
+    resolved_by INTEGER REFERENCES users(id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    resolved_at DATETIME
+  );
+
+  CREATE TABLE IF NOT EXISTS analytics_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type TEXT NOT NULL,
+    user_id INTEGER REFERENCES users(id),
+    visitor_id TEXT,
+    path TEXT DEFAULT '',
+    meta_json TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Migrations for existing databases
@@ -258,6 +281,27 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS word_index (
   PRIMARY KEY (word, work_id)
 )`); } catch {}
 try { db.exec("ALTER TABLE blog_posts ADD COLUMN header_image TEXT DEFAULT ''"); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS content_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  details TEXT DEFAULT '',
+  status TEXT DEFAULT 'open',
+  resolved_by INTEGER REFERENCES users(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  resolved_at DATETIME
+)`); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS analytics_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_type TEXT NOT NULL,
+  user_id INTEGER REFERENCES users(id),
+  visitor_id TEXT,
+  path TEXT DEFAULT '',
+  meta_json TEXT DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`); } catch {}
 
 // Seed forum tags
 const tags = [

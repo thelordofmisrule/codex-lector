@@ -57,6 +57,8 @@ app.use("/api/layers", require("./routes/layers"));
 app.use("/api/progress", require("./routes/progress"));
 app.use("/api/words", require("./routes/words"));
 app.use("/api/notifications", require("./routes/notifications"));
+app.use("/api/reports", require("./routes/reports"));
+app.use("/api/analytics", require("./routes/analytics"));
 app.get("/api/health", (req,res) => res.json({ status:"ok" }));
 app.use("/media", express.static(path.join(__dirname, "..", "data", "media")));
 

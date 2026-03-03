@@ -2,7 +2,20 @@ const express = require("express");
 const db = require("../db");
 const { requireAuth, requireAdmin, optionalAuth } = require("../auth");
 const { notifyAdmins, notifyReply } = require("../notify");
+const { createRateLimit } = require("../rateLimit");
 const r = express.Router();
+const commentLimit = createRateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 25,
+  message: "Too many comments. Please wait before posting again.",
+  keyFn: (req) => `annotation:comment:${req.ip}:${req.user?.id || "anon"}`,
+});
+const suggestionLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 12,
+  message: "Too many suggestions. Please wait before submitting another.",
+  keyFn: (req) => `annotation:suggest:${req.ip}:${req.user?.id || "anon"}`,
+});
 
 /* ── Get annotation detail with comments + suggestions ── */
 r.get("/:id", optionalAuth, (req, res) => {
@@ -51,7 +64,7 @@ r.get("/:id", optionalAuth, (req, res) => {
 });
 
 /* ── Comments CRUD ── */
-r.post("/:id/comments", requireAuth, (req, res) => {
+r.post("/:id/comments", requireAuth, commentLimit, (req, res) => {
   const ann = db.prepare("SELECT id FROM annotations WHERE id=?").get(req.params.id);
   if (!ann) return res.status(404).json({ error:"Annotation not found." });
   const { body, parentId } = req.body;
@@ -83,7 +96,7 @@ r.delete("/comments/:cid", requireAuth, (req, res) => {
 });
 
 /* ── Suggestions: propose, accept, reject ── */
-r.post("/:id/suggestions", requireAuth, (req, res) => {
+r.post("/:id/suggestions", requireAuth, suggestionLimit, (req, res) => {
   const ann = db.prepare("SELECT id FROM annotations WHERE id=?").get(req.params.id);
   if (!ann) return res.status(404).json({ error:"Annotation not found." });
   const { suggestedNote, suggestedColor, reason } = req.body;

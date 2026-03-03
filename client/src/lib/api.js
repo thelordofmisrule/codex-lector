@@ -75,6 +75,15 @@ export const blog = {
   deleteReply:id=>req(`/blog/reply/${id}`,{method:"DELETE"}),
   uploadImage:(fileName,mimeType,dataUrl)=>req("/blog/upload-image",{method:"POST",body:JSON.stringify({fileName,mimeType,dataUrl})}),
 };
+export const reports = {
+  create:(targetType,targetId,reason,details)=>req("/reports",{method:"POST",body:JSON.stringify({targetType,targetId,reason,details})}),
+  list:()=>req("/reports"),
+  resolve:id=>req(`/reports/${id}/resolve`,{method:"POST"}),
+};
+export const analytics = {
+  event:(eventType, payload={})=>req("/analytics/event",{method:"POST",body:JSON.stringify({ eventType, ...payload })}),
+  summary:()=>req("/analytics/summary"),
+};
 export const notifications = {
   list:()=>req("/notifications"),
   markRead:id=>req(`/notifications/${id}/read`,{method:"POST"}),

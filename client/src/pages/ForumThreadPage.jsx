@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { forum as api } from "../lib/api";
 import ThreadedComments from "../components/ThreadedComments";
+import ReportButton from "../components/ReportButton";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 
@@ -111,6 +112,7 @@ export default function ForumThreadPage() {
             <strong style={{ color:thread.isAdmin?"var(--gold)":"var(--accent)" }}>{thread.displayName}</strong>
             {thread.isAdmin && <span className="admin-badge">Author</span>}
             <span style={{ marginLeft:8 }}>{fmt(thread.createdAt)}</span>
+            {user && user.id !== thread.userId && <span style={{ marginLeft:10, display:"inline-flex", verticalAlign:"middle" }}><ReportButton targetType="forum_thread" targetId={thread.id} /></span>}
             {canModify && (
               <>
                 <button className="btn btn-ghost btn-sm" style={{marginLeft:12}} onClick={startEdit}>Edit</button>
@@ -129,7 +131,7 @@ export default function ForumThreadPage() {
         </>
       )}
 
-      <ThreadedComments comments={replies} onPost={postReply} onEdit={editReply} onDelete={deleteReply} label="Replies" draftKey={`forum:${id}:replies`} />
+      <ThreadedComments comments={replies} onPost={postReply} onEdit={editReply} onDelete={deleteReply} label="Replies" draftKey={`forum:${id}:replies`} reportType="forum_reply" />
     </div>
   );
 }

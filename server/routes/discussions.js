@@ -1,7 +1,14 @@
 const express = require("express");
 const db = require("../db");
 const { requireAuth } = require("../auth");
+const { createRateLimit } = require("../rateLimit");
 const r = express.Router();
+const discussionLimit = createRateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 25,
+  message: "Too many discussion replies. Please wait a moment before posting again.",
+  keyFn: (req) => `discussion:${req.ip}:${req.user?.id || "anon"}`,
+});
 
 r.get("/:workSlug", (req, res) => {
   const rows = db.prepare(`
@@ -15,7 +22,7 @@ r.get("/:workSlug", (req, res) => {
   })));
 });
 
-r.post("/:workSlug", requireAuth, (req, res) => {
+r.post("/:workSlug", requireAuth, discussionLimit, (req, res) => {
   const { body, parentId } = req.body;
   if (!body?.trim()) return res.status(400).json({ error:"Body required." });
   const result = db.prepare("INSERT INTO discussions (work_slug,user_id,parent_id,body) VALUES (?,?,?,?)")
