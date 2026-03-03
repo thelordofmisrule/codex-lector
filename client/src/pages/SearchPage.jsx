@@ -62,7 +62,7 @@ export default function SearchPage() {
 
       {results?.map(r => (
         <div key={r.slug} style={{ background:"var(--surface)", border:"1px solid var(--border-light)", borderRadius:8, padding:"16px 20px", marginBottom:12 }}>
-          <button className="btn btn-ghost" onClick={()=>nav(`/read/${r.slug}`)}
+          <button className="btn btn-ghost" onClick={()=>nav(`/read/${r.slug}${r.matches[0]?.lineNumber ? `?line=${r.matches[0].lineNumber}` : ""}`)}
             style={{ fontFamily:"var(--font-display)", fontSize:17, fontWeight:500, color:"var(--accent)", padding:0, marginBottom:8 }}>
             {r.title}
           </button>
@@ -71,17 +71,37 @@ export default function SearchPage() {
             // Highlight the query in the snippet
             const idx = m.snippet.toLowerCase().indexOf(query.toLowerCase());
             return (
-              <div key={i} style={{ fontSize:14, lineHeight:1.6, color:"var(--text-muted)", padding:"4px 0", borderTop: i>0?"1px solid var(--border-light)":"none" }}>
-                {idx >= 0 ? (
-                  <>
-                    {m.snippet.slice(0, idx)}
-                    <mark style={{ background:"var(--gold-faint)", color:"var(--gold)", fontWeight:500, padding:"1px 2px", borderRadius:2 }}>
-                      {m.snippet.slice(idx, idx + query.length)}
-                    </mark>
-                    {m.snippet.slice(idx + query.length)}
-                  </>
-                ) : m.snippet}
-              </div>
+              <button
+                key={i}
+                className="btn btn-ghost"
+                onClick={() => nav(`/read/${r.slug}${m.lineNumber ? `?line=${m.lineNumber}` : ""}`)}
+                style={{
+                  display:"block",
+                  width:"100%",
+                  textAlign:"left",
+                  fontSize:14,
+                  lineHeight:1.6,
+                  color:"var(--text-muted)",
+                  padding:"8px 0",
+                  borderTop: i>0?"1px solid var(--border-light)":"none",
+                  borderRadius:0,
+                }}
+              >
+                <div style={{ fontSize:11, color:"var(--text-light)", marginBottom:2, fontFamily:"var(--font-display)", letterSpacing:1 }}>
+                  Jump to line {m.lineNumber}
+                </div>
+                <div>
+                  {idx >= 0 ? (
+                    <>
+                      {m.snippet.slice(0, idx)}
+                      <mark style={{ background:"var(--gold-faint)", color:"var(--gold)", fontWeight:500, padding:"1px 2px", borderRadius:2 }}>
+                        {m.snippet.slice(idx, idx + query.length)}
+                      </mark>
+                      {m.snippet.slice(idx + query.length)}
+                    </>
+                  ) : m.snippet}
+                </div>
+              </button>
             );
           })}
         </div>
