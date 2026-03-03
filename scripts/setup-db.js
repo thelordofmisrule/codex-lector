@@ -308,7 +308,7 @@ const tags = [
   ["Tragedies","#9B2335"],["Comedies","#2E7D32"],["Histories","#1565C0"],
   ["Sonnets & Poetry","#6A1B9A"],["Language & Rhetoric","#C9A84C"],
   ["Performance","#D84315"],["Scholarship","#37474F"],["General","#78909C"],
-  ["First Folio","#8D6E63"],["Apocrypha","#5C6BC0"],
+  ["First Folio","#8D6E63"],["Apocrypha","#5C6BC0"],["Authorship","#6B4F2A"],
 ];
 const insertTag = db.prepare("INSERT OR IGNORE INTO forum_tags (name,color) VALUES (?,?)");
 for (const [n,c] of tags) insertTag.run(n,c);

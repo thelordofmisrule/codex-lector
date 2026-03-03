@@ -572,13 +572,6 @@ export default function ReaderPage() {
             ))}
           </div>
 
-          {showAnnots && annots.length > 0 && (
-            <>
-              <span style={{ width:1, height:20, background:"var(--border)" }} />
-              {ANNOT_TYPES.map((t,i) => <span key={i} style={{ fontSize:10, color:"var(--text-light)" }}><span className={t.cls} style={{padding:"1px 4px",borderRadius:3}}>{t.icon}</span></span>)}
-            </>
-          )}
-
           {/* Bookmark controls */}
           {user && (
             <>
