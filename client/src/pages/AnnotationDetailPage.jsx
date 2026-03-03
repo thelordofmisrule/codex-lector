@@ -3,6 +3,8 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { annotationDetail as api } from "../lib/api";
 import ThreadedComments from "../components/ThreadedComments";
+import { useConfirm } from "../lib/ConfirmContext";
+import { useToast } from "../lib/ToastContext";
 
 const ANNOT_TYPES = [
   { label:"Gloss", icon:"📖", color:"var(--gold-light)" },
@@ -17,6 +19,8 @@ export default function AnnotationDetailPage() {
   const { id } = useParams();
   const nav = useNavigate();
   const { user } = useAuth();
+  const { confirm } = useConfirm();
+  const toast = useToast();
   const isAdmin = !!user?.isAdmin;
 
   const [data, setData] = useState(null);
@@ -28,8 +32,11 @@ export default function AnnotationDetailPage() {
   const [sugMsg, setSugMsg] = useState("");
 
   useEffect(() => {
-    api.get(id).then(setData).catch(()=>{}).finally(()=>setLoading(false));
-  }, [id]);
+    api.get(id)
+      .then(setData)
+      .catch(() => toast?.error("Could not load annotation details."))
+      .finally(()=>setLoading(false));
+  }, [id, toast]);
 
   if (loading) return <div style={{padding:60,textAlign:"center"}}><div className="spinner"/></div>;
   if (!data) return <div style={{padding:60,textAlign:"center",color:"var(--danger)"}}>Annotation not found.</div>;
@@ -63,16 +70,31 @@ export default function AnnotationDetailPage() {
   };
 
   const acceptSuggestion = async (sid) => {
-    if (!confirm("Accept this suggestion? It will replace the current annotation text.")) return;
-    await api.acceptSuggestion(sid);
-    // Reload to get updated annotation
-    const fresh = await api.get(id);
-    setData(fresh);
+    const ok = await confirm({
+      title: "Accept Suggestion",
+      message: "Accept this suggestion? It will replace the current annotation text.",
+      confirmText: "Accept",
+    });
+    if (!ok) return;
+    try {
+      await api.acceptSuggestion(sid);
+      // Reload to get updated annotation
+      const fresh = await api.get(id);
+      setData(fresh);
+      toast?.success("Suggestion accepted.");
+    } catch (e) {
+      toast?.error(e.message || "Could not accept suggestion.");
+    }
   };
 
   const rejectSuggestion = async (sid) => {
-    await api.rejectSuggestion(sid);
-    setData(prev => ({ ...prev, suggestions: prev.suggestions.map(s => s.id===sid ? {...s, status:"rejected"} : s) }));
+    try {
+      await api.rejectSuggestion(sid);
+      setData(prev => ({ ...prev, suggestions: prev.suggestions.map(s => s.id===sid ? {...s, status:"rejected"} : s) }));
+      toast?.success("Suggestion rejected.");
+    } catch (e) {
+      toast?.error(e.message || "Could not reject suggestion.");
+    }
   };
 
   return (

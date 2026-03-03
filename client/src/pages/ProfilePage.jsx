@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { auth as api } from "../lib/api";
+import { useToast } from "../lib/ToastContext";
 
 const COLORS = ["#7A1E2E","#2E5A3C","#1E3A5F","#5C3D6E","#8B6914","#6B3A2E","#2E6B6B","#4A4A6A","#8C4A2F","#2F4858"];
 function fmt(iso) { try { return new Date(iso).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}); } catch { return ""; } }
@@ -10,6 +11,7 @@ export default function ProfilePage() {
   const { username } = useParams();
   const nav = useNavigate();
   const { user, refreshUser } = useAuth();
+  const toast = useToast();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -33,8 +35,8 @@ export default function ProfilePage() {
       setEditUsername(p.username || "");
       setBio(p.bio || "");
       setAvatarColor(p.avatarColor || "#7A1E2E");
-    }).catch(()=>{}).finally(()=>setLoading(false));
-  }, [username]);
+    }).catch(() => toast?.error("Could not load profile.")).finally(()=>setLoading(false));
+  }, [username, toast]);
 
   const save = async () => {
     setSaveMsg("");

@@ -4,12 +4,16 @@ import { useAuth } from "../lib/AuthContext";
 import { blog as api } from "../lib/api";
 import { RichText } from "../lib/markdown";
 import ThreadedComments from "../components/ThreadedComments";
+import { useConfirm } from "../lib/ConfirmContext";
+import { useToast } from "../lib/ToastContext";
 
 function fmt(iso) { return new Date(iso).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}); }
 
 export default function BlogPostPage() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { confirm } = useConfirm();
+  const toast = useToast();
   const nav = useNavigate();
   const [post, setPost] = useState(null);
   const [replies, setReplies] = useState([]);
@@ -20,18 +24,37 @@ export default function BlogPostPage() {
   const [preview, setPreview] = useState(false);
 
   useEffect(() => {
-    api.get(id).then(d => { setPost(d.post); setReplies(d.replies); }).catch(()=>{}).finally(()=>setLoading(false));
-  }, [id]);
+    api.get(id).then(d => { setPost(d.post); setReplies(d.replies); })
+      .catch(() => toast?.error("Could not load post."))
+      .finally(()=>setLoading(false));
+  }, [id, toast]);
 
   const startEdit = () => { setEditTitle(post.title); setEditBody(post.body); setEditing(true); setPreview(false); };
   const saveEdit = async () => {
-    await api.edit(id, { title:editTitle.trim(), body:editBody.trim() });
-    setPost(prev => ({...prev, title:editTitle.trim(), body:editBody.trim()}));
-    setEditing(false);
+    try {
+      await api.edit(id, { title:editTitle.trim(), body:editBody.trim() });
+      setPost(prev => ({...prev, title:editTitle.trim(), body:editBody.trim()}));
+      setEditing(false);
+      toast?.success("Post updated.");
+    } catch (e) {
+      toast?.error(e.message || "Could not update post.");
+    }
   };
   const del = async () => {
-    if (!confirm("Delete this post and all its replies? This cannot be undone.")) return;
-    await api.delete(id); nav("/blog");
+    const ok = await confirm({
+      title: "Delete Post",
+      message: "Delete this post and all its replies? This cannot be undone.",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.delete(id);
+      toast?.success("Post deleted.");
+      nav("/blog");
+    } catch (e) {
+      toast?.error(e.message || "Could not delete post.");
+    }
   };
 
   const postReply = async (body, parentId) => { const r = await api.reply(id, body, parentId); setReplies(prev => [...prev, r]); };

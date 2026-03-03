@@ -2,23 +2,41 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { bookmarks as api } from "../lib/api";
+import { useConfirm } from "../lib/ConfirmContext";
+import { useToast } from "../lib/ToastContext";
 
 function fmt(iso) { try { return new Date(iso).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}); } catch { return ""; } }
 
 export default function MyBookmarksPage() {
   const { user } = useAuth();
+  const { confirm } = useConfirm();
+  const toast = useToast();
   const [bookmarks, setBookmarks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
-    api.myAll().then(setBookmarks).catch(()=>{}).finally(()=>setLoading(false));
-  }, [user]);
+    api.myAll()
+      .then(setBookmarks)
+      .catch(() => toast?.error("Could not load bookmarks."))
+      .finally(() => setLoading(false));
+  }, [user, toast]);
 
   const remove = async (slug) => {
-    if (!confirm("Remove this bookmark?")) return;
-    await api.remove(slug);
-    setBookmarks(prev => prev.filter(b => b.work_slug !== slug));
+    const ok = await confirm({
+      title: "Remove Bookmark",
+      message: "Remove this bookmark?",
+      confirmText: "Remove",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.remove(slug);
+      setBookmarks(prev => prev.filter(b => b.work_slug !== slug));
+      toast?.success("Bookmark removed.");
+    } catch (e) {
+      toast?.error(e.message || "Could not remove bookmark.");
+    }
   };
 
   if (!user) return (
@@ -65,7 +83,7 @@ export default function MyBookmarksPage() {
                   Last updated {fmt(b.updated_at)}
                 </div>
               </div>
-              <button className="btn btn-ghost" onClick={()=>remove(b.work_slug)} title="Remove bookmark"
+              <button className="btn btn-ghost" aria-label="Remove bookmark" onClick={()=>remove(b.work_slug)} title="Remove bookmark"
                 style={{ fontSize:14, color:"var(--text-light)", padding:"4px 8px", flexShrink:0 }}>✕</button>
             </div>
           ))}

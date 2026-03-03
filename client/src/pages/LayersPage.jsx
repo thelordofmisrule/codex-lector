@@ -2,11 +2,15 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { layers as api } from "../lib/api";
+import { useConfirm } from "../lib/ConfirmContext";
+import { useToast } from "../lib/ToastContext";
 
 function fmt(iso) { try { return new Date(iso).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}); } catch { return ""; } }
 
 export default function LayersPage() {
   const { user } = useAuth();
+  const { confirm } = useConfirm();
+  const toast = useToast();
   const [allLayers, setLayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -14,30 +18,62 @@ export default function LayersPage() {
   const [desc, setDesc] = useState("");
   const [tab, setTab] = useState("browse"); // browse | mine | subscribed
 
-  useEffect(() => { api.list().then(setLayers).catch(()=>{}).finally(()=>setLoading(false)); }, []);
+  useEffect(() => {
+    api.list()
+      .then(setLayers)
+      .catch(() => toast?.error("Could not load layers. Please refresh."))
+      .finally(() => setLoading(false));
+  }, [toast]);
 
   const create = async () => {
     if (!name.trim()) return;
-    const { id } = await api.create(name.trim(), desc.trim());
-    setCreating(false); setName(""); setDesc("");
-    api.list().then(setLayers);
+    try {
+      await api.create(name.trim(), desc.trim());
+      setCreating(false); setName(""); setDesc("");
+      const data = await api.list();
+      setLayers(data);
+      toast?.success("Layer created.");
+    } catch (e) {
+      toast?.error(e.message || "Could not create layer.");
+    }
   };
 
   const toggle = async (layer) => {
-    if (layer.isSubscribed) { await api.unsubscribe(layer.id); }
-    else { await api.subscribe(layer.id); }
-    setLayers(prev => prev.map(l => l.id===layer.id ? {...l, isSubscribed:!l.isSubscribed, subscriberCount:l.subscriberCount+(l.isSubscribed?-1:1)} : l));
+    try {
+      if (layer.isSubscribed) { await api.unsubscribe(layer.id); }
+      else { await api.subscribe(layer.id); }
+      setLayers(prev => prev.map(l => l.id===layer.id ? {...l, isSubscribed:!l.isSubscribed, subscriberCount:l.subscriberCount+(l.isSubscribed?-1:1)} : l));
+      toast?.success(layer.isSubscribed ? "Unsubscribed from layer." : "Subscribed to layer.");
+    } catch (e) {
+      toast?.error(e.message || "Could not update subscription.");
+    }
   };
 
   const publish = async (layer) => {
-    await api.update(layer.id, { isPublic:!layer.isPublic });
-    setLayers(prev => prev.map(l => l.id===layer.id ? {...l, isPublic:!l.isPublic} : l));
+    try {
+      await api.update(layer.id, { isPublic:!layer.isPublic });
+      setLayers(prev => prev.map(l => l.id===layer.id ? {...l, isPublic:!l.isPublic} : l));
+      toast?.success(layer.isPublic ? "Layer is now private." : "Layer published.");
+    } catch (e) {
+      toast?.error(e.message || "Could not update layer visibility.");
+    }
   };
 
   const deleteLayer = async (layer) => {
-    if (!confirm(`Delete layer "${layer.name}"? Annotations will be kept but unlinked.`)) return;
-    await api.delete(layer.id);
-    setLayers(prev => prev.filter(l => l.id!==layer.id));
+    const ok = await confirm({
+      title: "Delete Layer",
+      message: `Delete layer "${layer.name}"? Annotations will be kept but unlinked.`,
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.delete(layer.id);
+      setLayers(prev => prev.filter(l => l.id!==layer.id));
+      toast?.success("Layer deleted.");
+    } catch (e) {
+      toast?.error(e.message || "Could not delete layer.");
+    }
   };
 
   const myLayers = allLayers.filter(l => l.isOwner);

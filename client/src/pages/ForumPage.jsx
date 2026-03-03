@@ -2,12 +2,14 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { forum as api } from "../lib/api";
+import { useToast } from "../lib/ToastContext";
 
 function fmt(iso) { return new Date(iso).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}); }
 
 export default function ForumPage() {
   const { user } = useAuth();
   const nav = useNavigate();
+  const toast = useToast();
   const [threads, setThreads] = useState([]);
   const [tags, setTags] = useState([]);
   const [activeTag, setActiveTag] = useState("");
@@ -18,13 +20,25 @@ export default function ForumPage() {
   const [body, setBody] = useState("");
   const [selTags, setSelTags] = useState([]);
 
-  useEffect(() => { api.tags().then(setTags).catch(()=>{}); }, []);
-  useEffect(() => { setLoading(true); api.list(activeTag, search).then(setThreads).finally(()=>setLoading(false)); }, [activeTag, search]);
+  useEffect(() => {
+    api.tags().then(setTags).catch(() => toast?.error("Could not load forum channels."));
+  }, [toast]);
+  useEffect(() => {
+    setLoading(true);
+    api.list(activeTag, search)
+      .then(setThreads)
+      .catch(() => toast?.error("Could not load forum threads."))
+      .finally(()=>setLoading(false));
+  }, [activeTag, search, toast]);
 
   const create = async () => {
     if (!title.trim()||!body.trim()) return;
-    const { id } = await api.create(title.trim(), body.trim(), selTags);
-    nav(`/forum/${id}`);
+    try {
+      const { id } = await api.create(title.trim(), body.trim(), selTags);
+      nav(`/forum/${id}`);
+    } catch (e) {
+      toast?.error(e.message || "Could not create thread.");
+    }
   };
 
   const toggleTag = id => setSelTags(prev => prev.includes(id) ? prev.filter(t=>t!==id) : [...prev,id]);

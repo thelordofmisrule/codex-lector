@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { layers as api } from "../lib/api";
+import { useToast } from "../lib/ToastContext";
 
 const ANNOT_TYPES = [
   { label:"Gloss", icon:"📖", color:"var(--gold-light)" },
@@ -11,10 +12,16 @@ const ANNOT_TYPES = [
 
 export default function LayerDetailPage() {
   const { id } = useParams();
+  const toast = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { api.get(id).then(setData).catch(()=>{}).finally(()=>setLoading(false)); }, [id]);
+  useEffect(() => {
+    api.get(id)
+      .then(setData)
+      .catch(() => toast?.error("Could not load layer details."))
+      .finally(()=>setLoading(false));
+  }, [id, toast]);
 
   if (loading) return <div style={{padding:60,textAlign:"center"}}><div className="spinner"/></div>;
   if (!data) return <div style={{padding:60,textAlign:"center",color:"var(--danger)"}}>Layer not found.</div>;

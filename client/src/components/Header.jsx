@@ -60,8 +60,15 @@ export default function Header() {
       }}>
         <div style={{ maxWidth:1100, margin:"0 auto", display:"flex", alignItems:"center", justifyContent:"space-between", height:58 }}>
           <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-            {loc.pathname!=="/" && <button className="btn btn-ghost" onClick={()=>nav(-1)} style={{fontSize:18}}>←</button>}
-            <div onClick={()=>nav("/")} style={{ cursor:"pointer", display:"flex", alignItems:"baseline", gap:8 }}>
+            {loc.pathname!=="/" && <button className="btn btn-ghost" aria-label="Go back" onClick={()=>nav(-1)} style={{fontSize:18}}>←</button>}
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Go to home"
+              onClick={()=>nav("/")}
+              onKeyDown={(e)=>{ if (e.key === "Enter" || e.key === " ") nav("/"); }}
+              style={{ cursor:"pointer", display:"flex", alignItems:"baseline", gap:8 }}
+            >
               <span style={{ fontFamily:"'Cinzel Decorative',var(--font-display)", fontSize:20, fontWeight:700, color:"var(--accent)", letterSpacing:1 }}>Codex</span>
               <span style={{ fontFamily:"var(--font-display)", fontSize:12, color:"var(--gold)", letterSpacing:3, textTransform:"uppercase" }}>Lector</span>
             </div>
@@ -80,7 +87,7 @@ export default function Header() {
             {/* Notification bell */}
             {user && (
               <div style={{ position:"relative" }}>
-                <button className="btn btn-ghost" onClick={()=>{setShowNotifs(!showNotifs);setMenu(false);}} title="Notifications" style={{
+                <button className="btn btn-ghost" aria-label="Toggle notifications" onClick={()=>{setShowNotifs(!showNotifs);setMenu(false);}} title="Notifications" style={{
                   fontSize:18, padding:"6px 10px", position:"relative",
                 }}>
                   🔔
@@ -111,7 +118,7 @@ export default function Header() {
             )}
 
             {/* Dark mode toggle */}
-            <button className="btn btn-ghost" onClick={toggleDark} title={dark?"Light mode":"Dark mode"} style={{
+            <button className="btn btn-ghost" aria-label={dark?"Switch to light mode":"Switch to dark mode"} onClick={toggleDark} title={dark?"Light mode":"Dark mode"} style={{
               fontSize:20, padding:"6px 10px", borderRadius:6,
               background: dark ? "rgba(255,248,240,0.08)" : "rgba(0,0,0,0.05)",
               border:"1px solid var(--border-light)",
@@ -125,7 +132,7 @@ export default function Header() {
                   <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);}} style={{
                     width:36, height:36, borderRadius:"50%", padding:0, border:"2px solid var(--accent)", overflow:"hidden",
                     display:"flex", alignItems:"center", justifyContent:"center", background:"var(--surface)",
-                  }}><img src={user.oauthAvatar} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /></button>
+                  }}><img src={user.oauthAvatar} alt="Profile avatar" style={{ width:"100%", height:"100%", objectFit:"cover" }} /></button>
                 ) : (
                   <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);}} style={{
                     background:"var(--accent)", color:"#FFF8F0", width:36, height:36, borderRadius:"50%",

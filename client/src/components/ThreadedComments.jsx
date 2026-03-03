@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../lib/AuthContext";
+import { useConfirm } from "../lib/ConfirmContext";
+import { useToast } from "../lib/ToastContext";
 
 function fmt(iso) {
   return new Date(iso).toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" });
@@ -7,6 +9,8 @@ function fmt(iso) {
 
 function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed }) {
   const { user } = useAuth();
+  const { confirm } = useConfirm();
+  const toast = useToast();
   const [collapsed, setCollapsed] = useState(defaultCollapsed && c.children?.length > 0);
   const [replying, setReplying] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -15,19 +19,38 @@ function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed }) {
   const canModify = user && (user.id === c.userId || user.isAdmin);
   const hasChildren = c.children?.length > 0;
 
-  const submitReply = () => {
+  const submitReply = async () => {
     if (!body.trim()) return;
-    onReply(c.id, body.trim());
-    setBody(""); setReplying(false);
+    try {
+      await onReply(c.id, body.trim());
+      setBody(""); setReplying(false);
+    } catch (e) {
+      toast?.error(e.message || "Could not post reply.");
+    }
   };
-  const submitEdit = () => {
+  const submitEdit = async () => {
     if (!editBody.trim()) return;
-    onEdit(c.id, editBody.trim());
-    setEditing(false);
+    try {
+      await onEdit(c.id, editBody.trim());
+      setEditing(false);
+    } catch (e) {
+      toast?.error(e.message || "Could not save edits.");
+    }
   };
-  const handleDelete = () => {
-    if (!confirm("Delete this comment? This cannot be undone.")) return;
-    onDelete(c.id);
+  const handleDelete = async () => {
+    const ok = await confirm({
+      title: "Delete Comment",
+      message: "Delete this comment? This cannot be undone.",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await onDelete(c.id);
+      toast?.success("Comment deleted.");
+    } catch (e) {
+      toast?.error(e.message || "Could not delete comment.");
+    }
   };
 
   return (
@@ -87,6 +110,7 @@ function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed }) {
 
 export default function ThreadedComments({ comments, onPost, onEdit, onDelete, label="Discussion" }) {
   const { user } = useAuth();
+  const toast = useToast();
   const [body, setBody] = useState("");
 
   const map = {};
@@ -99,10 +123,14 @@ export default function ThreadedComments({ comments, onPost, onEdit, onDelete, l
   });
 
   const handleReply = (parentId, text) => onPost(text, parentId);
-  const handleTopLevel = () => {
+  const handleTopLevel = async () => {
     if (!body.trim()) return;
-    onPost(body.trim(), null);
-    setBody("");
+    try {
+      await onPost(body.trim(), null);
+      setBody("");
+    } catch (e) {
+      toast?.error(e.message || "Could not post comment.");
+    }
   };
 
   return (

@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { works as api } from "../lib/api";
+import { useToast } from "../lib/ToastContext";
 
 export default function SearchPage() {
   const nav = useNavigate();
+  const toast = useToast();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -14,7 +16,11 @@ export default function SearchPage() {
     try {
       const r = await api.searchText(query.trim());
       setResults(r);
-    } catch (e) { console.error(e); setResults([]); }
+    } catch (e) {
+      console.error(e);
+      setResults([]);
+      toast?.error(e.message || "Search failed. Please try again.");
+    }
     setLoading(false);
   };
 

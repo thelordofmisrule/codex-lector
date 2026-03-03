@@ -1,16 +1,24 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { words as api } from "../lib/api";
+import { useToast } from "../lib/ToastContext";
 
 export default function WordLookup({ word, position, onClose, onAnnotate }) {
+  const toast = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!word) return;
     setLoading(true);
-    api.lookup(word).then(setData).catch(()=>{}).finally(()=>setLoading(false));
-  }, [word]);
+    api.lookup(word)
+      .then(setData)
+      .catch(() => {
+        setData(null);
+        toast?.error("Could not look up that word.");
+      })
+      .finally(()=>setLoading(false));
+  }, [word, toast]);
 
   if (!word) return null;
 
@@ -19,7 +27,7 @@ export default function WordLookup({ word, position, onClose, onAnnotate }) {
 
   return (
     <>
-      <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:199 }} />
+      <div aria-hidden="true" onClick={onClose} style={{ position:"fixed", inset:0, zIndex:199 }} />
       <div style={{
         position:"fixed", top, left, zIndex:200,
         width:360, maxHeight:420, overflowY:"auto",
@@ -29,7 +37,7 @@ export default function WordLookup({ word, position, onClose, onAnnotate }) {
       }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <span style={{ fontFamily:"var(--font-display)", fontSize:20, color:"var(--accent)", letterSpacing:1 }}>{word}</span>
-          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:18, color:"var(--text-light)", padding:"0 4px" }}>✕</button>
+          <button aria-label="Close word lookup" onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:18, color:"var(--text-light)", padding:"0 4px" }}>✕</button>
         </div>
 
         {loading ? (

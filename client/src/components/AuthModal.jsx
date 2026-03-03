@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { auth as authApi } from "../lib/api";
+import { useToast } from "../lib/ToastContext";
 
 const OAUTH_ICONS = {
   google: { label:"Google", icon:"G", bg:"#4285F4", text:"#fff" },
@@ -12,6 +13,7 @@ const API_BASE = import.meta.env.DEV ? "http://localhost:3001" : "";
 
 export default function AuthModal({ onClose }) {
   const { login } = useAuth();
+  const toast = useToast();
   const [providers, setProviders] = useState([]);
   const [showAdmin, setShowAdmin] = useState(false);
   const [username, setUsername] = useState("");
@@ -20,8 +22,10 @@ export default function AuthModal({ onClose }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    authApi.providers().then(d => setProviders(d.providers || [])).catch(()=>{});
-  }, []);
+    authApi.providers()
+      .then(d => setProviders(d.providers || []))
+      .catch(() => toast?.error("Could not load sign-in providers."));
+  }, [toast]);
 
   const adminLogin = async () => {
     setError(""); setBusy(true);

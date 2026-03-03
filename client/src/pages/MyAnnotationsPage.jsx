@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { annotations as api } from "../lib/api";
+import { useConfirm } from "../lib/ConfirmContext";
+import { useToast } from "../lib/ToastContext";
 
 const ANNOT_TYPES = [
   { label:"Gloss", icon:"📖", color:"var(--gold-light)" },
@@ -14,6 +16,8 @@ function fmt(iso) { try { return new Date(iso).toLocaleDateString("en-GB",{day:"
 
 export default function MyAnnotationsPage() {
   const { user } = useAuth();
+  const { confirm } = useConfirm();
+  const toast = useToast();
   const nav = useNavigate();
   const [annots, setAnnots] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,16 +26,31 @@ export default function MyAnnotationsPage() {
 
   const load = (q) => {
     setLoading(true);
-    api.myAll(q).then(setAnnots).catch(()=>{}).finally(()=>setLoading(false));
+    api.myAll(q)
+      .then(setAnnots)
+      .catch(() => toast?.error("Could not load annotations."))
+      .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [toast]);
 
   const doSearch = () => load(search.trim());
 
   const deleteAnnot = async (id) => {
-    if (!confirm("Delete this annotation?")) return;
-    try { await api.delete(id); setAnnots(prev => prev.filter(a => a.id !== id)); } catch {}
+    const ok = await confirm({
+      title: "Delete Annotation",
+      message: "Delete this annotation?",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.delete(id);
+      setAnnots(prev => prev.filter(a => a.id !== id));
+      toast?.success("Annotation deleted.");
+    } catch (e) {
+      toast?.error(e.message || "Could not delete annotation.");
+    }
   };
 
   if (!user) return (

@@ -3,12 +3,16 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { forum as api } from "../lib/api";
 import ThreadedComments from "../components/ThreadedComments";
+import { useConfirm } from "../lib/ConfirmContext";
+import { useToast } from "../lib/ToastContext";
 
 function fmt(iso) { return new Date(iso).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}); }
 
 export default function ForumThreadPage() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { confirm } = useConfirm();
+  const toast = useToast();
   const nav = useNavigate();
   const [thread, setThread] = useState(null);
   const [replies, setReplies] = useState([]);
@@ -19,20 +23,38 @@ export default function ForumThreadPage() {
 
   useEffect(() => {
     api.get(id).then(d => { setThread(d.thread); setReplies(d.replies); })
-      .catch(()=>{}).finally(()=>setLoading(false));
-  }, [id]);
+      .catch(() => toast?.error("Could not load thread."))
+      .finally(() => setLoading(false));
+  }, [id, toast]);
 
   const canModify = user && thread && (user.id === thread.userId || user.isAdmin);
 
   const startEdit = () => { setEditTitle(thread.title); setEditBody(thread.body); setEditing(true); };
   const saveEdit = async () => {
-    await api.edit(id, { title:editTitle.trim(), body:editBody.trim() });
-    setThread(prev => ({...prev, title:editTitle.trim(), body:editBody.trim()}));
-    setEditing(false);
+    try {
+      await api.edit(id, { title:editTitle.trim(), body:editBody.trim() });
+      setThread(prev => ({...prev, title:editTitle.trim(), body:editBody.trim()}));
+      setEditing(false);
+      toast?.success("Thread updated.");
+    } catch (e) {
+      toast?.error(e.message || "Could not update thread.");
+    }
   };
   const del = async () => {
-    if (!confirm("Delete this thread and all its replies? This cannot be undone.")) return;
-    await api.deleteThread(id); nav("/forum");
+    const ok = await confirm({
+      title: "Delete Thread",
+      message: "Delete this thread and all its replies? This cannot be undone.",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.deleteThread(id);
+      toast?.success("Thread deleted.");
+      nav("/forum");
+    } catch (e) {
+      toast?.error(e.message || "Could not delete thread.");
+    }
   };
 
   const postReply = async (body, parentId) => {

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { works as worksApi, annotations as annotsApi, discussions as discApi, bookmarks as bmApi, progress as progApi, layers as layersApi } from "../lib/api";
+import { useConfirm } from "../lib/ConfirmContext";
+import { useToast } from "../lib/ToastContext";
 import { parsePlayShakespeareXML } from "../lib/textParser";
 import ThreadedComments from "../components/ThreadedComments";
 import WordLookup from "../components/WordLookup";
@@ -211,6 +213,8 @@ export default function ReaderPage() {
   const { slug } = useParams();
   const location = useLocation();
   const { user } = useAuth();
+  const { confirm } = useConfirm();
+  const toast = useToast();
   const isAdmin = user?.isAdmin;
   const userId = user?.id;
   const [work, setWork] = useState(null);
@@ -243,9 +247,12 @@ export default function ReaderPage() {
         if(bm) setBookmark(bm.line_id);
         setMyLayers((layers||[]).filter(l => l.isOwner));
       })
-      .catch(e => console.error(e))
+      .catch(e => {
+        console.error(e);
+        toast?.error("Could not load this work. Please refresh.");
+      })
       .finally(() => setLoading(false));
-  }, [slug, annotMode]);
+  }, [slug, annotMode, user, toast]);
 
   // Track reading progress on scroll
   useEffect(() => {
@@ -338,17 +345,40 @@ export default function ReaderPage() {
         await layersApi.addAnnotation(layerId, a.id).catch(()=>{});
       }
       setAnnots(prev => [...prev, a]);
-    } catch (e) { console.error("Save annotation failed:", e); }
+      toast?.success("Annotation saved.");
+    } catch (e) {
+      console.error("Save annotation failed:", e);
+      toast?.error(e.message || "Could not save annotation.");
+    }
     setTooltip(null);
     window.getSelection()?.removeAllRanges();
   };
   const editAnnot = async (id, note, color) => {
-    try { const u = await annotsApi.update(id,{note,color}); setAnnots(prev => prev.map(a => a.id===id?{...a,note,color,...u}:a)); }
-    catch (e) { console.error(e); }
+    try {
+      const u = await annotsApi.update(id,{note,color});
+      setAnnots(prev => prev.map(a => a.id===id?{...a,note,color,...u}:a));
+      toast?.success("Annotation updated.");
+    } catch (e) {
+      console.error(e);
+      toast?.error(e.message || "Could not update annotation.");
+    }
   };
   const deleteAnnot = async (id) => {
-    if (!confirm("Delete this annotation?")) return;
-    try { await annotsApi.delete(id); setAnnots(prev => prev.filter(a => a.id!==id)); } catch(e){console.error(e);}
+    const ok = await confirm({
+      title: "Delete Annotation",
+      message: "Delete this annotation?",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await annotsApi.delete(id);
+      setAnnots(prev => prev.filter(a => a.id!==id));
+      toast?.success("Annotation deleted.");
+    } catch(e) {
+      console.error(e);
+      toast?.error(e.message || "Could not delete annotation.");
+    }
   };
 
   const setBookmarkHere = async () => {
@@ -363,13 +393,23 @@ export default function ReaderPage() {
     if (closest) {
       const lineId = closest.dataset.lineid;
       const text = closest.textContent?.slice(0, 80) || "";
-      await bmApi.set(slug, lineId, text);
-      setBookmark(lineId);
+      try {
+        await bmApi.set(slug, lineId, text);
+        setBookmark(lineId);
+        toast?.success("Bookmark saved.");
+      } catch (e) {
+        toast?.error(e.message || "Could not save bookmark.");
+      }
     }
   };
   const clearBookmark = async () => {
-    await bmApi.remove(slug);
-    setBookmark(null);
+    try {
+      await bmApi.remove(slug);
+      setBookmark(null);
+      toast?.success("Bookmark cleared.");
+    } catch (e) {
+      toast?.error(e.message || "Could not clear bookmark.");
+    }
   };
 
   const postComment = async (body,parentId) => { const c=await discApi.post(slug,body,parentId); setDisc(prev=>[...prev,c]); };
@@ -434,11 +474,11 @@ export default function ReaderPage() {
           {user && (
             <>
               <span style={{ width:1, height:20, background:"var(--border)" }} />
-              <button className="btn btn-sm btn-secondary" onClick={setBookmarkHere} title="Bookmark current position" style={{ fontSize:14, padding:"4px 8px" }}>
+              <button className="btn btn-sm btn-secondary" aria-label="Bookmark current position" onClick={setBookmarkHere} title="Bookmark current position" style={{ fontSize:14, padding:"4px 8px" }}>
                 🔖
               </button>
               {bookmark && (
-                <button className="btn btn-sm btn-ghost" onClick={clearBookmark} title="Clear bookmark" style={{ fontSize:11, color:"var(--text-light)", padding:"4px 6px" }}>
+                <button className="btn btn-sm btn-ghost" aria-label="Clear bookmark" onClick={clearBookmark} title="Clear bookmark" style={{ fontSize:11, color:"var(--text-light)", padding:"4px 6px" }}>
                   ✕
                 </button>
               )}

@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { progress as api, works as worksApi } from "../lib/api";
+import { useToast } from "../lib/ToastContext";
 
 function fmt(iso) { try { return new Date(iso).toLocaleDateString("en-GB",{day:"numeric",month:"short"}); } catch { return ""; } }
 
 export default function MyLibraryPage() {
   const { user } = useAuth();
+  const toast = useToast();
   const [prog, setProg] = useState([]);
   const [works, setWorks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -15,9 +17,9 @@ export default function MyLibraryPage() {
     if (!user) { setLoading(false); return; }
     Promise.all([api.myAll(), worksApi.list()])
       .then(([p, w]) => { setProg(p); setWorks(w); })
-      .catch(()=>{})
+      .catch(() => toast?.error("Could not load your library."))
       .finally(()=>setLoading(false));
-  }, [user]);
+  }, [user, toast]);
 
   if (!user) return (
     <div className="animate-in" style={{ maxWidth:600, margin:"60px auto", padding:"0 24px", textAlign:"center" }}>
