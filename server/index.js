@@ -58,6 +58,7 @@ app.use("/api/progress", require("./routes/progress"));
 app.use("/api/words", require("./routes/words"));
 app.use("/api/notifications", require("./routes/notifications"));
 app.get("/api/health", (req,res) => res.json({ status:"ok" }));
+app.use("/media", express.static(path.join(__dirname, "..", "data", "media")));
 
 /* ── RSS Feed ── */
 function esc(str) { return (str||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
@@ -129,13 +130,16 @@ if (process.env.NODE_ENV === "production") {
   app.get("/blog/:id", (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.send(indexHtml);
-    const post = db.prepare("SELECT p.title,p.body,u.display_name FROM blog_posts p JOIN users u ON p.user_id=u.id WHERE p.id=?").get(id);
+    const post = db.prepare("SELECT p.title,p.body,p.header_image,u.display_name FROM blog_posts p JOIN users u ON p.user_id=u.id WHERE p.id=?").get(id);
     if (!post) return res.send(indexHtml);
 
     const title = esc(post.title);
     const desc = esc(post.body.replace(/[#*_`\[\]]/g,"").slice(0,200));
     const author = esc(post.display_name);
     const url = `${SITE_URL}/blog/${id}`;
+    const imageUrl = post.header_image
+      ? (post.header_image.startsWith("http") ? post.header_image : `${SITE_URL}${post.header_image}`)
+      : "";
 
     const meta = `
     <meta property="og:type" content="article" />
@@ -143,7 +147,9 @@ if (process.env.NODE_ENV === "production") {
     <meta property="og:description" content="${desc}" />
     <meta property="og:url" content="${url}" />
     <meta property="og:site_name" content="${SITE_NAME}" />
-    <meta name="twitter:card" content="summary" />
+    ${imageUrl ? `<meta property="og:image" content="${esc(imageUrl)}" />` : ""}
+    <meta name="twitter:card" content="${imageUrl ? "summary_large_image" : "summary"}" />
+    ${imageUrl ? `<meta name="twitter:image" content="${esc(imageUrl)}" />` : ""}
     <meta name="twitter:title" content="${title}" />
     <meta name="twitter:description" content="${desc}" />
     <meta name="author" content="${author}" />

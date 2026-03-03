@@ -67,12 +67,13 @@ export const forum = {
 export const blog = {
   list:()=>req("/blog"),
   get:id=>req(`/blog/${id}`),
-  create:(title,body)=>req("/blog",{method:"POST",body:JSON.stringify({title,body})}),
+  create:(title,body,headerImage)=>req("/blog",{method:"POST",body:JSON.stringify({title,body,headerImage})}),
   edit:(id,d)=>req(`/blog/${id}`,{method:"PUT",body:JSON.stringify(d)}),
   reply:(id,body,parentId)=>req(`/blog/${id}/reply`,{method:"POST",body:JSON.stringify({body,parentId})}),
   editReply:(id,body)=>req(`/blog/reply/${id}`,{method:"PUT",body:JSON.stringify({body})}),
   delete:id=>req(`/blog/${id}`,{method:"DELETE"}),
   deleteReply:id=>req(`/blog/reply/${id}`,{method:"DELETE"}),
+  uploadImage:(fileName,mimeType,dataUrl)=>req("/blog/upload-image",{method:"POST",body:JSON.stringify({fileName,mimeType,dataUrl})}),
 };
 export const notifications = {
   list:()=>req("/notifications"),

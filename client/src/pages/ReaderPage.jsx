@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, Link, useLocation } from "react-router-dom";
+import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { works as worksApi, annotations as annotsApi, discussions as discApi, bookmarks as bmApi, progress as progApi, layers as layersApi } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
@@ -89,10 +89,22 @@ function MarginAnnot({ annot, userId, isAdmin, onEdit, onDelete, compact }) {
 }
 
 /* ─── Annotation tooltip ─── */
-function AnnotTooltip({ pos, onSave, onCancel, myLayers }) {
-  const [note, setNote] = useState("");
-  const [color, setColor] = useState(0);
-  const [layerId, setLayerId] = useState("");
+function AnnotTooltip({ pos, onSave, onCancel, myLayers, draftKey }) {
+  const [note, setNote] = useState(() => draftKey ? (localStorage.getItem(`${draftKey}:note`) || "") : "");
+  const [color, setColor] = useState(() => draftKey ? (parseInt(localStorage.getItem(`${draftKey}:color`) || "0", 10) || 0) : 0);
+  const [layerId, setLayerId] = useState(() => draftKey ? (localStorage.getItem(`${draftKey}:layer`) || "") : "");
+  const setNoteDraft = (value) => {
+    setNote(value);
+    if (draftKey) localStorage.setItem(`${draftKey}:note`, value);
+  };
+  const setColorDraft = (value) => {
+    setColor(value);
+    if (draftKey) localStorage.setItem(`${draftKey}:color`, String(value));
+  };
+  const setLayerDraft = (value) => {
+    setLayerId(value);
+    if (draftKey) localStorage.setItem(`${draftKey}:layer`, value);
+  };
   return (
       <div style={{
         position:"fixed", top:pos.y+8, left:Math.max(12,Math.min(pos.x,window.innerWidth-340)),
@@ -102,18 +114,18 @@ function AnnotTooltip({ pos, onSave, onCancel, myLayers }) {
       <div style={{ fontSize:12, color:"var(--text-light)", marginBottom:6, fontStyle:"italic" }}>"{pos.text.slice(0,60)}{pos.text.length>60?"…":""}"</div>
       <div style={{ display:"flex", gap:4, marginBottom:6, flexWrap:"wrap" }}>
         {ANNOT_TYPES.map((t,i) => (
-          <button key={i} onClick={()=>setColor(i)} className="btn btn-sm" style={{
+          <button key={i} onClick={()=>setColorDraft(i)} className="btn btn-sm" style={{
             fontSize:11, border: i===color ? "2px solid var(--accent)" : "2px solid transparent",
             background: i===color ? "var(--accent-faint)" : "var(--bg)",
             color: i===color ? "var(--text)" : "var(--text-muted)",
           }}>{t.icon} {t.label}</button>
         ))}
       </div>
-      <textarea className="input" value={note} onChange={e=>setNote(e.target.value)} placeholder="Your annotation…"
+      <textarea className="input" value={note} onChange={e=>setNoteDraft(e.target.value)} placeholder="Your annotation…"
         autoFocus style={{ minHeight:60, resize:"vertical", fontSize:14, lineHeight:1.6 }} />
       {myLayers && myLayers.length > 0 && (
         <div style={{ marginTop:6 }}>
-          <select className="input" value={layerId} onChange={e=>setLayerId(e.target.value)} style={{ fontSize:13, padding:"4px 8px" }}>
+          <select className="input" value={layerId} onChange={e=>setLayerDraft(e.target.value)} style={{ fontSize:13, padding:"4px 8px" }}>
             <option value="">No layer (private)</option>
             {myLayers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
@@ -212,6 +224,7 @@ function PoetryView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, e
 export default function ReaderPage() {
   const { slug } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { confirm } = useConfirm();
   const toast = useToast();
@@ -257,6 +270,31 @@ export default function ReaderPage() {
   useEffect(() => {
     if (!user && annotMode === "mine") setAnnotMode("all");
   }, [user, annotMode]);
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const tag = e.target?.tagName;
+      const editingField = tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable;
+      if (editingField) return;
+
+      if (e.key === "/") {
+        e.preventDefault();
+        navigate("/search");
+      } else if (e.key.toLowerCase() === "b" && user) {
+        e.preventDefault();
+        setBookmarkHere();
+      } else if (e.key === "Escape") {
+        if (wordLookup || tooltip) {
+          e.preventDefault();
+          setWordLookup(null);
+          setTooltip(null);
+          window.getSelection()?.removeAllRanges();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [navigate, user, wordLookup, tooltip]);
 
   useEffect(() => {
     setLoading(true);
@@ -371,6 +409,9 @@ export default function ReaderPage() {
         await layersApi.addAnnotation(layerId, a.id).catch(()=>{});
       }
       setAnnots(prev => [...prev, a]);
+      localStorage.removeItem(`draft:annot:${slug}:note`);
+      localStorage.removeItem(`draft:annot:${slug}:color`);
+      localStorage.removeItem(`draft:annot:${slug}:layer`);
       toast?.success("Annotation saved.");
     } catch (e) {
       console.error("Save annotation failed:", e);
@@ -546,7 +587,7 @@ export default function ReaderPage() {
         : <PlayView data={parsed} annots={annots} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} />
       }
 
-      {tooltip && <AnnotTooltip pos={tooltip} onSave={saveAnnot} onCancel={()=>{setTooltip(null);window.getSelection()?.removeAllRanges();}} myLayers={myLayers} />}
+      {tooltip && <AnnotTooltip pos={tooltip} onSave={saveAnnot} onCancel={()=>{setTooltip(null);window.getSelection()?.removeAllRanges();}} myLayers={myLayers} draftKey={`draft:annot:${slug}`} />}
       {wordLookup && (
         <WordLookup
           word={wordLookup.word}
@@ -563,7 +604,7 @@ export default function ReaderPage() {
           } : undefined}
         />
       )}
-      <ThreadedComments comments={disc} onPost={postComment} onEdit={editComment} onDelete={deleteComment} label="Discussion" />
+      <ThreadedComments comments={disc} onPost={postComment} onEdit={editComment} onDelete={deleteComment} label="Discussion" draftKey={`work:${slug}:discussion`} />
     </div>
   );
 }

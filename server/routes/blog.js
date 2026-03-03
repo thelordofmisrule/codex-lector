@@ -1,4 +1,7 @@
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
 const db = require("../db");
 const { requireAuth, requireAdmin } = require("../auth");
 const { notifyReply } = require("../notify");
@@ -11,7 +14,7 @@ r.get("/", (req, res) => {
     FROM blog_posts p JOIN users u ON p.user_id=u.id ORDER BY p.created_at DESC
   `).all();
   res.json(posts.map(p => ({
-    id:p.id, title:p.title, body:p.body, author:p.display_name,
+    id:p.id, title:p.title, body:p.body, headerImage:p.header_image || "", author:p.display_name,
     authorUsername:p.username, replyCount:p.reply_count,
     createdAt:p.created_at, updatedAt:p.updated_at,
   })));
@@ -25,7 +28,7 @@ r.get("/:id", (req, res) => {
     JOIN users u ON r.user_id=u.id WHERE r.post_id=? ORDER BY r.created_at
   `).all(p.id);
   res.json({
-    post: { id:p.id, title:p.title, body:p.body, author:p.display_name, authorUsername:p.username, createdAt:p.created_at, updatedAt:p.updated_at },
+    post: { id:p.id, title:p.title, body:p.body, headerImage:p.header_image || "", author:p.display_name, authorUsername:p.username, createdAt:p.created_at, updatedAt:p.updated_at },
     replies: replies.map(r2 => ({
       id:r2.id, parentId:r2.parent_id, userId:r2.user_id, body:r2.body, username:r2.username,
       displayName:r2.display_name, isAdmin:!!r2.is_admin, createdAt:r2.created_at, updatedAt:r2.updated_at,
@@ -33,17 +36,46 @@ r.get("/:id", (req, res) => {
   });
 });
 
+r.post("/upload-image", requireAdmin, (req, res) => {
+  const { fileName, mimeType, dataUrl } = req.body || {};
+  if (!dataUrl || typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) {
+    return res.status(400).json({ error:"Image data required." });
+  }
+
+  const allowed = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+  };
+  const ext = allowed[mimeType];
+  if (!ext) return res.status(400).json({ error:"Unsupported image type." });
+
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return res.status(400).json({ error:"Invalid image payload." });
+
+  const buf = Buffer.from(match[2], "base64");
+  if (buf.length > 5 * 1024 * 1024) return res.status(400).json({ error:"Image too large (max 5MB)." });
+
+  const dir = path.join(__dirname, "..", "..", "data", "media", "blog");
+  fs.mkdirSync(dir, { recursive: true });
+  const safeBase = (fileName || "header").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "header";
+  const name = `${safeBase}-${crypto.randomBytes(6).toString("hex")}${ext}`;
+  fs.writeFileSync(path.join(dir, name), buf);
+  res.json({ url:`/media/blog/${name}` });
+});
+
 r.post("/", requireAdmin, (req, res) => {
-  const { title, body } = req.body;
+  const { title, body, headerImage } = req.body;
   if (!title?.trim()||!body?.trim()) return res.status(400).json({ error:"Title and body required." });
-  const result = db.prepare("INSERT INTO blog_posts (user_id,title,body) VALUES (?,?,?)").run(req.user.id, title.trim(), body.trim());
+  const result = db.prepare("INSERT INTO blog_posts (user_id,title,header_image,body) VALUES (?,?,?,?)").run(req.user.id, title.trim(), (headerImage||"").trim(), body.trim());
   res.json({ id:result.lastInsertRowid });
 });
 
 r.put("/:id", requireAdmin, (req, res) => {
-  const { title, body } = req.body;
-  db.prepare("UPDATE blog_posts SET title=COALESCE(?,title), body=COALESCE(?,body), updated_at=datetime('now') WHERE id=?")
-    .run(title||null, body||null, req.params.id);
+  const { title, body, headerImage } = req.body;
+  db.prepare("UPDATE blog_posts SET title=COALESCE(?,title), header_image=COALESCE(?,header_image), body=COALESCE(?,body), updated_at=datetime('now') WHERE id=?")
+    .run(title||null, headerImage ?? null, body||null, req.params.id);
   res.json({ ok:true });
 });
 

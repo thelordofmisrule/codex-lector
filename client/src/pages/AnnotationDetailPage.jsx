@@ -26,10 +26,24 @@ export default function AnnotationDetailPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showSuggest, setShowSuggest] = useState(false);
-  const [sugNote, setSugNote] = useState("");
-  const [sugColor, setSugColor] = useState(null);
-  const [sugReason, setSugReason] = useState("");
+  const suggestDraftKey = `draft:annotation:${id}:suggestion`;
+  const [sugNote, setSugNote] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(suggestDraftKey) || "{}").note || ""; } catch { return ""; }
+  });
+  const [sugColor, setSugColor] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(suggestDraftKey) || "{}").color;
+      return raw === null || raw === undefined ? null : raw;
+    } catch { return null; }
+  });
+  const [sugReason, setSugReason] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(suggestDraftKey) || "{}").reason || ""; } catch { return ""; }
+  });
   const [sugMsg, setSugMsg] = useState("");
+
+  useEffect(() => {
+    localStorage.setItem(suggestDraftKey, JSON.stringify({ note:sugNote, color:sugColor, reason:sugReason }));
+  }, [suggestDraftKey, sugNote, sugColor, sugReason]);
 
   useEffect(() => {
     api.get(id)
@@ -73,6 +87,7 @@ export default function AnnotationDetailPage() {
     try {
       const s = await api.suggest(id, { suggestedNote:sugNote.trim(), suggestedColor:sugColor, reason:sugReason.trim() });
       setData(prev => ({ ...prev, suggestions: [s, ...prev.suggestions] }));
+      localStorage.removeItem(suggestDraftKey);
       setShowSuggest(false); setSugNote(""); setSugColor(null); setSugReason("");
     } catch(e) { setSugMsg(e.message); }
   };
@@ -224,7 +239,7 @@ export default function AnnotationDetailPage() {
       )}
 
       {/* Discussion */}
-      <ThreadedComments comments={comments} onPost={postComment} onEdit={editComment} onDelete={deleteComment} label="Discussion" />
+      <ThreadedComments comments={comments} onPost={postComment} onEdit={editComment} onDelete={deleteComment} label="Discussion" draftKey={`annotation:${id}:discussion`} />
     </div>
   );
 }

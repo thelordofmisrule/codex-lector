@@ -7,23 +7,36 @@ function fmt(iso) {
   return new Date(iso).toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" });
 }
 
-function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed }) {
+function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed, draftKeyBase }) {
   const { user } = useAuth();
   const { confirm } = useConfirm();
   const toast = useToast();
+  const replyDraftKey = draftKeyBase ? `${draftKeyBase}:reply:${c.id}` : "";
+  const editDraftKey = draftKeyBase ? `${draftKeyBase}:edit:${c.id}` : "";
   const [collapsed, setCollapsed] = useState(defaultCollapsed && c.children?.length > 0);
   const [replying, setReplying] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [body, setBody] = useState("");
-  const [editBody, setEditBody] = useState(c.body);
+  const [body, setBody] = useState(() => replyDraftKey ? (localStorage.getItem(replyDraftKey) || "") : "");
+  const [editBody, setEditBody] = useState(() => editDraftKey ? (localStorage.getItem(editDraftKey) || c.body) : c.body);
   const canModify = user && (user.id === c.userId || user.isAdmin);
   const hasChildren = c.children?.length > 0;
+
+  const setReplyBody = (value) => {
+    setBody(value);
+    if (replyDraftKey) localStorage.setItem(replyDraftKey, value);
+  };
+  const setEditBodyDraft = (value) => {
+    setEditBody(value);
+    if (editDraftKey) localStorage.setItem(editDraftKey, value);
+  };
 
   const submitReply = async () => {
     if (!body.trim()) return;
     try {
       await onReply(c.id, body.trim());
-      setBody(""); setReplying(false);
+      setBody("");
+      if (replyDraftKey) localStorage.removeItem(replyDraftKey);
+      setReplying(false);
     } catch (e) {
       toast?.error(e.message || "Could not post reply.");
     }
@@ -32,6 +45,7 @@ function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed }) {
     if (!editBody.trim()) return;
     try {
       await onEdit(c.id, editBody.trim());
+      if (editDraftKey) localStorage.removeItem(editDraftKey);
       setEditing(false);
     } catch (e) {
       toast?.error(e.message || "Could not save edits.");
@@ -70,14 +84,14 @@ function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed }) {
         </div>
         <div style={{ display:"flex", gap:4 }}>
           {user && <button className="btn btn-ghost btn-sm" onClick={()=>{setReplying(!replying);setEditing(false);}}>Reply</button>}
-          {canModify && <button className="btn btn-ghost btn-sm" onClick={()=>{setEditing(!editing);setReplying(false);setEditBody(c.body);}}>Edit</button>}
+          {canModify && <button className="btn btn-ghost btn-sm" onClick={()=>{setEditing(!editing);setReplying(false);setEditBodyDraft(editDraftKey ? (localStorage.getItem(editDraftKey) || c.body) : c.body);}}>Edit</button>}
           {canModify && onDelete && <button className="btn btn-ghost btn-sm" style={{color:"var(--danger)"}} onClick={handleDelete}>✕</button>}
         </div>
       </div>
 
       {editing ? (
         <div style={{ marginTop:4 }}>
-          <textarea className="input" value={editBody} onChange={e=>setEditBody(e.target.value)}
+          <textarea className="input" value={editBody} onChange={e=>setEditBodyDraft(e.target.value)}
             style={{ minHeight:60, resize:"vertical", fontSize:14 }} />
           <div style={{ display:"flex", gap:6, marginTop:6 }}>
             <button className="btn btn-primary btn-sm" onClick={submitEdit}>Save</button>
@@ -92,7 +106,7 @@ function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed }) {
 
       {replying && (
         <div style={{ marginTop:8, display:"flex", gap:8 }}>
-          <textarea className="input" value={body} onChange={e=>setBody(e.target.value)} placeholder="Your reply…"
+          <textarea className="input" value={body} onChange={e=>setReplyBody(e.target.value)} placeholder="Your reply…"
             style={{ minHeight:50, resize:"vertical", fontSize:14, flex:1 }} autoFocus />
           <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
             <button className="btn btn-primary btn-sm" onClick={submitReply}>Post</button>
@@ -102,16 +116,20 @@ function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed }) {
       )}
 
       {!collapsed && c.children?.map(child => (
-        <Comment key={child.id} c={child} depth={depth+1} onReply={onReply} onEdit={onEdit} onDelete={onDelete} defaultCollapsed={depth >= 2} />
+        <Comment key={child.id} c={child} depth={depth+1} onReply={onReply} onEdit={onEdit} onDelete={onDelete} defaultCollapsed={depth >= 2} draftKeyBase={draftKeyBase} />
       ))}
     </div>
   );
 }
 
-export default function ThreadedComments({ comments, onPost, onEdit, onDelete, label="Discussion" }) {
+export default function ThreadedComments({ comments, onPost, onEdit, onDelete, label="Discussion", draftKey="" }) {
   const { user } = useAuth();
   const toast = useToast();
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState(() => draftKey ? (localStorage.getItem(`${draftKey}:top`) || "") : "");
+  const setTopBody = (value) => {
+    setBody(value);
+    if (draftKey) localStorage.setItem(`${draftKey}:top`, value);
+  };
 
   const map = {};
   const roots = [];
@@ -128,6 +146,7 @@ export default function ThreadedComments({ comments, onPost, onEdit, onDelete, l
     try {
       await onPost(body.trim(), null);
       setBody("");
+      if (draftKey) localStorage.removeItem(`${draftKey}:top`);
     } catch (e) {
       toast?.error(e.message || "Could not post comment.");
     }
@@ -140,7 +159,7 @@ export default function ThreadedComments({ comments, onPost, onEdit, onDelete, l
 
       {user ? (
         <div style={{ marginBottom:20 }}>
-          <textarea className="input" value={body} onChange={e=>setBody(e.target.value)} placeholder="Share your thoughts…"
+          <textarea className="input" value={body} onChange={e=>setTopBody(e.target.value)} placeholder="Share your thoughts…"
             style={{ minHeight:80, resize:"vertical", marginBottom:8, lineHeight:1.7 }} />
           <button className="btn btn-primary" onClick={handleTopLevel}>Post</button>
         </div>
@@ -149,7 +168,7 @@ export default function ThreadedComments({ comments, onPost, onEdit, onDelete, l
       )}
 
       {roots.length === 0 && <p style={{ color:"var(--text-light)", fontStyle:"italic", fontFamily:"var(--font-fell)" }}>No comments yet. Be the first to share your thoughts.</p>}
-      {roots.map(c => <Comment key={c.id} c={c} depth={0} onReply={handleReply} onEdit={onEdit} onDelete={onDelete} defaultCollapsed={false} />)}
+      {roots.map(c => <Comment key={c.id} c={c} depth={0} onReply={handleReply} onEdit={onEdit} onDelete={onDelete} defaultCollapsed={false} draftKeyBase={draftKey} />)}
     </div>
   );
 }

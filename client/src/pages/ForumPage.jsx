@@ -5,6 +5,7 @@ import { forum as api } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
 
 function fmt(iso) { return new Date(iso).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}); }
+const DRAFT_KEY = "draft:forum:new";
 
 export default function ForumPage() {
   const { user } = useAuth();
@@ -16,9 +17,15 @@ export default function ForumPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [writing, setWriting] = useState(false);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [selTags, setSelTags] = useState([]);
+  const [title, setTitle] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "{}").title || ""; } catch { return ""; }
+  });
+  const [body, setBody] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "{}").body || ""; } catch { return ""; }
+  });
+  const [selTags, setSelTags] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "{}").selTags || []; } catch { return []; }
+  });
 
   useEffect(() => {
     api.tags().then(setTags).catch(() => toast?.error("Could not load forum channels."));
@@ -30,11 +37,15 @@ export default function ForumPage() {
       .catch(() => toast?.error("Could not load forum threads."))
       .finally(()=>setLoading(false));
   }, [activeTag, search, toast]);
+  useEffect(() => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, body, selTags }));
+  }, [title, body, selTags]);
 
   const create = async () => {
     if (!title.trim()||!body.trim()) return;
     try {
       const { id } = await api.create(title.trim(), body.trim(), selTags);
+      localStorage.removeItem(DRAFT_KEY);
       toast?.success("Thread posted.");
       nav(`/forum/${id}`);
     } catch (e) {

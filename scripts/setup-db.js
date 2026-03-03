@@ -187,6 +187,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id),
     title TEXT NOT NULL,
+    header_image TEXT DEFAULT '',
     body TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME
@@ -256,6 +257,7 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS word_index (
   count INTEGER DEFAULT 0,
   PRIMARY KEY (word, work_id)
 )`); } catch {}
+try { db.exec("ALTER TABLE blog_posts ADD COLUMN header_image TEXT DEFAULT ''"); } catch {}
 
 // Seed forum tags
 const tags = [

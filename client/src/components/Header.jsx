@@ -9,6 +9,7 @@ export default function Header() {
   const { user, logout, dark, toggleDark } = useAuth();
   const toast = useToast();
   const [showAuth, setShowAuth] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(false);
   const [menu, setMenu] = useState(false);
   const [changePw, setChangePw] = useState(false);
   const [curPw, setCurPw] = useState("");
@@ -17,6 +18,7 @@ export default function Header() {
   const [showNotifs, setShowNotifs] = useState(false);
   const [notifs, setNotifs] = useState([]);
   const [unread, setUnread] = useState(0);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 860);
   const nav = useNavigate();
   const loc = useLocation();
 
@@ -45,6 +47,11 @@ export default function Header() {
     } catch {}
   }, [user]);
   useEffect(() => { loadNotifs(); const t=setInterval(loadNotifs,30000); return ()=>clearInterval(t); }, [loadNotifs]);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 860);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const openNotif = async (n) => {
     if (!n.read) {
@@ -100,20 +107,39 @@ export default function Header() {
             </div>
           </div>
 
-          <nav style={{ display:"flex", gap:2 }}>
+          {!isMobile && <nav style={{ display:"flex", gap:2 }}>
             {links.map(l => (
               <button key={l.to} className="btn btn-ghost" onClick={()=>nav(l.to)} style={{
                 padding:"8px 14px", fontFamily:"var(--font-display)", fontSize:13,
                 color:active(l.to)?"var(--accent)":"var(--text-muted)", fontWeight:active(l.to)?600:400,
               }}>{l.label}</button>
             ))}
-          </nav>
+          </nav>}
 
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            {isMobile && (
+              <div style={{ position:"relative" }}>
+                <button className="btn btn-ghost" aria-label="Toggle navigation menu" onClick={()=>{setShowMobileNav(!showMobileNav);setMenu(false);setShowNotifs(false);}} style={{ fontSize:16, padding:"6px 10px" }}>
+                  ☰
+                </button>
+                {showMobileNav && <div onClick={()=>setShowMobileNav(false)} style={{ position:"fixed", inset:0, zIndex:199 }} />}
+                {showMobileNav && (
+                  <div style={{ position:"absolute", top:42, right:0, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, boxShadow:"0 8px 24px var(--shadow)", minWidth:180, padding:8, zIndex:200 }}>
+                    {links.map(l => (
+                      <button key={l.to} className="btn btn-ghost" onClick={()=>{nav(l.to);setShowMobileNav(false);}} style={{
+                        width:"100%", textAlign:"left", padding:"8px 10px", fontSize:14,
+                        color:active(l.to)?"var(--accent)":"var(--text-muted)", fontWeight:active(l.to)?600:400,
+                      }}>{l.label === "🔍" ? "Search" : l.label}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Notification bell */}
             {user && (
               <div style={{ position:"relative" }}>
-                <button className="btn btn-ghost" aria-label="Toggle notifications" onClick={()=>{setShowNotifs(!showNotifs);setMenu(false);}} title="Notifications" style={{
+                <button className="btn btn-ghost" aria-label="Toggle notifications" onClick={()=>{setShowNotifs(!showNotifs);setMenu(false);setShowMobileNav(false);}} title="Notifications" style={{
                   fontSize:18, padding:"6px 10px", position:"relative",
                 }}>
                   🔔
@@ -155,12 +181,12 @@ export default function Header() {
             {user ? (
               <div style={{ position:"relative" }}>
                 {user.oauthAvatar ? (
-                  <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);}} style={{
+                  <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);setShowMobileNav(false);}} style={{
                     width:36, height:36, borderRadius:"50%", padding:0, border:"2px solid var(--accent)", overflow:"hidden",
                     display:"flex", alignItems:"center", justifyContent:"center", background:"var(--surface)",
                   }}><img src={user.oauthAvatar} alt="Profile avatar" style={{ width:"100%", height:"100%", objectFit:"cover" }} /></button>
                 ) : (
-                  <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);}} style={{
+                  <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);setShowMobileNav(false);}} style={{
                     background:"var(--accent)", color:"#FFF8F0", width:36, height:36, borderRadius:"50%",
                     display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:600, fontFamily:"var(--font-display)",
                   }}>{user.displayName?.[0]?.toUpperCase()||"?"}</button>
