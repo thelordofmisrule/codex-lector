@@ -1,22 +1,34 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { works as api } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
 
 export default function SearchPage() {
   const nav = useNavigate();
+  const location = useLocation();
   const toast = useToast();
+  const initialWork = new URLSearchParams(location.search).get("work") || "";
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [scope, setScope] = useState(initialWork ? "work" : "all");
+  const [workSlug, setWorkSlug] = useState(initialWork);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const work = params.get("work") || "";
+    setWorkSlug(work);
+    setScope(work ? "work" : "all");
+  }, [location.search]);
 
   const search = async () => {
     if (query.trim().length < 2) return;
     setLoading(true);
     setError("");
     try {
-      const r = await api.searchText(query.trim());
+      const scopedWork = scope === "work" ? workSlug : "";
+      const r = await api.searchText(query.trim(), scopedWork);
       setResults(r);
     } catch (e) {
       console.error(e);
@@ -33,8 +45,25 @@ export default function SearchPage() {
     <div className="animate-in" style={{ maxWidth:740, margin:"0 auto", padding:"48px 24px" }}>
       <h1 style={{ fontFamily:"var(--font-display)", fontSize:28, letterSpacing:2, marginBottom:4 }}>Text Search</h1>
       <p style={{ fontFamily:"var(--font-fell)", fontStyle:"italic", color:"var(--text-muted)", fontSize:15, marginBottom:24 }}>
-        Search within the text of all Shakespeare's works.
+        {scope === "work" && workSlug ? `Search within this work first (${workSlug}).` : "Search within the text of all Shakespeare's works."}
       </p>
+
+      <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
+        <button
+          className={`btn btn-sm ${scope === "work" ? "btn-primary" : "btn-secondary"}`}
+          onClick={() => setScope("work")}
+          disabled={!workSlug}
+          style={{ opacity: workSlug ? 1 : 0.5 }}
+        >
+          This Work
+        </button>
+        <button
+          className={`btn btn-sm ${scope === "all" ? "btn-primary" : "btn-secondary"}`}
+          onClick={() => setScope("all")}
+        >
+          All Works
+        </button>
+      </div>
 
       <div style={{ display:"flex", gap:8, marginBottom:24 }}>
         <input className="input" value={query} onChange={e=>setQuery(e.target.value)}

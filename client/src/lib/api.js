@@ -23,7 +23,7 @@ export const auth = {
 export const works = {
   list:()=>req("/works"),
   get:s=>req(`/works/${s}`),
-  searchText:q=>req(`/works/search/text?q=${encodeURIComponent(q)}`),
+  searchText:(q, workSlug="")=>req(`/works/search/text?q=${encodeURIComponent(q)}${workSlug ? `&work=${encodeURIComponent(workSlug)}` : ""}`),
 };
 export const annotations = {
   forWork:(s,filter)=>req(`/annotations/${s}${filter?`?filter=${filter}`:""}`),

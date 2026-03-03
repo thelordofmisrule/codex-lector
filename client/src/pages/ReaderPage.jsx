@@ -296,7 +296,7 @@ export default function ReaderPage() {
 
       if (e.key === "/") {
         e.preventDefault();
-        navigate("/search");
+        navigate(`/search?work=${encodeURIComponent(slug)}`);
       } else if (e.key.toLowerCase() === "b" && user) {
         e.preventDefault();
         setBookmarkHere();
@@ -608,6 +608,15 @@ export default function ReaderPage() {
       )}
 
       {/* Title */}
+      <div style={{ textAlign:"center", marginBottom:10 }}>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => navigate(`/search?work=${encodeURIComponent(slug)}`)}
+          style={{ color:"var(--text-light)", fontSize:12, fontFamily:"var(--font-display)", letterSpacing:1 }}
+        >
+          Search This Work
+        </button>
+      </div>
       <h1 style={{ textAlign:"center", fontFamily:"var(--font-display)", fontSize:"1.8em", fontWeight:400, letterSpacing:3, color:"var(--accent)", marginBottom:4 }}>{parsed.title || work.title}</h1>
       <div style={{ textAlign:"center", fontFamily:"var(--font-fell)", fontStyle:"italic", color:"var(--text-light)", fontSize:15, marginBottom:8 }}>William Shakespeare</div>
       <div style={{ textAlign:"center", color:"var(--border)", fontSize:14, letterSpacing:8, marginBottom:28 }}>☙ ❦ ❧</div>

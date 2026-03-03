@@ -51,10 +51,15 @@ r.get("/", (req, res) => {
 
 // Full-text search across all works
 r.get("/search/text", (req, res) => {
-  const { q } = req.query;
+  const { q, work: workSlug } = req.query;
   if (!q || q.trim().length < 2) return res.json([]);
   const query = q.trim();
-  const works = db.prepare("SELECT id, slug, title, category, content FROM works WHERE content IS NOT NULL").all();
+  let works;
+  if (workSlug) {
+    works = db.prepare("SELECT id, slug, title, category, content FROM works WHERE content IS NOT NULL AND slug=?").all(String(workSlug));
+  } else {
+    works = db.prepare("SELECT id, slug, title, category, content FROM works WHERE content IS NOT NULL").all();
+  }
   const results = [];
 
   for (const w of works) {
