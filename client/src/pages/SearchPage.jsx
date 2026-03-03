@@ -9,16 +9,19 @@ export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const search = async () => {
     if (query.trim().length < 2) return;
     setLoading(true);
+    setError("");
     try {
       const r = await api.searchText(query.trim());
       setResults(r);
     } catch (e) {
       console.error(e);
-      setResults([]);
+      setResults(null);
+      setError(e.message || "Search failed.");
       toast?.error(e.message || "Search failed. Please try again.");
     }
     setLoading(false);
@@ -47,6 +50,13 @@ export default function SearchPage() {
           {totalMatches > 0
             ? `Found ${totalMatches} match${totalMatches===1?"":"es"} across ${results.length} work${results.length===1?"":"s"}.`
             : `No matches for "${query}".`}
+        </div>
+      )}
+
+      {error && (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--danger)", borderRadius:8, padding:"14px 16px", marginBottom:16 }}>
+          <div style={{ color:"var(--danger)", marginBottom:8 }}>{error}</div>
+          <button className="btn btn-secondary btn-sm" onClick={search}>Try Again</button>
         </div>
       )}
 

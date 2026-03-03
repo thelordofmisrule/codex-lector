@@ -30,11 +30,13 @@ export default function MyBookmarksPage() {
       danger: true,
     });
     if (!ok) return;
+    const prevBookmarks = bookmarks;
+    setBookmarks(prev => prev.filter(b => b.work_slug !== slug));
     try {
       await api.remove(slug);
-      setBookmarks(prev => prev.filter(b => b.work_slug !== slug));
       toast?.success("Bookmark removed.");
     } catch (e) {
+      setBookmarks(prevBookmarks);
       toast?.error(e.message || "Could not remove bookmark.");
     }
   };

@@ -20,11 +20,23 @@ export default function ForumThreadPage() {
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editBody, setEditBody] = useState("");
+  const [loadError, setLoadError] = useState("");
+
+  const load = () => {
+    setLoading(true);
+    setLoadError("");
+    api.get(id).then(d => { setThread(d.thread); setReplies(d.replies); })
+      .catch((e) => {
+        if (e?.status !== 404) {
+          setLoadError("Could not load thread.");
+          toast?.error("Could not load thread.");
+        }
+      })
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
-    api.get(id).then(d => { setThread(d.thread); setReplies(d.replies); })
-      .catch(() => toast?.error("Could not load thread."))
-      .finally(() => setLoading(false));
+    load();
   }, [id, toast]);
 
   const canModify = user && thread && (user.id === thread.userId || user.isAdmin);
@@ -71,6 +83,12 @@ export default function ForumThreadPage() {
   };
 
   if (loading) return <div style={{padding:60,textAlign:"center"}}><div className="spinner"/></div>;
+  if (loadError) return (
+    <div style={{padding:60,textAlign:"center"}}>
+      <div style={{ color:"var(--danger)", marginBottom:10 }}>{loadError}</div>
+      <button className="btn btn-secondary" onClick={load}>Retry</button>
+    </div>
+  );
   if (!thread) return <div style={{padding:60,textAlign:"center",color:"var(--danger)"}}>Thread not found.</div>;
 
   return (

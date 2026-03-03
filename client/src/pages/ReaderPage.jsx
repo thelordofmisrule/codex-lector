@@ -222,8 +222,14 @@ export default function ReaderPage() {
   const [disc, setDisc] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tooltip, setTooltip] = useState(null);
-  const [fontSize, setFontSize] = useState(20);
-  const [annotMode, setAnnotMode] = useState("all");
+  const [fontSize, setFontSize] = useState(() => {
+    const raw = parseInt(localStorage.getItem("codex-font-size") || "20", 10);
+    return Number.isFinite(raw) ? Math.min(28, Math.max(14, raw)) : 20;
+  });
+  const [annotMode, setAnnotMode] = useState(() => {
+    const raw = localStorage.getItem("codex-annot-mode");
+    return raw === "mine" || raw === "off" ? raw : "all";
+  });
   const [bookmark, setBookmark] = useState(null);
   const [wordLookup, setWordLookup] = useState(null); // { word, position:{x,y} }
   const [myLayers, setMyLayers] = useState([]);
@@ -239,6 +245,18 @@ export default function ReaderPage() {
   };
 
   const showAnnots = annotMode !== "off";
+
+  useEffect(() => {
+    localStorage.setItem("codex-font-size", String(fontSize));
+  }, [fontSize]);
+
+  useEffect(() => {
+    localStorage.setItem("codex-annot-mode", annotMode);
+  }, [annotMode]);
+
+  useEffect(() => {
+    if (!user && annotMode === "mine") setAnnotMode("all");
+  }, [user, annotMode]);
 
   useEffect(() => {
     setLoading(true);
@@ -401,21 +419,25 @@ export default function ReaderPage() {
     if (closest) {
       const lineId = closest.dataset.lineid;
       const text = closest.textContent?.slice(0, 80) || "";
+      const prevBookmark = bookmark;
+      setBookmark(lineId);
       try {
         await bmApi.set(slug, lineId, text);
-        setBookmark(lineId);
         toast?.success("Bookmark saved.");
       } catch (e) {
+        setBookmark(prevBookmark);
         toast?.error(e.message || "Could not save bookmark.");
       }
     }
   };
   const clearBookmark = async () => {
+    const prevBookmark = bookmark;
+    setBookmark(null);
     try {
       await bmApi.remove(slug);
-      setBookmark(null);
       toast?.success("Bookmark cleared.");
     } catch (e) {
+      setBookmark(prevBookmark);
       toast?.error(e.message || "Could not clear bookmark.");
     }
   };

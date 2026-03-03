@@ -12,13 +12,23 @@ export default function MyLibraryPage() {
   const [prog, setProg] = useState([]);
   const [works, setWorks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  const load = () => {
+    setLoading(true);
+    setLoadError("");
+    Promise.all([api.myAll(), worksApi.list()])
+      .then(([p, w]) => { setProg(p); setWorks(w); })
+      .catch(() => {
+        setLoadError("Could not load your library.");
+        toast?.error("Could not load your library.");
+      })
+      .finally(()=>setLoading(false));
+  };
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
-    Promise.all([api.myAll(), worksApi.list()])
-      .then(([p, w]) => { setProg(p); setWorks(w); })
-      .catch(() => toast?.error("Could not load your library."))
-      .finally(()=>setLoading(false));
+    load();
   }, [user, toast]);
 
   if (!user) return (
@@ -74,6 +84,11 @@ export default function MyLibraryPage() {
 
       {loading ? (
         <div style={{ padding:40, textAlign:"center" }}><div className="spinner"/></div>
+      ) : loadError ? (
+        <div style={{ padding:40, textAlign:"center" }}>
+          <div style={{ color:"var(--danger)", marginBottom:10 }}>{loadError}</div>
+          <button className="btn btn-secondary" onClick={load}>Retry</button>
+        </div>
       ) : reading.length === 0 ? (
         <div style={{ padding:40, textAlign:"center", color:"var(--text-muted)", fontFamily:"var(--font-fell)", fontStyle:"italic", lineHeight:1.8 }}>
           No reading progress yet. Open any work and start reading — your progress will be tracked automatically.

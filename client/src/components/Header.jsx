@@ -2,10 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { auth as authApi, notifications as notifApi } from "../lib/api";
+import { useToast } from "../lib/ToastContext";
 import AuthModal from "./AuthModal";
 
 export default function Header() {
   const { user, logout, dark, toggleDark } = useAuth();
+  const toast = useToast();
   const [showAuth, setShowAuth] = useState(false);
   const [menu, setMenu] = useState(false);
   const [changePw, setChangePw] = useState(false);
@@ -45,11 +47,35 @@ export default function Header() {
   useEffect(() => { loadNotifs(); const t=setInterval(loadNotifs,30000); return ()=>clearInterval(t); }, [loadNotifs]);
 
   const openNotif = async (n) => {
-    if (!n.read) { await notifApi.markRead(n.id); setUnread(u=>Math.max(0,u-1)); setNotifs(prev=>prev.map(x=>x.id===n.id?{...x,read:1}:x)); }
+    if (!n.read) {
+      const prevNotifs = notifs;
+      const prevUnread = unread;
+      setUnread(u=>Math.max(0,u-1));
+      setNotifs(prev=>prev.map(x=>x.id===n.id?{...x,read:1}:x));
+      try {
+        await notifApi.markRead(n.id);
+      } catch (e) {
+        setNotifs(prevNotifs);
+        setUnread(prevUnread);
+        toast?.error(e.message || "Could not update notification.");
+      }
+    }
     setShowNotifs(false);
     if (n.link) nav(n.link);
   };
-  const markAllRead = async () => { await notifApi.markAllRead(); setUnread(0); setNotifs(prev=>prev.map(x=>({...x,read:1}))); };
+  const markAllRead = async () => {
+    const prevNotifs = notifs;
+    const prevUnread = unread;
+    setUnread(0);
+    setNotifs(prev=>prev.map(x=>({...x,read:1})));
+    try {
+      await notifApi.markAllRead();
+    } catch (e) {
+      setNotifs(prevNotifs);
+      setUnread(prevUnread);
+      toast?.error(e.message || "Could not mark notifications as read.");
+    }
+  };
 
   return (
     <>

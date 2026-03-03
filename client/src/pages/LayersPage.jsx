@@ -17,12 +17,22 @@ export default function LayersPage() {
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [tab, setTab] = useState("browse"); // browse | mine | subscribed
+  const [loadError, setLoadError] = useState("");
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
+    setLoadError("");
     api.list()
       .then(setLayers)
-      .catch(() => toast?.error("Could not load layers. Please refresh."))
+      .catch(() => {
+        setLoadError("Could not load layers.");
+        toast?.error("Could not load layers. Please refresh.");
+      })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
   }, [toast]);
 
   const create = async () => {
@@ -119,6 +129,11 @@ export default function LayersPage() {
 
       {loading ? (
         <div style={{ padding:40, textAlign:"center" }}><div className="spinner"/></div>
+      ) : loadError ? (
+        <div style={{ padding:40, textAlign:"center" }}>
+          <div style={{ color:"var(--danger)", marginBottom:10 }}>{loadError}</div>
+          <button className="btn btn-secondary" onClick={load}>Retry</button>
+        </div>
       ) : displayed.length === 0 ? (
         <div style={{ padding:40, textAlign:"center", color:"var(--text-muted)", fontFamily:"var(--font-fell)", fontStyle:"italic" }}>
           {tab==="browse" ? "No public layers yet. Be the first to share your annotations!" :

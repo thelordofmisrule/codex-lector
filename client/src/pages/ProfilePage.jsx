@@ -22,12 +22,14 @@ export default function ProfilePage() {
   const [saveMsg, setSaveMsg] = useState("");
   const [resetToken, setResetToken] = useState("");
   const [resetMsg, setResetMsg] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const isOwn = !!(user && user.username === username);
   const isAdmin = !!user?.isAdmin;
 
-  useEffect(() => {
+  const load = () => {
     setLoading(true);
+    setLoadError("");
     setProfile(null);
     api.profile(username).then(p => {
       setProfile(p);
@@ -35,7 +37,16 @@ export default function ProfilePage() {
       setEditUsername(p.username || "");
       setBio(p.bio || "");
       setAvatarColor(p.avatarColor || "#7A1E2E");
-    }).catch((e) => { if (e?.status !== 404) toast?.error("Could not load profile."); }).finally(()=>setLoading(false));
+    }).catch((e) => {
+      if (e?.status !== 404) {
+        setLoadError("Could not load profile.");
+        toast?.error("Could not load profile.");
+      }
+    }).finally(()=>setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
   }, [username, toast]);
 
   const save = async () => {
@@ -91,6 +102,13 @@ export default function ProfilePage() {
       toast?.error("Could not copy link.");
     }
   };
+
+  if (loadError) return (
+    <div style={{padding:60,textAlign:"center"}}>
+      <div style={{ color:"var(--danger)", marginBottom:10 }}>{loadError}</div>
+      <button className="btn btn-secondary" onClick={load}>Retry</button>
+    </div>
+  );
 
   return (
     <div className="animate-in" style={{ maxWidth:600, margin:"0 auto", padding:"48px 24px 80px" }}>

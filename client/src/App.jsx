@@ -16,6 +16,7 @@ import MyLibraryPage from "./pages/MyLibraryPage";
 import LayersPage from "./pages/LayersPage";
 import LayerDetailPage from "./pages/LayerDetailPage";
 import AnnotationDetailPage from "./pages/AnnotationDetailPage";
+import AdminLoginPage from "./pages/AdminLoginPage";
 
 export default function App() {
   const { user, refreshUser } = useAuth();
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/layers" element={<LayersPage />} />
           <Route path="/layers/:id" element={<LayerDetailPage />} />
           <Route path="/annotation/:id" element={<AnnotationDetailPage />} />
+          <Route path="/admin-login" element={<AdminLoginPage />} />
         </Routes>
       </main>
       <footer style={{ textAlign:"center", padding:"24px", borderTop:"1px solid var(--border-light)", color:"var(--text-light)", fontSize:13, fontFamily:"var(--font-fell)", fontStyle:"italic" }}>
