@@ -8,7 +8,7 @@ function fmt(iso) {
   return new Date(iso).toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" });
 }
 
-function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed, draftKeyBase, reportType, reportLabel }) {
+function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed, draftKeyBase, reportType, reportLabel, anchorPrefix }) {
   const { user } = useAuth();
   const { confirm } = useConfirm();
   const toast = useToast();
@@ -69,7 +69,7 @@ function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed, draftK
   };
 
   return (
-    <div className={depth > 0 ? "comment comment-nested" : "comment"}>
+    <div id={anchorPrefix ? `${anchorPrefix}-${c.id}` : undefined} className={depth > 0 ? "comment comment-nested" : "comment"}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
         <div style={{ fontSize:14, display:"flex", alignItems:"center", gap:6 }}>
           {hasChildren && (
@@ -118,13 +118,13 @@ function Comment({ c, depth, onReply, onEdit, onDelete, defaultCollapsed, draftK
       )}
 
       {!collapsed && c.children?.map(child => (
-        <Comment key={child.id} c={child} depth={depth+1} onReply={onReply} onEdit={onEdit} onDelete={onDelete} defaultCollapsed={depth >= 2} draftKeyBase={draftKeyBase} reportType={reportType} reportLabel={reportLabel} />
+        <Comment key={child.id} c={child} depth={depth+1} onReply={onReply} onEdit={onEdit} onDelete={onDelete} defaultCollapsed={depth >= 2} draftKeyBase={draftKeyBase} reportType={reportType} reportLabel={reportLabel} anchorPrefix={anchorPrefix} />
       ))}
     </div>
   );
 }
 
-export default function ThreadedComments({ comments, onPost, onEdit, onDelete, label="Discussion", draftKey="", reportType="", reportLabel="" }) {
+export default function ThreadedComments({ comments, onPost, onEdit, onDelete, label="Discussion", draftKey="", reportType="", reportLabel="", anchorPrefix="" }) {
   const { user } = useAuth();
   const toast = useToast();
   const [body, setBody] = useState(() => draftKey ? (localStorage.getItem(`${draftKey}:top`) || "") : "");
@@ -170,7 +170,7 @@ export default function ThreadedComments({ comments, onPost, onEdit, onDelete, l
       )}
 
       {roots.length === 0 && <p style={{ color:"var(--text-light)", fontStyle:"italic", fontFamily:"var(--font-fell)" }}>No comments yet. Be the first to share your thoughts.</p>}
-      {roots.map(c => <Comment key={c.id} c={c} depth={0} onReply={handleReply} onEdit={onEdit} onDelete={onDelete} defaultCollapsed={false} draftKeyBase={draftKey} reportType={reportType} reportLabel={reportLabel} />)}
+      {roots.map(c => <Comment key={c.id} c={c} depth={0} onReply={handleReply} onEdit={onEdit} onDelete={onDelete} defaultCollapsed={false} draftKeyBase={draftKey} reportType={reportType} reportLabel={reportLabel} anchorPrefix={anchorPrefix} />)}
     </div>
   );
 }

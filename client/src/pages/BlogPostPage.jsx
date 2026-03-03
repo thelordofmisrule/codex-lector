@@ -151,7 +151,7 @@ export default function BlogPostPage() {
         </>
       )}
 
-      <ThreadedComments comments={replies} onPost={postReply} onEdit={editReply} onDelete={deleteReply} label="Responses" draftKey={`blog:${id}:responses`} reportType="blog_reply" reportLabel="Report" />
+      <ThreadedComments comments={replies} onPost={postReply} onEdit={editReply} onDelete={deleteReply} label="Responses" draftKey={`blog:${id}:responses`} reportType="blog_reply" reportLabel="Report" anchorPrefix="comment" />
     </div>
   );
 }

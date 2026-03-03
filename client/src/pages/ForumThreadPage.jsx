@@ -131,7 +131,7 @@ export default function ForumThreadPage() {
         </>
       )}
 
-      <ThreadedComments comments={replies} onPost={postReply} onEdit={editReply} onDelete={deleteReply} label="Replies" draftKey={`forum:${id}:replies`} reportType="forum_reply" />
+      <ThreadedComments comments={replies} onPost={postReply} onEdit={editReply} onDelete={deleteReply} label="Replies" draftKey={`forum:${id}:replies`} reportType="forum_reply" anchorPrefix="comment" />
     </div>
   );
 }

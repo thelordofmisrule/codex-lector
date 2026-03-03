@@ -205,7 +205,7 @@ function PoetryView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, e
     <div style={{ marginBottom:32 }}>
       {data.sections.map((sec, si) => (
         <div key={si} style={{ marginBottom:28 }}>
-          {sec.title && <h3 style={{ fontFamily:"var(--font-display)", fontSize:16, letterSpacing:2, color:"var(--accent)", margin:"20px 0 10px", textAlign:"center" }}>{sec.title}</h3>}
+          {(sec.title || sec.heading) && <h3 style={{ fontFamily:"var(--font-display)", fontSize:16, letterSpacing:2, color:"var(--accent)", margin:"20px 0 10px", textAlign:"center" }}>{sec.title || sec.heading}</h3>}
           {sec.lines.map((line, li) => {
             if (line.type==="stagedir") return <div key={li} style={{ textAlign:"center", fontStyle:"italic", color:"var(--text-muted)", margin:"4px 0", fontSize:"0.85em" }}>[{line.text}]</div>;
             lineNum = line.n || ++lineNum;

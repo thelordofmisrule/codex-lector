@@ -76,6 +76,18 @@ function extractCast(root) {
   return personae;
 }
 
+function escapeHtml(s) {
+  return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function renderDramatis(personae) {
+  if (!personae?.length) return "";
+  return personae.map((p) => {
+    const desc = p.desc ? ` <span style="color:var(--text-light);font-style:italic">(${escapeHtml(p.desc)})</span>` : "";
+    return `<div style="margin-bottom:4px">${escapeHtml(p.name || "")}${desc}</div>`;
+  }).join("");
+}
+
 /* ── Parse a play ── */
 function parsePlay(root, title) {
   const personae = extractCast(root);
@@ -158,7 +170,7 @@ function parsePlay(root, title) {
     });
   });
 
-  return { type: "play", title, personae, lines: result };
+  return { type: "play", title, personae, dramatis: renderDramatis(personae), lines: result };
 }
 
 /* ── Parse sonnets ── */
@@ -175,7 +187,7 @@ function parseSonnets(root, title) {
     });
 
     if (lines.length > 0) {
-      sections.push({ heading: num, sectionType: "sonnet", lines });
+      sections.push({ title: `Sonnet ${num || sections.length + 1}`, heading: num, sectionType: "sonnet", lines });
     }
   });
 
@@ -199,7 +211,7 @@ function parsePoem(root, title) {
         const n = l.getAttribute("n");
         lines.push({ text: txt(l), n: parseInt(n, 10) || localN });
       });
-      if (lines.length) sections.push({ heading, sectionType: "stanza", lines });
+      if (lines.length) sections.push({ title: heading, heading, sectionType: "stanza", lines });
     });
     return { type: "poetry", title, sections };
   }
@@ -215,7 +227,7 @@ function parsePoem(root, title) {
         const n = l.getAttribute("n");
         lines.push({ text: txt(l), n: parseInt(n, 10) || localN });
       });
-      if (lines.length) sections.push({ heading: "", sectionType: "stanza", lines });
+      if (lines.length) sections.push({ title: "", heading: "", sectionType: "stanza", lines });
     });
     return { type: "poetry", title, sections };
   }
@@ -236,9 +248,9 @@ function parsePoem(root, title) {
     if (cur.length) chunk.push(cur);
 
     chunk.forEach((lines) => {
-      sections.push({ heading: "", sectionType: "stanza", lines });
+      sections.push({ title: "", heading: "", sectionType: "stanza", lines });
     });
   }
 
-  return { type: "poetry", title, sections: sections.length > 0 ? sections : [{ heading: "", sectionType: "stanza", lines: [{ text: "No content found.", n: 1 }] }] };
+  return { type: "poetry", title, sections: sections.length > 0 ? sections : [{ title: "", heading: "", sectionType: "stanza", lines: [{ text: "No content found.", n: 1 }] }] };
 }

@@ -12,6 +12,21 @@ const reportLimit = createRateLimit({
   keyFn: (req) => `report:${req.ip}:${req.user?.id || "anon"}`,
 });
 
+function targetLinkFor(targetType, targetId) {
+  const id = String(targetId);
+  if (targetType === "annotation") return `/annotation/${id}`;
+  if (targetType === "forum_thread") return `/forum/${id}`;
+  if (targetType === "forum_reply") {
+    const reply = db.prepare("SELECT thread_id FROM forum_replies WHERE id=?").get(id);
+    return reply ? `/forum/${reply.thread_id}#comment-${id}` : "";
+  }
+  if (targetType === "blog_reply") {
+    const reply = db.prepare("SELECT post_id FROM blog_replies WHERE id=?").get(id);
+    return reply ? `/blog/${reply.post_id}#comment-${id}` : "";
+  }
+  return "";
+}
+
 r.post("/", requireAuth, reportLimit, (req, res) => {
   const { targetType, targetId, reason, details } = req.body || {};
   if (!targetType || !targetId || !reason?.trim()) return res.status(400).json({ error:"targetType, targetId, and reason are required." });
@@ -41,6 +56,7 @@ r.get("/", requireAdmin, (req, res) => {
     id: row.id,
     targetType: row.target_type,
     targetId: row.target_id,
+    targetLink: targetLinkFor(row.target_type, row.target_id),
     reason: row.reason,
     details: row.details,
     status: row.status,

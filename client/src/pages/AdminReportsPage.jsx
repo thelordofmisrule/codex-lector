@@ -100,11 +100,16 @@ export default function AdminReportsPage() {
               {fmt(item.createdAt)}
               {item.resolvedAt ? ` · Resolved ${fmt(item.resolvedAt)}` : ""}
             </div>
-            {item.status === "open" && (
-              <button className="btn btn-primary btn-sm" onClick={() => resolve(item.id)}>
-                Resolve
-              </button>
-            )}
+            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+              {item.targetLink && (
+                <a className="btn btn-secondary btn-sm" href={item.targetLink}>Open</a>
+              )}
+              {item.status === "open" && (
+                <button className="btn btn-primary btn-sm" onClick={() => resolve(item.id)}>
+                  Resolve
+                </button>
+              )}
+            </div>
           </div>
         </div>
       ))}
