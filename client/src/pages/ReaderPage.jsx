@@ -229,6 +229,14 @@ export default function ReaderPage() {
   const [myLayers, setMyLayers] = useState([]);
   const progressRef = useRef({ maxLine:0, total:0, slug:null });
   const resumeLine = Math.max(0, parseInt(new URLSearchParams(location.search).get("line") || "0", 10) || 0);
+  const copyPageLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast?.success("Link copied.");
+    } catch {
+      toast?.error("Could not copy link.");
+    }
+  };
 
   const showAnnots = annotMode !== "off";
 
@@ -249,7 +257,7 @@ export default function ReaderPage() {
       })
       .catch(e => {
         console.error(e);
-        toast?.error("Could not load this work. Please refresh.");
+        if (e?.status !== 404) toast?.error("Could not load this work. Please refresh.");
       })
       .finally(() => setLoading(false));
   }, [slug, annotMode, user, toast]);
@@ -484,6 +492,11 @@ export default function ReaderPage() {
               )}
             </>
           )}
+
+          <span style={{ width:1, height:20, background:"var(--border)" }} />
+          <button className="btn btn-sm btn-ghost" aria-label="Copy link to this page" onClick={copyPageLink} title="Copy link" style={{ fontSize:11, color:"var(--text-light)", padding:"4px 6px" }}>
+            Copy Link
+          </button>
 
           <span style={{ width:1, height:20, background:"var(--border)" }} />
           <span style={{ fontSize:11, color:"var(--text-light)", fontFamily:"var(--font-fell)", fontStyle:"italic" }}>Click a word to look it up</span>

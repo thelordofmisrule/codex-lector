@@ -35,7 +35,7 @@ export default function ProfilePage() {
       setEditUsername(p.username || "");
       setBio(p.bio || "");
       setAvatarColor(p.avatarColor || "#7A1E2E");
-    }).catch(() => toast?.error("Could not load profile.")).finally(()=>setLoading(false));
+    }).catch((e) => { if (e?.status !== 404) toast?.error("Could not load profile."); }).finally(()=>setLoading(false));
   }, [username, toast]);
 
   const save = async () => {
@@ -52,6 +52,7 @@ export default function ProfilePage() {
       setEditing(false);
       setSaveMsg("Saved!");
       setTimeout(() => setSaveMsg(""), 2000);
+      toast?.success("Profile updated.");
       if (refreshUser) refreshUser();
       if (usernameChanged) nav(`/profile/${newUsername}`, { replace:true });
     } catch (e) {
@@ -82,6 +83,14 @@ export default function ProfilePage() {
   if (!profile) return <div style={{padding:60,textAlign:"center",color:"var(--danger)"}}>User not found.</div>;
 
   const stats = profile.stats || { annotations: 0, discussions: 0, forumThreads: 0 };
+  const copyProfileLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast?.success("Profile link copied.");
+    } catch {
+      toast?.error("Could not copy link.");
+    }
+  };
 
   return (
     <div className="animate-in" style={{ maxWidth:600, margin:"0 auto", padding:"48px 24px 80px" }}>
@@ -111,6 +120,9 @@ export default function ProfilePage() {
           </div>
           <div style={{ fontSize:13, color:"var(--text-light)", marginTop:4 }}>Joined {fmt(profile.createdAt)}</div>
         </div>
+        <button className="btn btn-sm btn-ghost" onClick={copyProfileLink} style={{ fontSize:12, color:"var(--text-light)", flexShrink:0 }}>
+          Copy Link
+        </button>
       </div>
 
       {/* Bio */}

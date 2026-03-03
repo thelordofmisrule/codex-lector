@@ -34,7 +34,7 @@ export default function AnnotationDetailPage() {
   useEffect(() => {
     api.get(id)
       .then(setData)
-      .catch(() => toast?.error("Could not load annotation details."))
+      .catch((e) => { if (e?.status !== 404) toast?.error("Could not load annotation details."); })
       .finally(()=>setLoading(false));
   }, [id, toast]);
 
@@ -43,6 +43,14 @@ export default function AnnotationDetailPage() {
 
   const { annotation: ann, comments, suggestions } = data;
   const type = ANNOT_TYPES[ann.color] || ANNOT_TYPES[0];
+  const copyPageLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast?.success("Annotation link copied.");
+    } catch {
+      toast?.error("Could not copy link.");
+    }
+  };
 
   /* ── Comment handlers ── */
   const postComment = async (body, parentId) => {
@@ -115,11 +123,16 @@ export default function AnnotationDetailPage() {
           <span style={{ fontSize:12, fontFamily:"var(--font-display)", letterSpacing:2, textTransform:"uppercase", color:type.color }}>
             {type.icon} {type.label}
           </span>
-          {ann.authorName && (
-            <Link to={`/profile/${ann.authorUsername}`} style={{ fontSize:13, color:"var(--text-light)" }}>
-              by <strong style={{color:"var(--accent)"}}>{ann.authorName}</strong>
-            </Link>
-          )}
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            {ann.authorName && (
+              <Link to={`/profile/${ann.authorUsername}`} style={{ fontSize:13, color:"var(--text-light)" }}>
+                by <strong style={{color:"var(--accent)"}}>{ann.authorName}</strong>
+              </Link>
+            )}
+            <button className="btn btn-sm btn-ghost" onClick={copyPageLink} style={{ fontSize:11, color:"var(--text-light)" }}>
+              Copy Link
+            </button>
+          </div>
         </div>
 
         {ann.selected_text && (

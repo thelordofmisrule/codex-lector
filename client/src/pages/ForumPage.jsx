@@ -35,6 +35,7 @@ export default function ForumPage() {
     if (!title.trim()||!body.trim()) return;
     try {
       const { id } = await api.create(title.trim(), body.trim(), selTags);
+      toast?.success("Thread posted.");
       nav(`/forum/${id}`);
     } catch (e) {
       toast?.error(e.message || "Could not create thread.");

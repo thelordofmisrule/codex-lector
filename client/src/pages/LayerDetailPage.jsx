@@ -19,7 +19,7 @@ export default function LayerDetailPage() {
   useEffect(() => {
     api.get(id)
       .then(setData)
-      .catch(() => toast?.error("Could not load layer details."))
+      .catch((e) => { if (e?.status !== 404) toast?.error("Could not load layer details."); })
       .finally(()=>setLoading(false));
   }, [id, toast]);
 
@@ -27,6 +27,14 @@ export default function LayerDetailPage() {
   if (!data) return <div style={{padding:60,textAlign:"center",color:"var(--danger)"}}>Layer not found.</div>;
 
   const { layer, annotations } = data;
+  const copyPageLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast?.success("Layer link copied.");
+    } catch {
+      toast?.error("Could not copy link.");
+    }
+  };
 
   // Group by work
   const byWork = {};
@@ -40,7 +48,12 @@ export default function LayerDetailPage() {
       <div style={{ marginBottom:6 }}>
         <Link to="/layers" style={{ fontSize:12, color:"var(--text-light)", fontFamily:"var(--font-display)", letterSpacing:1 }}>← LAYERS</Link>
       </div>
-      <h1 style={{ fontFamily:"var(--font-display)", fontSize:28, letterSpacing:2, marginBottom:4, color:"var(--accent)" }}>{layer.name}</h1>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:4 }}>
+        <h1 style={{ fontFamily:"var(--font-display)", fontSize:28, letterSpacing:2, color:"var(--accent)" }}>{layer.name}</h1>
+        <button className="btn btn-sm btn-ghost" onClick={copyPageLink} style={{ fontSize:12, color:"var(--text-light)", flexShrink:0 }}>
+          Copy Link
+        </button>
+      </div>
       {layer.description && <p style={{ fontFamily:"var(--font-fell)", fontStyle:"italic", color:"var(--text-muted)", fontSize:15, marginBottom:4 }}>{layer.description}</p>}
       <div style={{ fontSize:13, color:"var(--text-light)", marginBottom:28 }}>
         by <Link to={`/profile/${layer.username}`} style={{color:"var(--text-light)"}}>{layer.displayName}</Link> · {annotations.length} annotations

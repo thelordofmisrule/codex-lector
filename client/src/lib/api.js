@@ -2,7 +2,11 @@ async function req(path, opts={}) {
   const r = await fetch(`/api${path}`, { credentials:"include", headers:{"Content-Type":"application/json",...opts.headers}, ...opts });
   if (r.status===204) return null;
   const d = await r.json();
-  if (!r.ok) throw new Error(d.error||`HTTP ${r.status}`);
+  if (!r.ok) {
+    const err = new Error(d.error||`HTTP ${r.status}`);
+    err.status = r.status;
+    throw err;
+  }
   return d;
 }
 export const auth = {
