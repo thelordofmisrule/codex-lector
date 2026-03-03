@@ -273,6 +273,22 @@ export default function ReaderPage() {
     if (!user && annotMode === "mine") setAnnotMode("all");
   }, [user, annotMode]);
 
+  const getCurrentViewportLineNumber = useCallback(() => {
+    const lines = document.querySelectorAll("[data-lineid]");
+    if (!lines.length) return 1;
+    const center = window.innerHeight / 2;
+    let closestIndex = 0;
+    let closestDist = Infinity;
+    lines.forEach((el, i) => {
+      const dist = Math.abs(el.getBoundingClientRect().top - center);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestIndex = i;
+      }
+    });
+    return closestIndex + 1;
+  }, []);
+
   useEffect(() => {
     if (!work?.id || trackedSlugRef.current === slug) return;
     trackedSlugRef.current = slug;
@@ -296,7 +312,7 @@ export default function ReaderPage() {
 
       if (e.key === "/") {
         e.preventDefault();
-        navigate(`/search?work=${encodeURIComponent(slug)}`);
+        navigate(`/search?work=${encodeURIComponent(slug)}&returnLine=${getCurrentViewportLineNumber()}`);
       } else if (e.key.toLowerCase() === "b" && user) {
         e.preventDefault();
         setBookmarkHere();
@@ -311,7 +327,7 @@ export default function ReaderPage() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigate, user, wordLookup, tooltip]);
+  }, [navigate, user, wordLookup, tooltip, slug, getCurrentViewportLineNumber]);
 
   useEffect(() => {
     setLoading(true);
@@ -611,7 +627,7 @@ export default function ReaderPage() {
       <div style={{ textAlign:"center", marginBottom:10 }}>
         <button
           className="btn btn-ghost btn-sm"
-          onClick={() => navigate(`/search?work=${encodeURIComponent(slug)}`)}
+          onClick={() => navigate(`/search?work=${encodeURIComponent(slug)}&returnLine=${getCurrentViewportLineNumber()}`)}
           style={{ color:"var(--text-light)", fontSize:12, fontFamily:"var(--font-display)", letterSpacing:1 }}
         >
           Search This Work

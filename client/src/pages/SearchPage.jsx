@@ -7,18 +7,23 @@ export default function SearchPage() {
   const nav = useNavigate();
   const location = useLocation();
   const toast = useToast();
-  const initialWork = new URLSearchParams(location.search).get("work") || "";
+  const params = new URLSearchParams(location.search);
+  const initialWork = params.get("work") || "";
+  const initialReturnLine = Math.max(0, parseInt(params.get("returnLine") || "0", 10) || 0);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [scope, setScope] = useState(initialWork ? "work" : "all");
   const [workSlug, setWorkSlug] = useState(initialWork);
+  const [returnLine, setReturnLine] = useState(initialReturnLine);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const work = params.get("work") || "";
+    const line = Math.max(0, parseInt(params.get("returnLine") || "0", 10) || 0);
     setWorkSlug(work);
+    setReturnLine(line);
     setScope(work ? "work" : "all");
   }, [location.search]);
 
@@ -47,6 +52,18 @@ export default function SearchPage() {
       <p style={{ fontFamily:"var(--font-fell)", fontStyle:"italic", color:"var(--text-muted)", fontSize:15, marginBottom:24 }}>
         {scope === "work" && workSlug ? `Search within this work first (${workSlug}).` : "Search within the text of all Shakespeare's works."}
       </p>
+
+      {workSlug && (
+        <div style={{ marginBottom:14 }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => nav(`/read/${workSlug}${returnLine ? `?line=${returnLine}` : ""}`)}
+            style={{ color:"var(--text-light)", fontFamily:"var(--font-display)", letterSpacing:1 }}
+          >
+            Back to Work
+          </button>
+        </div>
+      )}
 
       <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
         <button
