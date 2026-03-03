@@ -34,12 +34,70 @@ function inlineFormat(line) {
   return s;
 }
 
+function matchListLine(line) {
+  const expanded = line.replace(/\t/g, "    ");
+  const match = expanded.match(/^(\s*)([-*]|\d+\.)\s+(.*)$/);
+  if (!match) return null;
+  return {
+    indent: match[1].length,
+    level: Math.floor(match[1].length / 4),
+    type: /\d+\.$/.test(match[2]) ? "ol" : "ul",
+    text: match[3],
+  };
+}
+
+function renderListContainer(container) {
+  const tag = container.type;
+  const body = container.items.map((item) => {
+    const children = item.children.map(renderListContainer).join("");
+    return `<li>${inlineFormat(item.text)}${children}</li>`;
+  }).join("");
+  return `<${tag}>${body}</${tag}>`;
+}
+
+function renderListBlock(lines, startIndex) {
+  const roots = [];
+  const containers = [];
+  let i = startIndex;
+
+  for (; i < lines.length; i++) {
+    const info = matchListLine(lines[i]);
+    if (!info) break;
+
+    let level = info.level;
+    while (level > 0 && (!containers[level - 1] || containers[level - 1].items.length === 0)) {
+      level -= 1;
+    }
+    if (level > containers.length) level = containers.length;
+
+    let container = containers[level];
+    if (!container || container.type !== info.type) {
+      container = { type: info.type, items: [] };
+      if (level === 0) {
+        roots.push(container);
+      } else {
+        const parent = containers[level - 1];
+        const parentItem = parent.items[parent.items.length - 1];
+        parentItem.children.push(container);
+      }
+      containers[level] = container;
+    }
+    containers.length = level + 1;
+
+    container.items.push({ text: info.text, children: [] });
+  }
+
+  return {
+    html: roots.map(renderListContainer).join(""),
+    nextIndex: i - 1,
+  };
+}
+
 export function renderMarkdown(text) {
   if (!text) return "";
   const lines = text.split("\n");
   const out = [];
   let inCode = false, codeBlock = [];
-  let inList = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -54,12 +112,6 @@ export function renderMarkdown(text) {
       continue;
     }
     if (inCode) { codeBlock.push(line); continue; }
-
-    // Close list if needed
-    if (inList && !line.startsWith("- ") && !line.startsWith("* ") && line.trim() !== "") {
-      out.push("</ul>");
-      inList = false;
-    }
 
     const trimmed = line.trim();
 
@@ -76,10 +128,11 @@ export function renderMarkdown(text) {
     // Blockquote
     if (trimmed.startsWith("> ")) { out.push(`<blockquote>${inlineFormat(trimmed.slice(2))}</blockquote>`); continue; }
 
-    // List items
-    if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-      if (!inList) { out.push("<ul>"); inList = true; }
-      out.push(`<li>${inlineFormat(trimmed.slice(2))}</li>`);
+    // List items (supports nested 4-space indentation and ordered lists)
+    if (matchListLine(line)) {
+      const rendered = renderListBlock(lines, i);
+      out.push(rendered.html);
+      i = rendered.nextIndex;
       continue;
     }
 
@@ -88,7 +141,6 @@ export function renderMarkdown(text) {
   }
 
   if (inCode && codeBlock.length) out.push(`<pre><code>${escapeHtml(codeBlock.join("\n"))}</code></pre>`);
-  if (inList) out.push("</ul>");
 
   return out.join("\n");
 }
