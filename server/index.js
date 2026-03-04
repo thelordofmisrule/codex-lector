@@ -21,6 +21,7 @@ const SITE_NAME = "Codex Lector";
 const SITE_DESC = "Annotated Shakespeare — read, discuss, and explore the works with scholarly annotations.";
 const GOOGLE_VERIFICATION = (process.env.GOOGLE_SITE_VERIFICATION || "").replace(/^google-site-verification=/, "");
 const BING_VERIFICATION = (process.env.BING_SITE_VERIFICATION || "").replace(/^msvalidate\.01=/, "");
+const STATIC_SOCIAL_IMAGE = process.env.SOCIAL_IMAGE_URL || process.env.OG_IMAGE_URL || "";
 
 /* ── Middleware ── */
 app.use(express.json({ limit:"50mb" }));
@@ -85,16 +86,41 @@ function verificationMeta() {
     ${BING_VERIFICATION ? `<meta name="msvalidate.01" content="${esc(BING_VERIFICATION)}" />` : ""}
   `;
 }
+function socialCardUrl(title = SITE_NAME, subtitle = SITE_DESC) {
+  const params = new URLSearchParams();
+  if (title) params.set("title", String(title).slice(0, 90));
+  if (subtitle) params.set("subtitle", String(subtitle).slice(0, 180));
+  return `${SITE_URL}/social-card.svg?${params.toString()}`;
+}
+function absoluteSocialImage(raw) {
+  if (!raw) return "";
+  return raw.startsWith("http") ? raw : `${SITE_URL}${raw}`;
+}
+function socialImageUrl(preferred = "", title = SITE_NAME, subtitle = SITE_DESC) {
+  return absoluteSocialImage(preferred || STATIC_SOCIAL_IMAGE) || socialCardUrl(title, subtitle);
+}
+function socialImageMeta(imageUrl, alt = SITE_NAME) {
+  return `
+    <meta property="og:image" content="${esc(imageUrl)}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="${esc(alt)}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="${esc(imageUrl)}" />
+  `;
+}
 function defaultMeta(url = SITE_URL) {
+  const imageUrl = socialImageUrl("", SITE_NAME, SITE_DESC);
   return `
     <meta name="description" content="${esc(SITE_DESC)}" />
     <link rel="canonical" href="${esc(url)}" />
     ${verificationMeta()}
+    <meta property="og:type" content="website" />
     <meta property="og:title" content="${SITE_NAME}" />
     <meta property="og:description" content="${esc(SITE_DESC)}" />
     <meta property="og:url" content="${esc(url)}" />
     <meta property="og:site_name" content="${SITE_NAME}" />
-    <meta name="twitter:card" content="summary" />
+    ${socialImageMeta(imageUrl, `${SITE_NAME} share card`)}
     <meta name="twitter:title" content="${SITE_NAME}" />
     <meta name="twitter:description" content="${esc(SITE_DESC)}" />
     <title>${SITE_NAME} — Shakespeare Annotated</title>
@@ -165,6 +191,33 @@ ${urls.join("\n")}
 </urlset>`);
 });
 
+app.get("/social-card.svg", (req, res) => {
+  const title = String(req.query.title || SITE_NAME).slice(0, 90);
+  const subtitle = String(req.query.subtitle || SITE_DESC).slice(0, 180);
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.type("image/svg+xml").send(`<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="${esc(title)}">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f4eddd" />
+      <stop offset="100%" stop-color="#e6d9b7" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7A1E2E" />
+      <stop offset="100%" stop-color="#C9A84C" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <rect x="46" y="46" width="1108" height="538" rx="26" fill="rgba(255,248,240,0.72)" stroke="#c5b28a" stroke-width="2" />
+  <rect x="86" y="88" width="12" height="454" rx="6" fill="url(#accent)" />
+  <text x="130" y="156" font-family="Georgia, serif" font-size="30" letter-spacing="6" fill="#8a6e32">CODEX LECTOR</text>
+  <text x="130" y="276" font-family="Georgia, serif" font-size="64" font-weight="700" fill="#7A1E2E">${esc(title)}</text>
+  <text x="130" y="352" font-family="Georgia, serif" font-size="28" fill="#4e433a">${esc(subtitle)}</text>
+  <text x="130" y="500" font-family="Georgia, serif" font-size="26" fill="#6b5b4b">Read Shakespeare with line-by-line annotation, discussion, and shared layers.</text>
+  <text x="1010" y="548" text-anchor="end" font-family="Georgia, serif" font-size="26" fill="#8a6e32">codexlector.com</text>
+</svg>`);
+});
+
 /* ── Production static serving with OG meta injection ── */
 if (process.env.NODE_ENV === "production") {
   const dist = path.join(__dirname, "..", "client", "dist");
@@ -189,9 +242,7 @@ if (process.env.NODE_ENV === "production") {
     const desc = esc(post.body.replace(/[#*_`\[\]]/g,"").slice(0,200));
     const author = esc(post.display_name);
     const url = `${SITE_URL}/blog/${id}`;
-    const imageUrl = post.header_image
-      ? (post.header_image.startsWith("http") ? post.header_image : `${SITE_URL}${post.header_image}`)
-      : "";
+    const imageUrl = socialImageUrl(post.header_image || "", post.title, post.body.replace(/[#*_`\[\]]/g,"").slice(0,160));
 
     const meta = `
     <meta name="description" content="${desc}" />
@@ -202,9 +253,7 @@ if (process.env.NODE_ENV === "production") {
     <meta property="og:description" content="${desc}" />
     <meta property="og:url" content="${url}" />
     <meta property="og:site_name" content="${SITE_NAME}" />
-    ${imageUrl ? `<meta property="og:image" content="${esc(imageUrl)}" />` : ""}
-    <meta name="twitter:card" content="${imageUrl ? "summary_large_image" : "summary"}" />
-    ${imageUrl ? `<meta name="twitter:image" content="${esc(imageUrl)}" />` : ""}
+    ${socialImageMeta(imageUrl, `${post.title} on ${SITE_NAME}`)}
     <meta name="twitter:title" content="${title}" />
     <meta name="twitter:description" content="${desc}" />
     <meta name="author" content="${author}" />
@@ -220,6 +269,7 @@ if (process.env.NODE_ENV === "production") {
     const title = esc(work.title);
     const author = esc(work.authors || "William Shakespeare");
     const url = `${SITE_URL}/read/${req.params.slug}`;
+    const imageUrl = socialImageUrl("", `${work.title} — ${SITE_NAME}`, `Read ${work.title} by ${work.authors || "William Shakespeare"} with scholarly annotations.`);
 
     const meta = `
     <meta name="description" content="Read ${title} by ${author} with scholarly annotations." />
@@ -230,7 +280,7 @@ if (process.env.NODE_ENV === "production") {
     <meta property="og:description" content="Read ${title} by ${author} with scholarly annotations." />
     <meta property="og:url" content="${url}" />
     <meta property="og:site_name" content="${SITE_NAME}" />
-    <meta name="twitter:card" content="summary" />
+    ${socialImageMeta(imageUrl, `${work.title} on ${SITE_NAME}`)}
     <meta name="twitter:title" content="${title}" />
     <meta name="twitter:description" content="Read ${title} with annotations on ${SITE_NAME}" />
     <title>${title} — ${SITE_NAME}</title>`;
@@ -244,6 +294,7 @@ if (process.env.NODE_ENV === "production") {
     const title = esc(thread.title);
     const desc = esc((thread.body || "").replace(/[#*_`\[\]]/g, "").slice(0, 200));
     const url = `${SITE_URL}/forum/${req.params.id}`;
+    const imageUrl = socialImageUrl("", thread.title, (thread.body || "").replace(/[#*_`\[\]]/g, "").slice(0, 160));
     const meta = `
     <meta name="description" content="${desc}" />
     <link rel="canonical" href="${url}" />
@@ -253,7 +304,7 @@ if (process.env.NODE_ENV === "production") {
     <meta property="og:description" content="${desc}" />
     <meta property="og:url" content="${url}" />
     <meta property="og:site_name" content="${SITE_NAME}" />
-    <meta name="twitter:card" content="summary" />
+    ${socialImageMeta(imageUrl, `${thread.title} on ${SITE_NAME}`)}
     <meta name="twitter:title" content="${title}" />
     <meta name="twitter:description" content="${desc}" />
     <meta name="author" content="${esc(thread.display_name)}" />
@@ -274,6 +325,7 @@ if (process.env.NODE_ENV === "production") {
     const title = esc(head.slice(0, 120));
     const desc = esc((ann.note || "").replace(/[#*_`\[\]]/g, "").slice(0, 200));
     const url = `${SITE_URL}/annotation/${req.params.id}`;
+    const imageUrl = socialImageUrl("", head, (ann.note || "").replace(/[#*_`\[\]]/g, "").slice(0, 160));
     const meta = `
     <meta name="description" content="${desc}" />
     <link rel="canonical" href="${url}" />
@@ -283,7 +335,7 @@ if (process.env.NODE_ENV === "production") {
     <meta property="og:description" content="${desc}" />
     <meta property="og:url" content="${url}" />
     <meta property="og:site_name" content="${SITE_NAME}" />
-    <meta name="twitter:card" content="summary" />
+    ${socialImageMeta(imageUrl, `${head} on ${SITE_NAME}`)}
     <meta name="twitter:title" content="${title}" />
     <meta name="twitter:description" content="${desc}" />
     <meta name="author" content="${esc(ann.display_name)}" />
@@ -302,6 +354,7 @@ if (process.env.NODE_ENV === "production") {
     const title = esc(layer.name);
     const desc = esc((layer.description || `Annotation layer by ${layer.display_name}`).slice(0, 200));
     const url = `${SITE_URL}/layers/${req.params.id}`;
+    const imageUrl = socialImageUrl("", layer.name, layer.description || `Annotation layer by ${layer.display_name}`);
     const meta = `
     <meta name="description" content="${desc}" />
     <link rel="canonical" href="${url}" />
@@ -311,7 +364,7 @@ if (process.env.NODE_ENV === "production") {
     <meta property="og:description" content="${desc}" />
     <meta property="og:url" content="${url}" />
     <meta property="og:site_name" content="${SITE_NAME}" />
-    <meta name="twitter:card" content="summary" />
+    ${socialImageMeta(imageUrl, `${layer.name} on ${SITE_NAME}`)}
     <meta name="twitter:title" content="${title}" />
     <meta name="twitter:description" content="${desc}" />
     <meta name="author" content="${esc(layer.display_name)}" />
@@ -325,6 +378,7 @@ if (process.env.NODE_ENV === "production") {
     const title = esc(`${profile.display_name} Profile`);
     const desc = esc((profile.bio || `${profile.display_name} on ${SITE_NAME}`).slice(0, 200));
     const url = `${SITE_URL}/profile/${req.params.username}`;
+    const imageUrl = socialImageUrl("", `${profile.display_name} on ${SITE_NAME}`, profile.bio || `${profile.display_name} profile`);
     const meta = `
     <meta name="description" content="${desc}" />
     <link rel="canonical" href="${url}" />
@@ -334,7 +388,7 @@ if (process.env.NODE_ENV === "production") {
     <meta property="og:description" content="${desc}" />
     <meta property="og:url" content="${url}" />
     <meta property="og:site_name" content="${SITE_NAME}" />
-    <meta name="twitter:card" content="summary" />
+    ${socialImageMeta(imageUrl, `${profile.display_name} profile on ${SITE_NAME}`)}
     <meta name="twitter:title" content="${title}" />
     <meta name="twitter:description" content="${desc}" />
     <title>${title} — ${SITE_NAME}</title>`;
@@ -344,6 +398,7 @@ if (process.env.NODE_ENV === "production") {
   app.get("/places", (req, res) => {
     const url = `${SITE_URL}/places`;
     const desc = "Explore a curated geography of real places mentioned across Shakespeare's works, with line-level citations.";
+    const imageUrl = socialImageUrl("", "Places in the Works", desc);
     const meta = `
     <meta name="description" content="${esc(desc)}" />
     <link rel="canonical" href="${url}" />
@@ -353,7 +408,7 @@ if (process.env.NODE_ENV === "production") {
     <meta property="og:description" content="${esc(desc)}" />
     <meta property="og:url" content="${url}" />
     <meta property="og:site_name" content="${SITE_NAME}" />
-    <meta name="twitter:card" content="summary" />
+    ${socialImageMeta(imageUrl, `Places in the Works on ${SITE_NAME}`)}
     <meta name="twitter:title" content="Places in the Works" />
     <meta name="twitter:description" content="${esc(desc)}" />
     <title>Places in the Works — ${SITE_NAME}</title>`;
