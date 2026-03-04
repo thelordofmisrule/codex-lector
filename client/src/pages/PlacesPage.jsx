@@ -1,17 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { places as placesApi, works as worksApi } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
-
-const LEAFLET_CSS_ID = "codex-leaflet-css";
-const LEAFLET_SCRIPT_ID = "codex-leaflet-js";
-const LEAFLET_CSS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-const LEAFLET_SCRIPT_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-const INITIAL_CENTER = [45.2, 12.0];
-const INITIAL_ZOOM = 4;
-
-let leafletPromise = null;
 
 function prettyCategory(cat) {
   return String(cat || "")
@@ -19,37 +10,22 @@ function prettyCategory(cat) {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function ensureLeaflet() {
-  if (typeof window === "undefined") return Promise.reject(new Error("Browser only."));
-  if (window.L) return Promise.resolve(window.L);
-  if (leafletPromise) return leafletPromise;
+function mapEmbedUrl(place) {
+  if (!place) {
+    return "https://www.openstreetmap.org/export/embed.html?bbox=-12%2C34%2C34%2C60&layer=mapnik";
+  }
+  const spanLng = 4;
+  const spanLat = 2.5;
+  const left = (place.lng - spanLng).toFixed(4);
+  const right = (place.lng + spanLng).toFixed(4);
+  const bottom = (place.lat - spanLat).toFixed(4);
+  const top = (place.lat + spanLat).toFixed(4);
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${place.lat}%2C${place.lng}`;
+}
 
-  leafletPromise = new Promise((resolve, reject) => {
-    if (!document.getElementById(LEAFLET_CSS_ID)) {
-      const link = document.createElement("link");
-      link.id = LEAFLET_CSS_ID;
-      link.rel = "stylesheet";
-      link.href = LEAFLET_CSS_URL;
-      document.head.appendChild(link);
-    }
-
-    const existing = document.getElementById(LEAFLET_SCRIPT_ID);
-    if (existing) {
-      existing.addEventListener("load", () => window.L ? resolve(window.L) : reject(new Error("Leaflet failed to initialize.")), { once: true });
-      existing.addEventListener("error", () => reject(new Error("Could not load map library.")), { once: true });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.id = LEAFLET_SCRIPT_ID;
-    script.src = LEAFLET_SCRIPT_URL;
-    script.async = true;
-    script.onload = () => window.L ? resolve(window.L) : reject(new Error("Leaflet failed to initialize."));
-    script.onerror = () => reject(new Error("Could not load map library."));
-    document.body.appendChild(script);
-  });
-
-  return leafletPromise;
+function mapLinkUrl(place) {
+  if (!place) return "https://www.openstreetmap.org/#map=4/45.2/12.0";
+  return `https://www.openstreetmap.org/?mlat=${place.lat}&mlon=${place.lng}#map=7/${place.lat}/${place.lng}`;
 }
 
 function fileToDataUrl(file) {
@@ -65,10 +41,6 @@ export default function PlacesPage() {
   const nav = useNavigate();
   const { user } = useAuth();
   const toast = useToast();
-  const mapNodeRef = useRef(null);
-  const mapRef = useRef(null);
-  const layerRef = useRef(null);
-  const markersRef = useRef({});
 
   const [works, setWorks] = useState([]);
   const [places, setPlaces] = useState([]);
@@ -79,11 +51,9 @@ export default function PlacesPage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [mapLoading, setMapLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const [mapError, setMapError] = useState("");
   const [editor, setEditor] = useState({ description: "", historicalNote: "", imageUrl: "" });
 
   useEffect(() => {
@@ -166,89 +136,6 @@ export default function PlacesPage() {
     return types.sort();
   }, [places]);
 
-  useEffect(() => {
-    let cancelled = false;
-    ensureLeaflet().then(L => {
-      if (cancelled || mapRef.current || !mapNodeRef.current) return;
-      const map = L.map(mapNodeRef.current, {
-        center: INITIAL_CENTER,
-        zoom: INITIAL_ZOOM,
-        minZoom: 3,
-        maxZoom: 10,
-        zoomControl: true,
-      });
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      }).addTo(map);
-      layerRef.current = L.layerGroup().addTo(map);
-      mapRef.current = map;
-      setMapLoading(false);
-      setMapError("");
-      setTimeout(() => map.invalidateSize(), 80);
-    }).catch(e => {
-      if (cancelled) return;
-      setMapLoading(false);
-      setMapError(e.message || "Could not load the map.");
-    });
-
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    const L = window.L;
-    if (!map || !L || !layerRef.current) return;
-
-    layerRef.current.clearLayers();
-    markersRef.current = {};
-
-    if (!visiblePlaces.length) {
-      map.setView(INITIAL_CENTER, INITIAL_ZOOM);
-      return;
-    }
-
-    const bounds = [];
-    visiblePlaces.forEach(place => {
-      const marker = L.circleMarker([place.lat, place.lng], {
-        radius: place.slug === selectedSlug ? 9 : 7,
-        color: "rgba(122,30,46,0.9)",
-        weight: place.slug === selectedSlug ? 3 : 2,
-        fillColor: place.slug === selectedSlug ? "#7A1E2E" : "#C9A84C",
-        fillOpacity: 0.85,
-      });
-      marker.on("click", () => setSelectedSlug(place.slug));
-      marker.bindTooltip(place.name, {
-        direction: "top",
-        offset: [0, -6],
-      });
-      marker.addTo(layerRef.current);
-      markersRef.current[place.slug] = marker;
-      bounds.push([place.lat, place.lng]);
-    });
-
-    if (bounds.length === 1) {
-      map.setView(bounds[0], 6);
-    } else {
-      map.fitBounds(bounds, { padding: [36, 36], maxZoom: 6 });
-    }
-  }, [visiblePlaces, selectedSlug]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    const marker = markersRef.current[selectedSlug];
-    if (!map || !marker) return;
-    const latLng = marker.getLatLng();
-    map.flyTo(latLng, Math.max(map.getZoom(), 5), { duration: 0.4 });
-    marker.openTooltip();
-  }, [selectedSlug]);
-
-  useEffect(() => () => {
-    if (mapRef.current) {
-      mapRef.current.remove();
-      mapRef.current = null;
-    }
-  }, []);
-
   const selectedWork = works.find(work => work.slug === workFilter);
 
   const uploadPlaceImage = async (file) => {
@@ -329,42 +216,25 @@ export default function PlacesPage() {
               <div>
                 <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "var(--accent)" }}>Map View</div>
                 <div style={{ fontSize: 13, color: "var(--text-light)" }}>
-                  {selectedWork ? `Filtered to ${selectedWork.title}` : "Zoomable real geography via OpenStreetMap"}
+                  {selectedWork ? `Filtered to ${selectedWork.title}` : "Interactive OpenStreetMap view"}
                 </div>
               </div>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <div style={{ fontSize: 13, color: "var(--text-light)" }}>{visiblePlaces.length} places</div>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => {
-                    const map = mapRef.current;
-                    if (!map) return;
-                    if (!visiblePlaces.length) {
-                      map.setView(INITIAL_CENTER, INITIAL_ZOOM);
-                      return;
-                    }
-                    const bounds = visiblePlaces.map(place => [place.lat, place.lng]);
-                    if (bounds.length === 1) map.setView(bounds[0], 6);
-                    else map.fitBounds(bounds, { padding: [36, 36], maxZoom: 6 });
-                  }}
-                >
-                  Reset View
-                </button>
+                <a className="btn btn-ghost btn-sm" href={mapLinkUrl(selectedPlace)} target="_blank" rel="noopener noreferrer">
+                  Open Larger
+                </a>
               </div>
             </div>
 
             <div style={{ position: "relative", minHeight: 560, borderRadius: 14, border: "1px solid var(--border-light)", overflow: "hidden", background: "rgba(244,240,229,0.9)" }}>
-              <div ref={mapNodeRef} style={{ position: "absolute", inset: 0 }} />
-              {mapLoading && (
-                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(244,240,229,0.92)" }}>
-                  <div className="spinner" />
-                </div>
-              )}
-              {mapError && (
-                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center", background: "rgba(244,240,229,0.95)", color: "var(--danger)" }}>
-                  {mapError}
-                </div>
-              )}
+              <iframe
+                key={selectedPlace?.slug || "all-places"}
+                title={selectedPlace ? `${selectedPlace.name} map` : "Shakespeare places map"}
+                src={mapEmbedUrl(selectedPlace)}
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }}
+                loading="lazy"
+              />
             </div>
 
             <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
