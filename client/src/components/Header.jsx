@@ -24,6 +24,7 @@ export default function Header() {
 
   const links = [
     { to:"/", label:"Works" },
+    { to:"/places", label:"Places" },
     { to:"/how-to", label:"How To" },
     { to:"/layers", label:"Layers" },
     { to:"/forum", label:"Forum" },

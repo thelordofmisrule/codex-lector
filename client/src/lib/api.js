@@ -84,6 +84,10 @@ export const analytics = {
   event:(eventType, payload={})=>req("/analytics/event",{method:"POST",body:JSON.stringify({ eventType, ...payload })}),
   summary:()=>req("/analytics/summary"),
 };
+export const places = {
+  list:(workSlug="")=>req(`/places${workSlug ? `?work=${encodeURIComponent(workSlug)}` : ""}`),
+  get:(slug, workSlug="")=>req(`/places/${encodeURIComponent(slug)}${workSlug ? `?work=${encodeURIComponent(workSlug)}` : ""}`),
+};
 export const notifications = {
   list:()=>req("/notifications"),
   markRead:id=>req(`/notifications/${id}/read`,{method:"POST"}),

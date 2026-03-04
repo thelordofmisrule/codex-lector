@@ -225,6 +225,20 @@ db.exec(`
     meta_json TEXT DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS places (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    modern_name TEXT DEFAULT '',
+    place_type TEXT NOT NULL DEFAULT 'city',
+    modern_country TEXT DEFAULT '',
+    lat REAL NOT NULL,
+    lng REAL NOT NULL,
+    description TEXT DEFAULT '',
+    aliases_json TEXT DEFAULT '[]',
+    is_real BOOLEAN DEFAULT 1
+  );
 `);
 
 // Migrations for existing databases
@@ -302,6 +316,25 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS analytics_events (
   meta_json TEXT DEFAULT '',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS places (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  modern_name TEXT DEFAULT '',
+  place_type TEXT NOT NULL DEFAULT 'city',
+  modern_country TEXT DEFAULT '',
+  lat REAL NOT NULL,
+  lng REAL NOT NULL,
+  description TEXT DEFAULT '',
+  aliases_json TEXT DEFAULT '[]',
+  is_real BOOLEAN DEFAULT 1
+)`); } catch {}
+try { db.exec("ALTER TABLE places ADD COLUMN modern_name TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE places ADD COLUMN place_type TEXT NOT NULL DEFAULT 'city'"); } catch {}
+try { db.exec("ALTER TABLE places ADD COLUMN modern_country TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE places ADD COLUMN description TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE places ADD COLUMN aliases_json TEXT DEFAULT '[]'"); } catch {}
+try { db.exec("ALTER TABLE places ADD COLUMN is_real BOOLEAN DEFAULT 1"); } catch {}
 
 // Seed forum tags
 const tags = [
@@ -312,6 +345,41 @@ const tags = [
 ];
 const insertTag = db.prepare("INSERT OR IGNORE INTO forum_tags (name,color) VALUES (?,?)");
 for (const [n,c] of tags) insertTag.run(n,c);
+
+// Seed a curated starter geography of real places.
+const seededPlaces = [
+  ["athens", "Athens", "Athina", "city", "Greece", 37.9838, 23.7275, "A classical city of philosophy, law, and myth that recurs throughout the canon.", JSON.stringify([])],
+  ["cyprus", "Cyprus", "Cyprus", "island", "Cyprus", 35.1264, 33.4299, "An eastern Mediterranean island central to trade, war, and Othello's military setting.", JSON.stringify([])],
+  ["denmark", "Denmark", "Danmark", "kingdom", "Denmark", 56.2639, 9.5018, "A northern kingdom associated above all with Hamlet and the Danish court.", JSON.stringify([])],
+  ["egypt", "Egypt", "Egypt", "kingdom", "Egypt", 26.8206, 30.8025, "A political and erotic counterworld to Rome in Antony and Cleopatra.", JSON.stringify([])],
+  ["england", "England", "England", "kingdom", "United Kingdom", 52.3555, -1.1743, "The political heart of the histories and the most frequently invoked realm in the plays.", JSON.stringify([])],
+  ["florence", "Florence", "Firenze", "city", "Italy", 43.7696, 11.2558, "A Renaissance city linked to soldiers, courts, and Italian political texture.", JSON.stringify([])],
+  ["france", "France", "France", "kingdom", "France", 46.2276, 2.2137, "England's nearest rival and ally, invoked constantly in histories and comedies alike.", JSON.stringify([])],
+  ["messina", "Messina", "Messina", "city", "Italy", 38.1938, 15.5540, "The Sicilian setting of Much Ado About Nothing.", JSON.stringify([])],
+  ["milan", "Milan", "Milano", "city", "Italy", 45.4642, 9.1900, "A ducal city tied to exile, restoration, and courtly intrigue.", JSON.stringify([])],
+  ["navarre", "Navarre", "Navarra", "kingdom", "Spain", 42.6954, -1.6761, "A Pyrenean kingdom associated with academies, wit, and diplomatic comedy.", JSON.stringify([])],
+  ["padua", "Padua", "Padova", "city", "Italy", 45.4064, 11.8768, "A learned university city named in The Taming of the Shrew and other Italianate plays.", JSON.stringify([])],
+  ["rome", "Rome", "Roma", "city", "Italy", 41.9028, 12.4964, "The imperial city of republican virtue, conspiracy, and tragic statecraft.", JSON.stringify([])],
+  ["scotland", "Scotland", "Scotland", "kingdom", "United Kingdom", 56.4907, -4.2026, "A haunted northern kingdom tied to succession, prophecy, and Macbeth.", JSON.stringify([])],
+  ["venice", "Venice", "Venezia", "city", "Italy", 45.4408, 12.3155, "A mercantile republic of law, credit, outsiders, and theatrical disguise.", JSON.stringify([])],
+  ["verona", "Verona", "Verona", "city", "Italy", 45.4384, 10.9916, "A northern Italian city remembered above all for Romeo and Juliet.", JSON.stringify([])],
+  ["vienna", "Vienna", "Wien", "city", "Austria", 48.2082, 16.3738, "The setting of Measure for Measure, imagined as a city of law, appetite, and surveillance.", JSON.stringify([])],
+];
+const upsertPlace = db.prepare(`
+  INSERT INTO places (slug, name, modern_name, place_type, modern_country, lat, lng, description, aliases_json, is_real)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+  ON CONFLICT(slug) DO UPDATE SET
+    name=excluded.name,
+    modern_name=excluded.modern_name,
+    place_type=excluded.place_type,
+    modern_country=excluded.modern_country,
+    lat=excluded.lat,
+    lng=excluded.lng,
+    description=excluded.description,
+    aliases_json=excluded.aliases_json,
+    is_real=1
+`);
+for (const row of seededPlaces) upsertPlace.run(...row);
 
 // Create first admin user
 const bcrypt = require("bcryptjs");

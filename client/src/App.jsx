@@ -20,6 +20,7 @@ import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminReportsPage from "./pages/AdminReportsPage";
 import AdminAnalyticsPage from "./pages/AdminAnalyticsPage";
 import HowToPage from "./pages/HowToPage";
+import PlacesPage from "./pages/PlacesPage";
 
 export default function App() {
   const { user, refreshUser } = useAuth();
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/my-bookmarks" element={<MyBookmarksPage />} />
           <Route path="/my-library" element={<MyLibraryPage />} />
           <Route path="/layers" element={<LayersPage />} />
+          <Route path="/places" element={<PlacesPage />} />
           <Route path="/layers/:id" element={<LayerDetailPage />} />
           <Route path="/annotation/:id" element={<AnnotationDetailPage />} />
           <Route path="/admin-login" element={<AdminLoginPage />} />
