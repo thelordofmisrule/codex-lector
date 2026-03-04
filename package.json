@@ -12,6 +12,7 @@
     "backup:db": "node scripts/backup-db.js",
     "restore:db": "node scripts/restore-db.js",
     "set-admin": "node scripts/set-admin.js",
+    "set-place": "node scripts/set-place-meta.js",
     "deploy:safe": "bash scripts/deploy-safe.sh",
     "rollback": "bash scripts/rollback-release.sh",
     "import": "node scripts/import-texts.js",

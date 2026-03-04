@@ -118,6 +118,8 @@ function serializePlace(row) {
     lat: row.lat,
     lng: row.lng,
     description: row.description,
+    historicalNote: row.historical_note || "",
+    imageUrl: row.image_url || "",
     aliases: parseAliases(row.aliases_json),
     isReal: !!row.is_real,
   };
