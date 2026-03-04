@@ -87,6 +87,8 @@ export const analytics = {
 export const places = {
   list:(workSlug="")=>req(`/places${workSlug ? `?work=${encodeURIComponent(workSlug)}` : ""}`),
   get:(slug, workSlug="")=>req(`/places/${encodeURIComponent(slug)}${workSlug ? `?work=${encodeURIComponent(workSlug)}` : ""}`),
+  update:(slug, data)=>req(`/places/${encodeURIComponent(slug)}`,{method:"PUT",body:JSON.stringify(data)}),
+  uploadImage:(fileName,mimeType,dataUrl)=>req("/places/upload-image",{method:"POST",body:JSON.stringify({fileName,mimeType,dataUrl})}),
 };
 export const notifications = {
   list:()=>req("/notifications"),

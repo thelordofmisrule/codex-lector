@@ -1,5 +1,9 @@
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
 const db = require("../db");
+const { requireAdmin } = require("../auth");
 
 const r = express.Router();
 const WORK_CACHE_MS = 10 * 60 * 1000;
@@ -144,6 +148,57 @@ r.get("/", (req, res) => {
   }).filter(place => place.workCount > 0);
 
   res.json({ places });
+});
+
+r.post("/upload-image", requireAdmin, (req, res) => {
+  const { fileName, mimeType, dataUrl } = req.body || {};
+  if (!dataUrl || typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) {
+    return res.status(400).json({ error: "Image data required." });
+  }
+
+  const allowed = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+  };
+  const ext = allowed[mimeType];
+  if (!ext) return res.status(400).json({ error: "Unsupported image type." });
+
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return res.status(400).json({ error: "Invalid image payload." });
+
+  const buf = Buffer.from(match[2], "base64");
+  if (buf.length > 5 * 1024 * 1024) return res.status(400).json({ error: "Image too large (max 5MB)." });
+
+  const dir = path.join(__dirname, "..", "..", "data", "media", "places");
+  fs.mkdirSync(dir, { recursive: true });
+  const safeBase = (fileName || "place").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "place";
+  const name = `${safeBase}-${crypto.randomBytes(6).toString("hex")}${ext}`;
+  fs.writeFileSync(path.join(dir, name), buf);
+  res.json({ url: `/media/places/${name}` });
+});
+
+r.put("/:slug", requireAdmin, (req, res) => {
+  const row = db.prepare("SELECT id FROM places WHERE slug=?").get(req.params.slug);
+  if (!row) return res.status(404).json({ error: "Place not found." });
+
+  const { description, historicalNote, imageUrl } = req.body || {};
+  db.prepare(`
+    UPDATE places
+    SET description=COALESCE(?, description),
+        historical_note=COALESCE(?, historical_note),
+        image_url=COALESCE(?, image_url)
+    WHERE id=?
+  `).run(
+    description !== undefined ? String(description).trim() : null,
+    historicalNote !== undefined ? String(historicalNote).trim() : null,
+    imageUrl !== undefined ? String(imageUrl).trim() : null,
+    row.id
+  );
+
+  const updated = db.prepare("SELECT * FROM places WHERE id=?").get(row.id);
+  res.json({ place: serializePlace(updated) });
 });
 
 r.get("/:slug", (req, res) => {
