@@ -20,6 +20,15 @@ function cleanInlineXml(text) {
     .trim();
 }
 
+function normalizeSearchText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/['’`]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function extractLineTexts(xml) {
   const lines = [];
   const re = /<(l|line)\b[^>]*>([\s\S]*?)<\/\1>/gi;
@@ -61,15 +70,16 @@ r.get("/search/text", (req, res) => {
     works = db.prepare("SELECT id, slug, title, category, content FROM works WHERE content IS NOT NULL").all();
   }
   const results = [];
+  const normalizedQuery = normalizeSearchText(query);
 
   for (const w of works) {
     const lines = extractLineTexts(w.content || "");
     const matches = [];
-    const qLower = query.toLowerCase();
 
     for (let i = 0; i < lines.length && matches.length < 5; i++) {
       const lineText = lines[i];
-      if (!lineText.toLowerCase().includes(qLower)) continue;
+      const normalizedLine = normalizeSearchText(lineText);
+      if (!normalizedLine.includes(normalizedQuery)) continue;
       matches.push({
         snippet: makeSnippet(lineText, query),
         lineNumber: i + 1,
