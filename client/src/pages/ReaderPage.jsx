@@ -148,14 +148,12 @@ function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId,
         {showNum && lineNum}
         {isBookmarked && <span style={{ position:"absolute", right:-4, top:0, fontSize:14 }} title="Bookmark">🔖</span>}
       </div>
-      <div style={{ flex:1, overflowX:"auto" }}>
+      <div style={{ flex:1 }}>
         <div
           dangerouslySetInnerHTML={{ __html:text }}
           style={{
             fontFamily:"var(--font-fell)",
-            whiteSpace:"pre",
-            display:"inline-block",
-            minWidth:"100%",
+            whiteSpace:"normal",
           }}
         />
       </div>
