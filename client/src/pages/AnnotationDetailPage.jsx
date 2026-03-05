@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
-import { annotationDetail as api } from "../lib/api";
+import { annotationDetail as api, works as worksApi, annotations as annotsApi } from "../lib/api";
 import ThreadedComments from "../components/ThreadedComments";
 import ReportButton from "../components/ReportButton";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
+import { parsePlayShakespeareXML } from "../lib/textParser";
 
 const ANNOT_TYPES = [
   { label:"Gloss", icon:"📖", color:"var(--gold-light)" },
@@ -15,6 +16,84 @@ const ANNOT_TYPES = [
 ];
 
 function fmt(iso) { try { return new Date(iso).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}); } catch { return ""; } }
+
+function normalizeText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/['’`]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function flattenWorkLines(parsed) {
+  const lines = [];
+  if (!parsed) return lines;
+  if (parsed.type === "play") {
+    parsed.lines.forEach((item, idx) => {
+      if (item.type !== "speech") return;
+      (item.lines || []).forEach((line, li) => {
+        if (line.type === "stagedir") return;
+        lines.push({ lineId:`l-${idx}-${li}`, text:line.text || "", speaker:item.speaker || "" });
+      });
+    });
+    return lines;
+  }
+  if (parsed.type === "poetry") {
+    (parsed.sections || []).forEach((sec, si) => {
+      (sec.lines || []).forEach((line, li) => {
+        if (line.type === "stagedir") return;
+        lines.push({ lineId:`p-${si}-${li}`, text:line.text || "", speaker:"" });
+      });
+    });
+  }
+  return lines;
+}
+
+function inferParallelSlug(sourceSlug, sourceTitle, allWorks) {
+  if (!sourceSlug || !allWorks.length) return "";
+  const has = new Set(allWorks.map(w => w.slug));
+  if (sourceSlug.startsWith("f1-")) {
+    const modern = sourceSlug.slice(3);
+    if (has.has(modern)) return modern;
+  } else {
+    const folio = `f1-${sourceSlug}`;
+    if (has.has(folio)) return folio;
+  }
+  const src = allWorks.find(w => w.slug === sourceSlug);
+  if (!src) return "";
+  const targetVariant = src.variant === "first-folio" ? "ps" : "first-folio";
+  const byTitle = allWorks.find(w => w.variant === targetVariant && normalizeText(w.title) === normalizeText(sourceTitle || src.title));
+  return byTitle?.slug || "";
+}
+
+function buildCandidates(queryText, flattenedLines, limit = 8) {
+  const qNorm = normalizeText(queryText);
+  if (!qNorm || qNorm.length < 2) return [];
+  const qTokens = qNorm.split(" ").filter(Boolean);
+  const candidates = [];
+
+  flattenedLines.forEach((line, idx) => {
+    const n = normalizeText(line.text);
+    if (!n) return;
+    let score = 0;
+    if (n.includes(qNorm)) score += 8;
+    const tokens = new Set(n.split(" ").filter(Boolean));
+    const overlap = qTokens.filter(t => tokens.has(t)).length;
+    if (overlap) score += (overlap / qTokens.length) * 5;
+    if (!score) return;
+    candidates.push({
+      ...line,
+      index: idx,
+      lineNumber: idx + 1,
+      score,
+      contextBefore: flattenedLines[idx - 1]?.text || "",
+      contextAfter: flattenedLines[idx + 1]?.text || "",
+    });
+  });
+
+  return candidates.sort((a, b) => b.score - a.score).slice(0, limit);
+}
 
 export default function AnnotationDetailPage() {
   const { id } = useParams();
@@ -26,6 +105,14 @@ export default function AnnotationDetailPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showSuggest, setShowSuggest] = useState(false);
+  const [showParallel, setShowParallel] = useState(false);
+  const [allWorks, setAllWorks] = useState([]);
+  const [parallelTargetSlug, setParallelTargetSlug] = useState("");
+  const [parallelCandidates, setParallelCandidates] = useState([]);
+  const [parallelChosen, setParallelChosen] = useState(0);
+  const [parallelHighlight, setParallelHighlight] = useState("");
+  const [parallelBusy, setParallelBusy] = useState(false);
+  const [parallelMsg, setParallelMsg] = useState("");
   const suggestDraftKey = `draft:annotation:${id}:suggestion`;
   const [sugNote, setSugNote] = useState(() => {
     try { return JSON.parse(localStorage.getItem(suggestDraftKey) || "{}").note || ""; } catch { return ""; }
@@ -52,6 +139,10 @@ export default function AnnotationDetailPage() {
       .finally(()=>setLoading(false));
   }, [id, toast]);
 
+  useEffect(() => {
+    worksApi.list().then(setAllWorks).catch(()=>{});
+  }, []);
+
   if (loading) return <div style={{padding:60,textAlign:"center"}}><div className="spinner"/></div>;
   if (!data) return <div style={{padding:60,textAlign:"center",color:"var(--danger)"}}>Annotation not found.</div>;
 
@@ -63,6 +154,62 @@ export default function AnnotationDetailPage() {
       toast?.success("Annotation link copied.");
     } catch {
       toast?.error("Could not copy link.");
+    }
+  };
+
+  const runParallelMatch = async (targetSlug, sourceHighlight) => {
+    if (!targetSlug) return;
+    setParallelBusy(true);
+    setParallelMsg("");
+    try {
+      const targetWork = await worksApi.get(targetSlug);
+      const parsed = parsePlayShakespeareXML(targetWork.content || "", targetWork.title, targetWork.category);
+      const flat = flattenWorkLines(parsed);
+      const cands = buildCandidates(sourceHighlight, flat, 8);
+      setParallelCandidates(cands);
+      setParallelChosen(0);
+      if (cands[0]) setParallelHighlight(cands[0].text);
+      if (!cands.length) setParallelMsg("No close textual match found. Try a shorter or less punctuated phrase.");
+    } catch (e) {
+      setParallelMsg(e.message || "Could not search target edition.");
+    } finally {
+      setParallelBusy(false);
+    }
+  };
+
+  const openParallelModal = async () => {
+    const inferred = inferParallelSlug(ann.work_slug, ann.work_title, allWorks);
+    const fallback = allWorks.find(w => w.slug !== ann.work_slug)?.slug || "";
+    const nextTarget = inferred || fallback;
+    setParallelTargetSlug(nextTarget);
+    setParallelHighlight(ann.selected_text || "");
+    setParallelCandidates([]);
+    setParallelChosen(0);
+    setParallelMsg("");
+    setShowParallel(true);
+    if (nextTarget) await runParallelMatch(nextTarget, ann.selected_text || ann.note || "");
+  };
+
+  const copyToParallel = async () => {
+    const targetWork = allWorks.find(w => w.slug === parallelTargetSlug);
+    const chosen = parallelCandidates[parallelChosen];
+    if (!targetWork || !chosen) return;
+    setParallelBusy(true);
+    try {
+      const created = await annotsApi.create({
+        workId: targetWork.id,
+        lineId: chosen.lineId,
+        note: ann.note,
+        color: ann.color,
+        selectedText: (parallelHighlight || chosen.text || "").trim(),
+      });
+      setShowParallel(false);
+      toast?.success(`Copied to ${targetWork.title}.`);
+      if (created?.id) window.open(`/annotation/${created.id}`, "_blank");
+    } catch (e) {
+      setParallelMsg(e.message || "Could not copy annotation.");
+    } finally {
+      setParallelBusy(false);
     }
   };
 
@@ -169,6 +316,11 @@ export default function AnnotationDetailPage() {
       {/* Suggest an edit */}
       {user && (
         <div style={{ marginBottom:28 }}>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
+            <button className="btn btn-secondary" onClick={openParallelModal}>
+              ⇄ Copy to Another Edition
+            </button>
+          </div>
           {!showSuggest ? (
             <button className="btn btn-secondary" onClick={()=>{setShowSuggest(true);setSugNote(ann.note);setSugColor(ann.color);}}>
               ✏️ Suggest an Edit
@@ -197,6 +349,74 @@ export default function AnnotationDetailPage() {
               {sugMsg && <div style={{ fontSize:13, color:"var(--danger)", marginTop:6 }}>{sugMsg}</div>}
             </div>
           )}
+        </div>
+      )}
+
+      {showParallel && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ width:"min(920px, 96vw)", maxHeight:"90vh", overflowY:"auto", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:16 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+              <h3 style={{ margin:0, fontFamily:"var(--font-display)", color:"var(--accent)" }}>Copy Annotation to Another Edition</h3>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setShowParallel(false)}>Close</button>
+            </div>
+            <div style={{ display:"grid", gap:10, marginBottom:12 }}>
+              <div style={{ fontSize:13, color:"var(--text-light)" }}>
+                Source: <strong>{ann.work_title}</strong> · "{ann.selected_text || ann.note.slice(0,80)}"
+              </div>
+              <select className="input" value={parallelTargetSlug} onChange={async e => {
+                const v = e.target.value;
+                setParallelTargetSlug(v);
+                await runParallelMatch(v, ann.selected_text || ann.note || "");
+              }}>
+                <option value="">Select target edition…</option>
+                {allWorks.filter(w => w.slug !== ann.work_slug).sort((a,b)=>a.title.localeCompare(b.title)).map(w => (
+                  <option key={w.slug} value={w.slug}>{w.title} ({w.variant})</option>
+                ))}
+              </select>
+              {parallelBusy && <div style={{ color:"var(--text-light)", fontSize:13 }}>Searching target edition…</div>}
+              {parallelMsg && <div style={{ color:"var(--danger)", fontSize:13 }}>{parallelMsg}</div>}
+            </div>
+
+            {parallelCandidates.length > 0 && (
+              <>
+                <div style={{ display:"grid", gap:8, marginBottom:12 }}>
+                  {parallelCandidates.map((c, i) => (
+                    <button
+                      key={`${c.lineId}-${i}`}
+                      className="btn"
+                      onClick={()=>{ setParallelChosen(i); setParallelHighlight(c.text); }}
+                      style={{
+                        textAlign:"left",
+                        border:"1px solid var(--border-light)",
+                        borderRadius:8,
+                        padding:10,
+                        background: i===parallelChosen ? "var(--accent-faint)" : "var(--bg)",
+                      }}
+                    >
+                      <div style={{ fontSize:12, color:"var(--text-light)", marginBottom:4 }}>
+                        Line {c.lineNumber} · score {c.score.toFixed(2)} {c.speaker ? `· ${c.speaker}` : ""}
+                      </div>
+                      {c.contextBefore && <div style={{ fontSize:13, color:"var(--text-light)" }}>… {c.contextBefore}</div>}
+                      <div style={{ fontSize:15, fontFamily:"var(--font-fell)", lineHeight:1.6 }}>{c.text}</div>
+                      {c.contextAfter && <div style={{ fontSize:13, color:"var(--text-light)" }}>{c.contextAfter} …</div>}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ marginBottom:10 }}>
+                  <div style={{ fontSize:12, color:"var(--text-light)", marginBottom:4 }}>Adjust highlighted text before copying:</div>
+                  <textarea className="input" value={parallelHighlight} onChange={e=>setParallelHighlight(e.target.value)} style={{ minHeight:56, resize:"vertical", fontFamily:"var(--font-fell)" }} />
+                </div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <button className="btn btn-primary" onClick={copyToParallel} disabled={parallelBusy || !parallelTargetSlug || !parallelCandidates[parallelChosen]}>
+                    Copy Annotation
+                  </button>
+                  <button className="btn btn-secondary" onClick={async ()=>runParallelMatch(parallelTargetSlug, parallelHighlight || ann.selected_text || ann.note || "")} disabled={parallelBusy || !parallelTargetSlug}>
+                    Re-run Match
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
