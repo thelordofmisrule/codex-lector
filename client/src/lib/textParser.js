@@ -48,7 +48,7 @@ function txt(node) {
 }
 
 function parseLineN(node) {
-  const raw = node?.getAttribute?.("n");
+  const raw = node?.getAttribute?.("gn") || node?.getAttribute?.("n");
   if (!raw) return null;
   const n = parseInt(raw, 10);
   return Number.isFinite(n) ? n : null;

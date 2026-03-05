@@ -149,7 +149,15 @@ function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId,
         {isBookmarked && <span style={{ position:"absolute", right:-4, top:0, fontSize:14 }} title="Bookmark">🔖</span>}
       </div>
       <div style={{ flex:1 }}>
-        <div dangerouslySetInnerHTML={{ __html:text }} style={{ fontFamily:"var(--font-fell)" }} />
+        <div
+          dangerouslySetInnerHTML={{ __html:text }}
+          style={{
+            fontFamily:"var(--font-fell)",
+            whiteSpace:"nowrap",
+            overflowX:"auto",
+            overflowY:"hidden",
+          }}
+        />
       </div>
       {lineAnnots.length > 0 && (
         <div className="annot-margin" style={{ width:260, flexShrink:0, display:"flex", flexDirection:"column", gap:4 }}>
