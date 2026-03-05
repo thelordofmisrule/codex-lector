@@ -153,9 +153,7 @@ function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId,
           dangerouslySetInnerHTML={{ __html:text }}
           style={{
             fontFamily:"var(--font-fell)",
-            whiteSpace:"nowrap",
-            overflowX:"auto",
-            overflowY:"hidden",
+            whiteSpace:"normal",
           }}
         />
       </div>
