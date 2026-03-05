@@ -47,6 +47,13 @@ function txt(node) {
   return s;
 }
 
+function parseLineN(node) {
+  const raw = node?.getAttribute?.("n");
+  if (!raw) return null;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
 /* ── Extract personae/cast from various formats ── */
 function extractCast(root) {
   const personae = [];
@@ -144,7 +151,12 @@ function parsePlay(root, title) {
           for (const lc of child.children) {
             const lt = lc.tagName.toLowerCase();
             if (lt === "l" || lt === "line") {
-              lines.push({ type: "line", text: txt(lc), form: lc.getAttribute("form") || "verse" });
+              lines.push({
+                type: "line",
+                text: txt(lc),
+                form: lc.getAttribute("form") || "verse",
+                n: parseLineN(lc),
+              });
             } else if (lt === "stage") {
               lines.push({ type: "stagedir", text: txt(lc) });
             } else if (lt === "stagedir") {
@@ -153,7 +165,7 @@ function parsePlay(root, title) {
             } else if (lt === "recite") {
               // Character reading/reciting
               lc.querySelectorAll("l, line").forEach(rl => {
-                lines.push({ type: "line", text: txt(rl), form: "recite" });
+                lines.push({ type: "line", text: txt(rl), form: "recite", n: parseLineN(rl) });
               });
             }
           }
