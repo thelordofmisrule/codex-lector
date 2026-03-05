@@ -542,6 +542,13 @@ export default function ReaderPage() {
   );
 
   const parsed = parsePlayShakespeareXML(work.content, work.title, work.category);
+  const editionLabel = work.variant === "first-folio"
+    ? "First Folio"
+    : work.variant === "ps"
+      ? "Modern Edition"
+      : work.variant === "ps-apocrypha"
+        ? "Apocrypha"
+        : work.variant || "Edition";
   const annotsByLine = {};
   annots.forEach(a => { (annotsByLine[a.line_id] ??= []).push(a); });
 
@@ -644,7 +651,10 @@ export default function ReaderPage() {
         </button>
       </div>
       <h1 style={{ textAlign:"center", fontFamily:"var(--font-display)", fontSize:"1.8em", fontWeight:400, letterSpacing:3, color:"var(--accent)", marginBottom:4 }}>{parsed.title || work.title}</h1>
-      <div style={{ textAlign:"center", fontFamily:"var(--font-fell)", fontStyle:"italic", color:"var(--text-light)", fontSize:15, marginBottom:8 }}>William Shakespeare</div>
+      <div style={{ textAlign:"center", fontFamily:"var(--font-fell)", fontStyle:"italic", color:"var(--text-light)", fontSize:15, marginBottom:4 }}>William Shakespeare</div>
+      <div style={{ textAlign:"center", fontSize:11, color:"var(--text-light)", letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>
+        {editionLabel} · {slug}
+      </div>
       <div style={{ textAlign:"center", color:"var(--border)", fontSize:14, letterSpacing:8, marginBottom:28 }}>☙ ❦ ❧</div>
 
       {/* Content */}

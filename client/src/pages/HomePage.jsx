@@ -22,6 +22,13 @@ export default function HomePage() {
   const filtered = search.trim() ? works.filter(w=>w.title.toLowerCase().includes(search.toLowerCase())) : works;
   const grouped = {};
   filtered.forEach(w => { (grouped[w.category]??=[]).push(w); });
+  const variantLabel = (variant) => {
+    if (variant === "first-folio") return "First Folio";
+    if (variant === "ps") return "Modern";
+    if (variant === "ps-apocrypha") return "Apocrypha";
+    if (variant === "ps-poems") return "Poems";
+    return variant || "";
+  };
 
   return (
     <div className="animate-in" style={{ maxWidth:920, margin:"0 auto", padding:"48px 24px" }}>
@@ -75,6 +82,9 @@ export default function HomePage() {
                   onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="transparent";}}
                 >
                   {w.title}
+                  <span style={{ display:"inline-block", marginLeft:8, fontSize:10, letterSpacing:1, textTransform:"uppercase", color:"var(--text-light)", border:"1px solid var(--border-light)", borderRadius:999, padding:"1px 6px", verticalAlign:"middle" }}>
+                    {variantLabel(w.variant)}
+                  </span>
                   {w.authors && !w.authors.includes("William Shakespeare") && (
                     <span style={{ display:"block", fontSize:12, color:"var(--text-light)", fontStyle:"italic" }}>{w.authors}</span>
                   )}
