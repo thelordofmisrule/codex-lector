@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { places as placesApi, works as worksApi } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
+import PlacesMap from "../components/PlacesMap";
 
 function prettyCategory(cat) {
   return String(cat || "")
@@ -10,22 +11,20 @@ function prettyCategory(cat) {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function mapEmbedUrl(place) {
-  if (!place) {
-    return "https://www.openstreetmap.org/export/embed.html?bbox=-12%2C34%2C34%2C60&layer=mapnik";
-  }
-  const spanLng = 4;
-  const spanLat = 2.5;
-  const left = (place.lng - spanLng).toFixed(4);
-  const right = (place.lng + spanLng).toFixed(4);
-  const bottom = (place.lat - spanLat).toFixed(4);
-  const top = (place.lat + spanLat).toFixed(4);
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${place.lat}%2C${place.lng}`;
-}
-
 function mapLinkUrl(place) {
   if (!place) return "https://www.openstreetmap.org/#map=4/45.2/12.0";
   return `https://www.openstreetmap.org/?mlat=${place.lat}&mlon=${place.lng}#map=7/${place.lat}/${place.lng}`;
+}
+
+function mapLinkUrlForPlaces(places) {
+  if (!places?.length) return mapLinkUrl(null);
+  const acc = places.reduce((sum, place) => ({
+    lat: sum.lat + (Number(place.lat) || 0),
+    lng: sum.lng + (Number(place.lng) || 0),
+  }), { lat: 0, lng: 0 });
+  const centerLat = acc.lat / places.length;
+  const centerLng = acc.lng / places.length;
+  return `https://www.openstreetmap.org/#map=4/${centerLat.toFixed(4)}/${centerLng.toFixed(4)}`;
 }
 
 function fileToDataUrl(file) {
@@ -49,6 +48,10 @@ export default function PlacesPage() {
   const [citations, setCitations] = useState([]);
   const [workFilter, setWorkFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [countryFilter, setCountryFilter] = useState("all");
+  const [searchFilter, setSearchFilter] = useState("");
+  const [showAllMap, setShowAllMap] = useState(false);
+  const [showAllPlacesList, setShowAllPlacesList] = useState(false);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -117,9 +120,26 @@ export default function PlacesPage() {
     });
   }, [selectedPlace]);
 
-  const visiblePlaces = useMemo(() => (
-    typeFilter === "all" ? places : places.filter(place => place.placeType === typeFilter)
-  ), [places, typeFilter]);
+  const visiblePlaces = useMemo(() => {
+    const q = searchFilter.trim().toLowerCase();
+    return places.filter((place) => {
+      if (typeFilter !== "all" && place.placeType !== typeFilter) return false;
+      if (countryFilter !== "all" && place.modernCountry !== countryFilter) return false;
+      if (!q) return true;
+      const haystack = [
+        place.name,
+        place.modernName,
+        place.modernCountry,
+        place.placeType,
+        ...(place.aliases || []),
+      ].join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [places, typeFilter, countryFilter, searchFilter]);
+
+  const listPlaces = useMemo(() => (
+    showAllPlacesList ? visiblePlaces : visiblePlaces.slice(0, 28)
+  ), [visiblePlaces, showAllPlacesList]);
 
   useEffect(() => {
     if (!visiblePlaces.length) {
@@ -136,7 +156,17 @@ export default function PlacesPage() {
     return types.sort();
   }, [places]);
 
+  const countryOptions = useMemo(() => {
+    const countries = [...new Set(places.map(place => place.modernCountry).filter(Boolean))];
+    return countries.sort((a, b) => a.localeCompare(b));
+  }, [places]);
+
   const selectedWork = works.find(work => work.slug === workFilter);
+  const mapLink = showAllMap ? mapLinkUrlForPlaces(visiblePlaces) : mapLinkUrl(selectedPlace);
+
+  useEffect(() => {
+    setShowAllPlacesList(false);
+  }, [workFilter, typeFilter, countryFilter, searchFilter]);
 
   const uploadPlaceImage = async (file) => {
     if (!file) return;
@@ -196,6 +226,31 @@ export default function PlacesPage() {
             <option key={type} value={type}>{prettyCategory(type)}</option>
           ))}
         </select>
+        <select className="input" value={countryFilter} onChange={e => setCountryFilter(e.target.value)} style={{ minWidth: 180 }}>
+          <option value="all">All Countries</option>
+          {countryOptions.map(country => (
+            <option key={country} value={country}>{country}</option>
+          ))}
+        </select>
+        <input
+          className="input"
+          value={searchFilter}
+          onChange={e => setSearchFilter(e.target.value)}
+          placeholder="Find place name or alias…"
+          style={{ minWidth: 240 }}
+        />
+        {(typeFilter !== "all" || countryFilter !== "all" || searchFilter.trim()) && (
+          <button
+            className="btn btn-ghost"
+            onClick={() => {
+              setTypeFilter("all");
+              setCountryFilter("all");
+              setSearchFilter("");
+            }}
+          >
+            Clear Filters
+          </button>
+        )}
         <button className="btn btn-secondary" onClick={() => nav("/search")} style={{ whiteSpace: "nowrap" }}>
           Search Texts
         </button>
@@ -216,42 +271,73 @@ export default function PlacesPage() {
               <div>
                 <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "var(--accent)" }}>Map View</div>
                 <div style={{ fontSize: 13, color: "var(--text-light)" }}>
-                  {selectedWork ? `Filtered to ${selectedWork.title}` : "Interactive OpenStreetMap view"}
+                  {showAllMap
+                    ? "Browsing all filtered locations"
+                    : selectedWork
+                      ? `Focused by selection · ${selectedWork.title}`
+                      : "Focused by selection"}
                 </div>
               </div>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <div style={{ fontSize: 13, color: "var(--text-light)" }}>{visiblePlaces.length} places</div>
-                <a className="btn btn-ghost btn-sm" href={mapLinkUrl(selectedPlace)} target="_blank" rel="noopener noreferrer">
+                <div style={{ fontSize: 13, color: "var(--text-light)" }}>{visiblePlaces.length} / {places.length} places</div>
+                <a className="btn btn-ghost btn-sm" href={mapLink} target="_blank" rel="noopener noreferrer">
                   Open Larger
                 </a>
               </div>
             </div>
 
-            <div style={{ position: "relative", minHeight: 560, borderRadius: 14, border: "1px solid var(--border-light)", overflow: "hidden", background: "rgba(244,240,229,0.9)" }}>
-              <iframe
-                key={selectedPlace?.slug || "all-places"}
-                title={selectedPlace ? `${selectedPlace.name} map` : "Shakespeare places map"}
-                src={mapEmbedUrl(selectedPlace)}
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }}
-                loading="lazy"
-              />
-            </div>
+            <PlacesMap
+              places={visiblePlaces}
+              selectedSlug={showAllMap ? "" : selectedSlug}
+              showAll={showAllMap}
+              onSelect={(slug) => {
+                setSelectedSlug(slug);
+                setShowAllMap(false);
+              }}
+            />
 
-            <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap", maxHeight: 220, overflowY: "auto", paddingRight: 2, alignContent: "flex-start" }}>
+              <button
+                className={showAllMap ? "btn btn-primary btn-sm" : "btn btn-secondary btn-sm"}
+                onClick={() => setShowAllMap(true)}
+                disabled={visiblePlaces.length === 0}
+              >
+                Show All On Map
+              </button>
+              <button
+                className={!showAllMap ? "btn btn-primary btn-sm" : "btn btn-secondary btn-sm"}
+                onClick={() => setShowAllMap(false)}
+                disabled={!selectedSlug}
+              >
+                Focus Selected
+              </button>
               {visiblePlaces.length === 0 ? (
                 <div style={{ fontSize: 13, color: "var(--text-light)" }}>
                   No matching places for this filter.
                 </div>
-              ) : visiblePlaces.map(place => (
+              ) : listPlaces.map(place => (
                 <button
                   key={place.slug}
                   className={place.slug === selectedSlug ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
-                  onClick={() => setSelectedSlug(place.slug)}
+                  onClick={() => {
+                    setSelectedSlug(place.slug);
+                    setShowAllMap(false);
+                  }}
                   style={{ fontSize: 12 }}
                 >
                   {place.name}
                 </button>
               ))}
+              {!showAllPlacesList && visiblePlaces.length > listPlaces.length && (
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowAllPlacesList(true)}>
+                  Show {visiblePlaces.length - listPlaces.length} More
+                </button>
+              )}
+              {showAllPlacesList && visiblePlaces.length > 28 && (
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowAllPlacesList(false)}>
+                  Collapse List
+                </button>
+              )}
             </div>
           </div>
 
