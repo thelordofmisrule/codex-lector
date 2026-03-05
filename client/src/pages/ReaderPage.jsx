@@ -183,11 +183,12 @@ function PlayView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, edi
               )}
               {item.lines.map((line, li) => {
                 if (line.type==="stagedir") return <div key={li} style={{ fontStyle:"italic", color:"var(--text-muted)", paddingLeft:48, fontSize:"0.85em", fontFamily:"var(--font-fell)", margin:"4px 0" }}>[{line.text}]</div>;
-                lineNum = line.n || (lineNum + 1);
+                const hasXmlN = Number.isFinite(line.n);
+                lineNum = hasXmlN ? line.n : (lineNum + 1);
                 const lineId = `l-${idx}-${li}`;
                 return <AnnotatedLine key={li} lineId={lineId} text={line.text} annots={annots} annotsByLine={annotsByLine}
                   showAnnots={showAnnots} userId={userId} isAdmin={isAdmin} editAnnot={editAnnot} deleteAnnot={deleteAnnot}
-                  lineNum={lineNum} showNum={lineNum%5===0} isBookmarked={bookmark===lineId} />;
+                  lineNum={lineNum} showNum={hasXmlN || lineNum%5===0} isBookmarked={bookmark===lineId} />;
               })}
             </div>
           );
@@ -208,11 +209,12 @@ function PoetryView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, e
           {(sec.title || sec.heading) && <h3 style={{ fontFamily:"var(--font-display)", fontSize:16, letterSpacing:2, color:"var(--accent)", margin:"20px 0 10px", textAlign:"center" }}>{sec.title || sec.heading}</h3>}
           {sec.lines.map((line, li) => {
             if (line.type==="stagedir") return <div key={li} style={{ textAlign:"center", fontStyle:"italic", color:"var(--text-muted)", margin:"4px 0", fontSize:"0.85em" }}>[{line.text}]</div>;
-            lineNum = line.n || ++lineNum;
+            const hasXmlN = Number.isFinite(line.n);
+            lineNum = hasXmlN ? line.n : (lineNum + 1);
             const lineId = `p-${si}-${li}`;
             return <AnnotatedLine key={li} lineId={lineId} text={line.text} annots={annots} annotsByLine={annotsByLine}
               showAnnots={showAnnots} userId={userId} isAdmin={isAdmin} editAnnot={editAnnot} deleteAnnot={deleteAnnot}
-              lineNum={lineNum} showNum={lineNum%5===0||lineNum===1} isBookmarked={bookmark===lineId} />;
+              lineNum={lineNum} showNum={hasXmlN || lineNum%5===0||lineNum===1} isBookmarked={bookmark===lineId} />;
           })}
         </div>
       ))}
