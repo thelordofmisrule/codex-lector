@@ -116,7 +116,12 @@ function parsePlay(root, title) {
     return speakerMap[key] || short;
   }
 
-  root.querySelectorAll("act").forEach(act => {
+  const actNodes = Array.from(root.children).filter((child) => {
+    const tag = child?.tagName?.toLowerCase();
+    return tag === "act" || tag === "actref";
+  });
+
+  actNodes.forEach(act => {
     const actNum = act.getAttribute("num");
     const actTitle = act.querySelector("acttitle");
     result.push({ type: "act", text: actTitle ? txt(actTitle) : `Act ${actNum}` });
