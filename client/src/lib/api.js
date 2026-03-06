@@ -85,7 +85,10 @@ export const analytics = {
   summary:()=>req("/analytics/summary"),
 };
 export const places = {
-  list:(workSlug="")=>req(`/places${workSlug ? `?work=${encodeURIComponent(workSlug)}` : ""}`),
+  list:(workSlug="", includeAll=false)=>req(`/places${workSlug || includeAll ? `?${[
+    workSlug ? `work=${encodeURIComponent(workSlug)}` : "",
+    includeAll ? "all=1" : "",
+  ].filter(Boolean).join("&")}` : ""}`),
   get:(slug, workSlug="")=>req(`/places/${encodeURIComponent(slug)}${workSlug ? `?work=${encodeURIComponent(workSlug)}` : ""}`),
   update:(slug, data)=>req(`/places/${encodeURIComponent(slug)}`,{method:"PUT",body:JSON.stringify(data)}),
   uploadImage:(fileName,mimeType,dataUrl)=>req("/places/upload-image",{method:"POST",body:JSON.stringify({fileName,mimeType,dataUrl})}),

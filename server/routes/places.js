@@ -49,6 +49,32 @@ function parseAliases(raw) {
   }
 }
 
+function parseStringList(raw) {
+  if (Array.isArray(raw)) {
+    return [...new Set(raw.map(v => String(v || "").trim()).filter(Boolean))];
+  }
+  if (typeof raw === "string") {
+    return [...new Set(raw.split(/[,\n;]+/).map(v => v.trim()).filter(Boolean))];
+  }
+  return [];
+}
+
+function parseNullableNumber(value, fieldName) {
+  if (value === null || value === undefined) return null;
+  const str = String(value).trim();
+  if (!str) return null;
+  const n = Number(str);
+  if (!Number.isFinite(n)) throw new Error(`Invalid ${fieldName}.`);
+  return n;
+}
+
+function parseBool(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  const s = String(value || "").trim().toLowerCase();
+  return s === "true" || s === "1" || s === "yes";
+}
+
 function escRegExp(text) {
   return String(text || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -126,11 +152,18 @@ function serializePlace(row) {
     imageUrl: row.image_url || "",
     aliases: parseAliases(row.aliases_json),
     isReal: !!row.is_real,
+    sourcePlays: parseAliases(row.source_plays_json),
   };
 }
 
 r.get("/", (req, res) => {
-  const rows = db.prepare("SELECT * FROM places WHERE is_real=1 ORDER BY name").all();
+  const includeAll = String(req.query.all || "") === "1";
+  const realOnly = String(req.query.real || "") === "1";
+  const rows = db.prepare(`SELECT * FROM places ${realOnly ? "WHERE is_real=1" : ""} ORDER BY name`).all();
+  if (includeAll) {
+    return res.json({ places: rows.map(serializePlace) });
+  }
+
   const parsedWorks = parseWorkCache();
   const workSlug = req.query.work ? String(req.query.work) : "";
   const places = rows.map(row => {
@@ -183,26 +216,57 @@ r.put("/:slug", requireAdmin, (req, res) => {
   const row = db.prepare("SELECT id FROM places WHERE slug=?").get(req.params.slug);
   if (!row) return res.status(404).json({ error: "Place not found." });
 
-  const { description, historicalNote, imageUrl } = req.body || {};
-  db.prepare(`
-    UPDATE places
-    SET description=COALESCE(?, description),
-        historical_note=COALESCE(?, historical_note),
-        image_url=COALESCE(?, image_url)
-    WHERE id=?
-  `).run(
-    description !== undefined ? String(description).trim() : null,
-    historicalNote !== undefined ? String(historicalNote).trim() : null,
-    imageUrl !== undefined ? String(imageUrl).trim() : null,
-    row.id
-  );
+  const body = req.body || {};
+  const updates = [];
+  const values = [];
+  const setText = (column, value) => {
+    updates.push(`${column}=?`);
+    values.push(String(value ?? "").trim());
+  };
+
+  try {
+    if (body.name !== undefined) setText("name", body.name);
+    if (body.modernName !== undefined) setText("modern_name", body.modernName);
+    if (body.placeType !== undefined) setText("place_type", body.placeType);
+    if (body.modernCountry !== undefined) setText("modern_country", body.modernCountry);
+    if (body.description !== undefined) setText("description", body.description);
+    if (body.historicalNote !== undefined) setText("historical_note", body.historicalNote);
+    if (body.imageUrl !== undefined) setText("image_url", body.imageUrl);
+    if (body.aliases !== undefined) {
+      updates.push("aliases_json=?");
+      values.push(JSON.stringify(parseStringList(body.aliases)));
+    }
+    if (body.sourcePlays !== undefined) {
+      updates.push("source_plays_json=?");
+      values.push(JSON.stringify(parseStringList(body.sourcePlays)));
+    }
+    if (body.lat !== undefined) {
+      updates.push("lat=?");
+      values.push(parseNullableNumber(body.lat, "latitude"));
+    }
+    if (body.lng !== undefined) {
+      updates.push("lng=?");
+      values.push(parseNullableNumber(body.lng, "longitude"));
+    }
+    if (body.isReal !== undefined) {
+      updates.push("is_real=?");
+      values.push(parseBool(body.isReal) ? 1 : 0);
+    }
+  } catch (e) {
+    return res.status(400).json({ error: e.message || "Invalid place payload." });
+  }
+
+  if (updates.length > 0) {
+    values.push(row.id);
+    db.prepare(`UPDATE places SET ${updates.join(", ")} WHERE id=?`).run(...values);
+  }
 
   const updated = db.prepare("SELECT * FROM places WHERE id=?").get(row.id);
   res.json({ place: serializePlace(updated) });
 });
 
 r.get("/:slug", (req, res) => {
-  const row = db.prepare("SELECT * FROM places WHERE slug=? AND is_real=1").get(req.params.slug);
+  const row = db.prepare("SELECT * FROM places WHERE slug=?").get(req.params.slug);
   if (!row) return res.status(404).json({ error: "Place not found." });
 
   const parsedWorks = parseWorkCache();

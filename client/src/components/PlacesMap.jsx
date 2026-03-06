@@ -34,7 +34,11 @@ function ensureLeaflet() {
 }
 
 function validPlaces(places) {
-  return (places || []).filter(place => Number.isFinite(place?.lat) && Number.isFinite(place?.lng));
+  return (places || []).map((place) => {
+    const lat = Number(place?.lat);
+    const lng = Number(place?.lng);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { ...place, lat, lng } : null;
+  }).filter(Boolean);
 }
 
 export default function PlacesMap({

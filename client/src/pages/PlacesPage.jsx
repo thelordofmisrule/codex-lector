@@ -13,6 +13,9 @@ function prettyCategory(cat) {
 
 function mapLinkUrl(place) {
   if (!place) return "https://www.openstreetmap.org/#map=4/45.2/12.0";
+  if (!Number.isFinite(Number(place.lat)) || !Number.isFinite(Number(place.lng))) {
+    return "https://www.openstreetmap.org/#map=4/45.2/12.0";
+  }
   return `https://www.openstreetmap.org/?mlat=${place.lat}&mlon=${place.lng}#map=7/${place.lat}/${place.lng}`;
 }
 
@@ -57,7 +60,20 @@ export default function PlacesPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const [editor, setEditor] = useState({ description: "", historicalNote: "", imageUrl: "" });
+  const [editor, setEditor] = useState({
+    name: "",
+    modernName: "",
+    placeType: "",
+    modernCountry: "",
+    lat: "",
+    lng: "",
+    aliases: "",
+    sourcePlays: "",
+    isReal: true,
+    description: "",
+    historicalNote: "",
+    imageUrl: "",
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -66,7 +82,7 @@ export default function PlacesPage() {
 
     Promise.all([
       worksApi.list(),
-      placesApi.list(workFilter),
+      placesApi.list(workFilter, true),
     ]).then(([worksData, placesData]) => {
       if (cancelled) return;
       setWorks((worksData || []).filter(w => w.has_content));
@@ -114,6 +130,15 @@ export default function PlacesPage() {
 
   useEffect(() => {
     setEditor({
+      name: selectedPlace?.name || "",
+      modernName: selectedPlace?.modernName || "",
+      placeType: selectedPlace?.placeType || "",
+      modernCountry: selectedPlace?.modernCountry || "",
+      lat: selectedPlace?.lat ?? "",
+      lng: selectedPlace?.lng ?? "",
+      aliases: (selectedPlace?.aliases || []).join(", "),
+      sourcePlays: (selectedPlace?.sourcePlays || []).join(", "),
+      isReal: selectedPlace?.isReal !== false,
       description: selectedPlace?.description || "",
       historicalNote: selectedPlace?.historicalNote || "",
       imageUrl: selectedPlace?.imageUrl || "",
@@ -185,9 +210,19 @@ export default function PlacesPage() {
 
   const savePlace = async () => {
     if (!selectedPlace) return;
+    const parsedLat = editor.lat === "" ? null : Number(editor.lat);
+    const parsedLng = editor.lng === "" ? null : Number(editor.lng);
+    if ((editor.lat !== "" && !Number.isFinite(parsedLat)) || (editor.lng !== "" && !Number.isFinite(parsedLng))) {
+      toast?.error("Latitude/longitude must be numeric values.");
+      return;
+    }
     setSaving(true);
     try {
-      const data = await placesApi.update(selectedPlace.slug, editor);
+      const data = await placesApi.update(selectedPlace.slug, {
+        ...editor,
+        lat: parsedLat,
+        lng: parsedLng,
+      });
       setSelectedPlace(data.place);
       setPlaces(prev => prev.map(place => place.slug === data.place.slug ? { ...place, ...data.place } : place));
       toast?.success("Place details updated.");
@@ -208,8 +243,8 @@ export default function PlacesPage() {
           Places in the Works
         </h1>
         <p style={{ maxWidth: 780, lineHeight: 1.8, color: "var(--text-muted)", fontFamily: "var(--font-body)", margin: 0 }}>
-          Explore a curated geography of real places named in Shakespeare. The map now uses live OpenStreetMap tiles, so places sit where they
-          actually belong, and each place card can carry historical context and an image.
+          Explore Shakespearean settings across cities, regions, rivers, battlefields, streets, and imagined locations. The map uses live
+          OpenStreetMap tiles when coordinates exist, and each place card can be refined with historical context and editorial notes.
         </p>
       </div>
 
@@ -360,6 +395,16 @@ export default function PlacesPage() {
                   <div style={{ fontSize: 13, color: "var(--text-light)", marginBottom: 10 }}>
                     {selectedPlace.modernCountry}{selectedPlace.modernName && selectedPlace.modernName !== selectedPlace.name ? ` · Modern name: ${selectedPlace.modernName}` : ""}
                   </div>
+                  <div style={{ fontSize: 12, color: "var(--text-light)", marginBottom: 10 }}>
+                    {Number.isFinite(Number(selectedPlace.lat)) && Number.isFinite(Number(selectedPlace.lng))
+                      ? `Coordinates: ${Number(selectedPlace.lat).toFixed(4)}, ${Number(selectedPlace.lng).toFixed(4)}`
+                      : "Coordinates not set yet."}
+                  </div>
+                  {selectedPlace.sourcePlays?.length > 0 && (
+                    <div style={{ fontSize: 12, color: "var(--text-light)", marginBottom: 10 }}>
+                      Source index: {selectedPlace.sourcePlays.slice(0, 8).join(", ")}{selectedPlace.sourcePlays.length > 8 ? ` +${selectedPlace.sourcePlays.length - 8} more` : ""}
+                    </div>
+                  )}
                   {selectedPlace.imageUrl && (
                     <img
                       src={selectedPlace.imageUrl}
@@ -396,6 +441,66 @@ export default function PlacesPage() {
                       Edit Place Card
                     </div>
                     <div style={{ display: "grid", gap: 10 }}>
+                      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                        <input
+                          className="input"
+                          value={editor.name}
+                          onChange={e => setEditor(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="Name"
+                        />
+                        <input
+                          className="input"
+                          value={editor.modernName}
+                          onChange={e => setEditor(prev => ({ ...prev, modernName: e.target.value }))}
+                          placeholder="Modern name"
+                        />
+                        <input
+                          className="input"
+                          value={editor.placeType}
+                          onChange={e => setEditor(prev => ({ ...prev, placeType: e.target.value }))}
+                          placeholder="Place type"
+                        />
+                        <input
+                          className="input"
+                          value={editor.modernCountry}
+                          onChange={e => setEditor(prev => ({ ...prev, modernCountry: e.target.value }))}
+                          placeholder="Country / region"
+                        />
+                      </div>
+                      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                        <input
+                          className="input"
+                          value={editor.lat}
+                          onChange={e => setEditor(prev => ({ ...prev, lat: e.target.value }))}
+                          placeholder="Latitude"
+                        />
+                        <input
+                          className="input"
+                          value={editor.lng}
+                          onChange={e => setEditor(prev => ({ ...prev, lng: e.target.value }))}
+                          placeholder="Longitude"
+                        />
+                      </div>
+                      <input
+                        className="input"
+                        value={editor.aliases}
+                        onChange={e => setEditor(prev => ({ ...prev, aliases: e.target.value }))}
+                        placeholder="Aliases (comma separated)"
+                      />
+                      <input
+                        className="input"
+                        value={editor.sourcePlays}
+                        onChange={e => setEditor(prev => ({ ...prev, sourcePlays: e.target.value }))}
+                        placeholder="Source plays (comma separated)"
+                      />
+                      <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-muted)" }}>
+                        <input
+                          type="checkbox"
+                          checked={!!editor.isReal}
+                          onChange={e => setEditor(prev => ({ ...prev, isReal: e.target.checked }))}
+                        />
+                        Real-world location
+                      </label>
                       <textarea
                         className="input"
                         value={editor.description}

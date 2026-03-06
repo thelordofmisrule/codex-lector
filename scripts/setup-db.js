@@ -233,13 +233,14 @@ db.exec(`
     modern_name TEXT DEFAULT '',
     place_type TEXT NOT NULL DEFAULT 'city',
     modern_country TEXT DEFAULT '',
-    lat REAL NOT NULL,
-    lng REAL NOT NULL,
+    lat REAL,
+    lng REAL,
     description TEXT DEFAULT '',
     historical_note TEXT DEFAULT '',
     image_url TEXT DEFAULT '',
     aliases_json TEXT DEFAULT '[]',
-    is_real BOOLEAN DEFAULT 1
+    is_real BOOLEAN DEFAULT 1,
+    source_plays_json TEXT DEFAULT '[]'
   );
 `);
 
@@ -325,13 +326,14 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS places (
   modern_name TEXT DEFAULT '',
   place_type TEXT NOT NULL DEFAULT 'city',
   modern_country TEXT DEFAULT '',
-  lat REAL NOT NULL,
-  lng REAL NOT NULL,
+  lat REAL,
+  lng REAL,
   description TEXT DEFAULT '',
   historical_note TEXT DEFAULT '',
   image_url TEXT DEFAULT '',
   aliases_json TEXT DEFAULT '[]',
-  is_real BOOLEAN DEFAULT 1
+  is_real BOOLEAN DEFAULT 1,
+  source_plays_json TEXT DEFAULT '[]'
 )`); } catch {}
 try { db.exec("ALTER TABLE places ADD COLUMN modern_name TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE places ADD COLUMN place_type TEXT NOT NULL DEFAULT 'city'"); } catch {}
@@ -341,6 +343,43 @@ try { db.exec("ALTER TABLE places ADD COLUMN historical_note TEXT DEFAULT ''"); 
 try { db.exec("ALTER TABLE places ADD COLUMN image_url TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE places ADD COLUMN aliases_json TEXT DEFAULT '[]'"); } catch {}
 try { db.exec("ALTER TABLE places ADD COLUMN is_real BOOLEAN DEFAULT 1"); } catch {}
+try { db.exec("ALTER TABLE places ADD COLUMN source_plays_json TEXT DEFAULT '[]'"); } catch {}
+
+// Older DBs had NOT NULL lat/lng; rebuild to allow unknown coordinates.
+try {
+  const placeCols = db.prepare("PRAGMA table_info(places)").all();
+  const latCol = placeCols.find(c => c.name === "lat");
+  const lngCol = placeCols.find(c => c.name === "lng");
+  const hasSourcePlays = placeCols.some(c => c.name === "source_plays_json");
+  if ((latCol && latCol.notnull) || (lngCol && lngCol.notnull)) {
+    const sourceSelect = hasSourcePlays ? "COALESCE(source_plays_json, '[]')" : "'[]'";
+    db.exec(`
+      ALTER TABLE places RENAME TO places_old;
+      CREATE TABLE places (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        slug TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        modern_name TEXT DEFAULT '',
+        place_type TEXT NOT NULL DEFAULT 'city',
+        modern_country TEXT DEFAULT '',
+        lat REAL,
+        lng REAL,
+        description TEXT DEFAULT '',
+        historical_note TEXT DEFAULT '',
+        image_url TEXT DEFAULT '',
+        aliases_json TEXT DEFAULT '[]',
+        is_real BOOLEAN DEFAULT 1,
+        source_plays_json TEXT DEFAULT '[]'
+      );
+      INSERT INTO places (id, slug, name, modern_name, place_type, modern_country, lat, lng, description, historical_note, image_url, aliases_json, is_real, source_plays_json)
+      SELECT id, slug, name, modern_name, place_type, modern_country, lat, lng, description, historical_note, image_url, aliases_json, is_real, ${sourceSelect}
+      FROM places_old;
+      DROP TABLE places_old;
+    `);
+  }
+} catch (e) {
+  console.warn("places schema migration skipped:", e.message);
+}
 
 // Seed forum tags
 const tags = [

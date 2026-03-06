@@ -16,6 +16,7 @@
     "deploy:safe": "bash scripts/deploy-safe.sh",
     "rollback": "bash scripts/rollback-release.sh",
     "import": "node scripts/import-texts.js",
+    "import-places": "node scripts/import-places-json.js",
     "build-words": "node scripts/build-word-index.js"
   },
   "dependencies": {
