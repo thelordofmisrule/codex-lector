@@ -39,6 +39,65 @@ function fileToDataUrl(file) {
   });
 }
 
+function normalizeCsvList(raw) {
+  return [...new Set(String(raw || "").split(/[,\n;]+/).map(s => s.trim()).filter(Boolean))];
+}
+
+function placeDraftFromPlace(place) {
+  return {
+    name: place?.name || "",
+    modernName: place?.modernName || "",
+    placeType: place?.placeType || "",
+    modernCountry: place?.modernCountry || "",
+    lat: place?.lat ?? "",
+    lng: place?.lng ?? "",
+    aliases: (place?.aliases || []).join(", "),
+    sourcePlays: (place?.sourcePlays || []).join(", "),
+    isReal: place?.isReal !== false,
+    description: place?.description || "",
+    historicalNote: place?.historicalNote || "",
+    imageUrl: place?.imageUrl || "",
+  };
+}
+
+function buildSuggestionChanges(originalPlace, draft) {
+  const changes = {};
+  if (!originalPlace) return changes;
+
+  const scalarChecks = [
+    ["name", draft.name, originalPlace.name || ""],
+    ["modernName", draft.modernName, originalPlace.modernName || ""],
+    ["placeType", draft.placeType, originalPlace.placeType || ""],
+    ["modernCountry", draft.modernCountry, originalPlace.modernCountry || ""],
+    ["description", draft.description, originalPlace.description || ""],
+    ["historicalNote", draft.historicalNote, originalPlace.historicalNote || ""],
+    ["imageUrl", draft.imageUrl, originalPlace.imageUrl || ""],
+  ];
+  scalarChecks.forEach(([key, nextRaw, prevRaw]) => {
+    const next = String(nextRaw || "").trim();
+    const prev = String(prevRaw || "").trim();
+    if (next !== prev) changes[key] = next;
+  });
+
+  const nextLat = draft.lat === "" ? null : Number(draft.lat);
+  const nextLng = draft.lng === "" ? null : Number(draft.lng);
+  const prevLat = originalPlace.lat === null || originalPlace.lat === undefined || originalPlace.lat === "" ? null : Number(originalPlace.lat);
+  const prevLng = originalPlace.lng === null || originalPlace.lng === undefined || originalPlace.lng === "" ? null : Number(originalPlace.lng);
+  if (nextLat !== prevLat) changes.lat = nextLat;
+  if (nextLng !== prevLng) changes.lng = nextLng;
+
+  const nextAliases = normalizeCsvList(draft.aliases);
+  const prevAliases = [...new Set((originalPlace.aliases || []).map(s => String(s || "").trim()).filter(Boolean))];
+  if (nextAliases.join("|") !== prevAliases.join("|")) changes.aliases = nextAliases;
+
+  const nextPlays = normalizeCsvList(draft.sourcePlays);
+  const prevPlays = [...new Set((originalPlace.sourcePlays || []).map(s => String(s || "").trim()).filter(Boolean))];
+  if (nextPlays.join("|") !== prevPlays.join("|")) changes.sourcePlays = nextPlays;
+
+  if (!!draft.isReal !== !!originalPlace.isReal) changes.isReal = !!draft.isReal;
+  return changes;
+}
+
 export default function PlacesPage() {
   const nav = useNavigate();
   const { user } = useAuth();
@@ -59,21 +118,15 @@ export default function PlacesPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [showSuggestEditor, setShowSuggestEditor] = useState(false);
+  const [suggestDraft, setSuggestDraft] = useState(() => placeDraftFromPlace(null));
+  const [suggestReason, setSuggestReason] = useState("");
+  const [suggestMsg, setSuggestMsg] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
   const [error, setError] = useState("");
-  const [editor, setEditor] = useState({
-    name: "",
-    modernName: "",
-    placeType: "",
-    modernCountry: "",
-    lat: "",
-    lng: "",
-    aliases: "",
-    sourcePlays: "",
-    isReal: true,
-    description: "",
-    historicalNote: "",
-    imageUrl: "",
-  });
+  const [editor, setEditor] = useState(() => placeDraftFromPlace(null));
 
   useEffect(() => {
     let cancelled = false;
@@ -129,21 +182,33 @@ export default function PlacesPage() {
   }, [selectedSlug, workFilter]);
 
   useEffect(() => {
-    setEditor({
-      name: selectedPlace?.name || "",
-      modernName: selectedPlace?.modernName || "",
-      placeType: selectedPlace?.placeType || "",
-      modernCountry: selectedPlace?.modernCountry || "",
-      lat: selectedPlace?.lat ?? "",
-      lng: selectedPlace?.lng ?? "",
-      aliases: (selectedPlace?.aliases || []).join(", "),
-      sourcePlays: (selectedPlace?.sourcePlays || []).join(", "),
-      isReal: selectedPlace?.isReal !== false,
-      description: selectedPlace?.description || "",
-      historicalNote: selectedPlace?.historicalNote || "",
-      imageUrl: selectedPlace?.imageUrl || "",
-    });
+    const draft = placeDraftFromPlace(selectedPlace);
+    setEditor(draft);
+    setSuggestDraft(draft);
+    setSuggestReason("");
+    setSuggestMsg("");
+    setShowSuggestEditor(false);
   }, [selectedPlace]);
+
+  useEffect(() => {
+    if (!selectedSlug || !user) {
+      setSuggestions([]);
+      setSuggestionsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSuggestionsLoading(true);
+    placesApi.suggestions(selectedSlug).then(data => {
+      if (cancelled) return;
+      setSuggestions(data.suggestions || []);
+    }).catch(() => {
+      if (cancelled) return;
+      setSuggestions([]);
+    }).finally(() => {
+      if (!cancelled) setSuggestionsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [selectedSlug, user]);
 
   const visiblePlaces = useMemo(() => {
     const q = searchFilter.trim().toLowerCase();
@@ -230,6 +295,64 @@ export default function PlacesPage() {
       toast?.error(e.message || "Could not save place details.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const submitSuggestion = async () => {
+    if (!selectedPlace) return;
+    const parsedLat = suggestDraft.lat === "" ? null : Number(suggestDraft.lat);
+    const parsedLng = suggestDraft.lng === "" ? null : Number(suggestDraft.lng);
+    if ((suggestDraft.lat !== "" && !Number.isFinite(parsedLat)) || (suggestDraft.lng !== "" && !Number.isFinite(parsedLng))) {
+      setSuggestMsg("Latitude/longitude must be numeric values.");
+      return;
+    }
+
+    const changes = buildSuggestionChanges(selectedPlace, {
+      ...suggestDraft,
+      lat: parsedLat,
+      lng: parsedLng,
+    });
+    if (!Object.keys(changes).length) {
+      setSuggestMsg("No changes to suggest.");
+      return;
+    }
+
+    setSuggesting(true);
+    setSuggestMsg("");
+    try {
+      const data = await placesApi.suggest(selectedPlace.slug, changes, suggestReason);
+      setSuggestions(prev => [data.suggestion, ...prev]);
+      setShowSuggestEditor(false);
+      setSuggestReason("");
+      toast?.success("Place edit suggestion submitted.");
+    } catch (e) {
+      setSuggestMsg(e.message || "Could not submit suggestion.");
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const acceptSuggestion = async (id) => {
+    try {
+      await placesApi.acceptSuggestion(id);
+      setSuggestions(prev => prev.map(s => s.id === id ? { ...s, status: "accepted" } : s));
+      const refreshed = await placesApi.get(selectedSlug, workFilter);
+      setSelectedPlace(refreshed.place);
+      setCitations(refreshed.citations || []);
+      setPlaces(prev => prev.map(place => place.slug === refreshed.place.slug ? { ...place, ...refreshed.place } : place));
+      toast?.success("Suggestion accepted.");
+    } catch (e) {
+      toast?.error(e.message || "Could not accept suggestion.");
+    }
+  };
+
+  const rejectSuggestion = async (id) => {
+    try {
+      await placesApi.rejectSuggestion(id);
+      setSuggestions(prev => prev.map(s => s.id === id ? { ...s, status: "rejected" } : s));
+      toast?.success("Suggestion rejected.");
+    } catch (e) {
+      toast?.error(e.message || "Could not reject suggestion.");
     }
   };
 
@@ -435,6 +558,59 @@ export default function PlacesPage() {
                   )}
                 </div>
 
+                {user && !user.isAdmin && (
+                  <div style={{ borderTop: "1px solid var(--border-light)", paddingTop: 14, marginBottom: 16 }}>
+                    {!showSuggestEditor ? (
+                      <button className="btn btn-secondary" onClick={() => setShowSuggestEditor(true)}>
+                        Suggest Place Edit
+                      </button>
+                    ) : (
+                      <div style={{ display: "grid", gap: 10 }}>
+                        <div style={{ fontFamily: "var(--font-display)", fontSize: 13, letterSpacing: 2, textTransform: "uppercase", color: "var(--accent)" }}>
+                          Suggest Edits
+                        </div>
+                        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                          <input className="input" value={suggestDraft.name} onChange={e => setSuggestDraft(prev => ({ ...prev, name: e.target.value }))} placeholder="Name" />
+                          <input className="input" value={suggestDraft.modernName} onChange={e => setSuggestDraft(prev => ({ ...prev, modernName: e.target.value }))} placeholder="Modern name" />
+                          <input className="input" value={suggestDraft.placeType} onChange={e => setSuggestDraft(prev => ({ ...prev, placeType: e.target.value }))} placeholder="Place type" />
+                          <input className="input" value={suggestDraft.modernCountry} onChange={e => setSuggestDraft(prev => ({ ...prev, modernCountry: e.target.value }))} placeholder="Country / region" />
+                        </div>
+                        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                          <input className="input" value={suggestDraft.lat} onChange={e => setSuggestDraft(prev => ({ ...prev, lat: e.target.value }))} placeholder="Latitude" />
+                          <input className="input" value={suggestDraft.lng} onChange={e => setSuggestDraft(prev => ({ ...prev, lng: e.target.value }))} placeholder="Longitude" />
+                        </div>
+                        <input className="input" value={suggestDraft.aliases} onChange={e => setSuggestDraft(prev => ({ ...prev, aliases: e.target.value }))} placeholder="Aliases (comma separated)" />
+                        <input className="input" value={suggestDraft.sourcePlays} onChange={e => setSuggestDraft(prev => ({ ...prev, sourcePlays: e.target.value }))} placeholder="Source plays (comma separated)" />
+                        <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-muted)" }}>
+                          <input type="checkbox" checked={!!suggestDraft.isReal} onChange={e => setSuggestDraft(prev => ({ ...prev, isReal: e.target.checked }))} />
+                          Real-world location
+                        </label>
+                        <textarea className="input" value={suggestDraft.description} onChange={e => setSuggestDraft(prev => ({ ...prev, description: e.target.value }))} rows={3} placeholder="Description" style={{ resize: "vertical" }} />
+                        <textarea className="input" value={suggestDraft.historicalNote} onChange={e => setSuggestDraft(prev => ({ ...prev, historicalNote: e.target.value }))} rows={3} placeholder="Historical note" style={{ resize: "vertical" }} />
+                        <input className="input" value={suggestDraft.imageUrl} onChange={e => setSuggestDraft(prev => ({ ...prev, imageUrl: e.target.value }))} placeholder="Image URL" />
+                        <textarea className="input" value={suggestReason} onChange={e => setSuggestReason(e.target.value)} rows={2} placeholder="Why are you suggesting this change? (optional)" style={{ resize: "vertical" }} />
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <button className="btn btn-primary btn-sm" onClick={submitSuggestion} disabled={suggesting}>
+                            {suggesting ? "Submitting..." : "Submit Suggestion"}
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => {
+                              setShowSuggestEditor(false);
+                              setSuggestDraft(placeDraftFromPlace(selectedPlace));
+                              setSuggestReason("");
+                              setSuggestMsg("");
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        {suggestMsg && <div style={{ fontSize: 13, color: "var(--danger)" }}>{suggestMsg}</div>}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {user?.isAdmin && (
                   <div style={{ borderTop: "1px solid var(--border-light)", paddingTop: 14, marginBottom: 16 }}>
                     <div style={{ fontFamily: "var(--font-display)", fontSize: 13, letterSpacing: 2, textTransform: "uppercase", color: "var(--accent)", marginBottom: 10 }}>
@@ -538,6 +714,53 @@ export default function PlacesPage() {
                         </button>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {user && (
+                  <div style={{ borderTop: "1px solid var(--border-light)", paddingTop: 14, marginBottom: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10 }}>
+                      <div style={{ fontFamily: "var(--font-display)", fontSize: 13, letterSpacing: 2, textTransform: "uppercase", color: "var(--accent)" }}>
+                        Edit Suggestions
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--text-light)" }}>
+                        {suggestionsLoading ? "Loading..." : `${suggestions.length} total`}
+                      </div>
+                    </div>
+                    {suggestionsLoading ? (
+                      <div style={{ padding: 10 }}><div className="spinner" /></div>
+                    ) : suggestions.length === 0 ? (
+                      <div style={{ color: "var(--text-light)", fontSize: 13 }}>No suggestions yet.</div>
+                    ) : (
+                      <div style={{ display: "grid", gap: 8 }}>
+                        {suggestions.map(s => (
+                          <div key={s.id} style={{ border: "1px solid var(--border-light)", borderRadius: 10, padding: "10px 12px", background: "rgba(201,168,76,0.05)" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                              <div style={{ fontSize: 13 }}>
+                                <strong>{s.displayName}</strong>
+                                <span style={{ color: "var(--text-light)", marginLeft: 8 }}>{new Date(s.createdAt).toLocaleString()}</span>
+                              </div>
+                              <span style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: s.status === "accepted" ? "var(--success)" : s.status === "rejected" ? "var(--danger)" : "var(--gold)" }}>
+                                {s.status}
+                              </span>
+                            </div>
+                            {s.reason && <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 6 }}>Reason: {s.reason}</div>}
+                            <div style={{ fontSize: 12, color: "var(--text-light)", marginBottom: 6 }}>
+                              Suggested fields: {Object.keys(s.payload || {}).join(", ") || "None"}
+                            </div>
+                            <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: 12, color: "var(--text-muted)", background: "var(--bg)", padding: 8, borderRadius: 6, border: "1px solid var(--border-light)" }}>
+{JSON.stringify(s.payload || {}, null, 2)}
+                            </pre>
+                            {user.isAdmin && s.status === "pending" && (
+                              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                <button className="btn btn-primary btn-sm" onClick={() => acceptSuggestion(s.id)}>Accept</button>
+                                <button className="btn btn-secondary btn-sm" onClick={() => rejectSuggestion(s.id)}>Reject</button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 

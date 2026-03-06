@@ -91,6 +91,10 @@ export const places = {
   ].filter(Boolean).join("&")}` : ""}`),
   get:(slug, workSlug="")=>req(`/places/${encodeURIComponent(slug)}${workSlug ? `?work=${encodeURIComponent(workSlug)}` : ""}`),
   update:(slug, data)=>req(`/places/${encodeURIComponent(slug)}`,{method:"PUT",body:JSON.stringify(data)}),
+  suggestions:slug=>req(`/places/${encodeURIComponent(slug)}/suggestions`),
+  suggest:(slug, changes, reason="")=>req(`/places/${encodeURIComponent(slug)}/suggestions`,{method:"POST",body:JSON.stringify({ changes, reason })}),
+  acceptSuggestion:id=>req(`/places/suggestions/${id}/accept`,{method:"POST"}),
+  rejectSuggestion:id=>req(`/places/suggestions/${id}/reject`,{method:"POST"}),
   uploadImage:(fileName,mimeType,dataUrl)=>req("/places/upload-image",{method:"POST",body:JSON.stringify({fileName,mimeType,dataUrl})}),
 };
 export const notifications = {

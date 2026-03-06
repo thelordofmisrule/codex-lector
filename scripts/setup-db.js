@@ -62,6 +62,22 @@ db.exec(`
     resolved_at DATETIME
   );
 
+  CREATE TABLE IF NOT EXISTS place_edit_suggestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    place_id INTEGER NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    payload_json TEXT NOT NULL,
+    reason TEXT DEFAULT '',
+    status TEXT DEFAULT 'pending',
+    resolved_by INTEGER REFERENCES users(id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    resolved_at DATETIME
+  );
+  CREATE INDEX IF NOT EXISTS idx_place_suggestions_place_status
+    ON place_edit_suggestions(place_id, status, created_at);
+  CREATE INDEX IF NOT EXISTS idx_place_suggestions_user_created
+    ON place_edit_suggestions(user_id, created_at);
+
   CREATE TABLE IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id),
@@ -319,6 +335,19 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS analytics_events (
   meta_json TEXT DEFAULT '',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS place_edit_suggestions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  place_id INTEGER NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  payload_json TEXT NOT NULL,
+  reason TEXT DEFAULT '',
+  status TEXT DEFAULT 'pending',
+  resolved_by INTEGER REFERENCES users(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  resolved_at DATETIME
+)`); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_place_suggestions_place_status ON place_edit_suggestions(place_id, status, created_at)"); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_place_suggestions_user_created ON place_edit_suggestions(user_id, created_at)"); } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS places (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   slug TEXT UNIQUE NOT NULL,
