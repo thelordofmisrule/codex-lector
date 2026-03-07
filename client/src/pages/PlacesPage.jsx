@@ -11,6 +11,10 @@ function prettyCategory(cat) {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
+function normalizePlaceType(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 function mapLinkUrl(place) {
   if (!place) return "https://www.openstreetmap.org/#map=4/45.2/12.0";
   if (!Number.isFinite(Number(place.lat)) || !Number.isFinite(Number(place.lng))) {
@@ -98,6 +102,32 @@ function buildSuggestionChanges(originalPlace, draft) {
   return changes;
 }
 
+function buildCreatePayloadFromDraft(draft) {
+  const parsedLat = draft.lat === "" ? null : Number(draft.lat);
+  const parsedLng = draft.lng === "" ? null : Number(draft.lng);
+  if ((draft.lat !== "" && !Number.isFinite(parsedLat)) || (draft.lng !== "" && !Number.isFinite(parsedLng))) {
+    throw new Error("Latitude/longitude must be numeric values.");
+  }
+  const name = String(draft.name || "").trim();
+  if (!name) {
+    throw new Error("Name is required.");
+  }
+  return {
+    name,
+    modernName: String(draft.modernName || "").trim(),
+    placeType: String(draft.placeType || "").trim(),
+    modernCountry: String(draft.modernCountry || "").trim(),
+    lat: parsedLat,
+    lng: parsedLng,
+    aliases: normalizeCsvList(draft.aliases),
+    sourcePlays: normalizeCsvList(draft.sourcePlays),
+    isReal: !!draft.isReal,
+    description: String(draft.description || "").trim(),
+    historicalNote: String(draft.historicalNote || "").trim(),
+    imageUrl: String(draft.imageUrl || "").trim(),
+  };
+}
+
 export default function PlacesPage() {
   const nav = useNavigate();
   const { user } = useAuth();
@@ -108,6 +138,8 @@ export default function PlacesPage() {
   const [selectedSlug, setSelectedSlug] = useState("");
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [citations, setCitations] = useState([]);
+  const [citationExclusions, setCitationExclusions] = useState([]);
+  const [citationExclusionsLoading, setCitationExclusionsLoading] = useState(false);
   const [workFilter, setWorkFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [countryFilter, setCountryFilter] = useState("all");
@@ -125,6 +157,17 @@ export default function PlacesPage() {
   const [suggestReason, setSuggestReason] = useState("");
   const [suggestMsg, setSuggestMsg] = useState("");
   const [suggesting, setSuggesting] = useState(false);
+  const [newPlaceSuggestions, setNewPlaceSuggestions] = useState([]);
+  const [newPlaceSuggestionsLoading, setNewPlaceSuggestionsLoading] = useState(false);
+  const [showSuggestNewEditor, setShowSuggestNewEditor] = useState(false);
+  const [suggestNewDraft, setSuggestNewDraft] = useState(() => placeDraftFromPlace(null));
+  const [suggestNewReason, setSuggestNewReason] = useState("");
+  const [suggestNewMsg, setSuggestNewMsg] = useState("");
+  const [suggestingNew, setSuggestingNew] = useState(false);
+  const [showCreateEditor, setShowCreateEditor] = useState(false);
+  const [createEditor, setCreateEditor] = useState(() => placeDraftFromPlace(null));
+  const [createMsg, setCreateMsg] = useState("");
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [editor, setEditor] = useState(() => placeDraftFromPlace(null));
 
@@ -210,10 +253,50 @@ export default function PlacesPage() {
     return () => { cancelled = true; };
   }, [selectedSlug, user]);
 
+  useEffect(() => {
+    if (!user) {
+      setNewPlaceSuggestions([]);
+      setNewPlaceSuggestionsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setNewPlaceSuggestionsLoading(true);
+    placesApi.newSuggestions().then(data => {
+      if (cancelled) return;
+      setNewPlaceSuggestions(data.suggestions || []);
+    }).catch(() => {
+      if (cancelled) return;
+      setNewPlaceSuggestions([]);
+    }).finally(() => {
+      if (!cancelled) setNewPlaceSuggestionsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  useEffect(() => {
+    if (!selectedSlug || !user?.isAdmin) {
+      setCitationExclusions([]);
+      setCitationExclusionsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setCitationExclusionsLoading(true);
+    placesApi.citationExclusions(selectedSlug).then(data => {
+      if (cancelled) return;
+      setCitationExclusions(data.exclusions || []);
+    }).catch(() => {
+      if (cancelled) return;
+      setCitationExclusions([]);
+    }).finally(() => {
+      if (!cancelled) setCitationExclusionsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [selectedSlug, user?.isAdmin]);
+
   const visiblePlaces = useMemo(() => {
     const q = searchFilter.trim().toLowerCase();
     return places.filter((place) => {
-      if (typeFilter !== "all" && place.placeType !== typeFilter) return false;
+      if (typeFilter !== "all" && normalizePlaceType(place.placeType) !== typeFilter) return false;
       if (countryFilter !== "all" && place.modernCountry !== countryFilter) return false;
       if (!q) return true;
       const haystack = [
@@ -242,8 +325,15 @@ export default function PlacesPage() {
   }, [visiblePlaces, selectedSlug]);
 
   const typeOptions = useMemo(() => {
-    const types = [...new Set(places.map(place => place.placeType))];
-    return types.sort();
+    const byValue = new Map();
+    places.forEach((place) => {
+      const value = normalizePlaceType(place.placeType);
+      if (!value) return;
+      if (!byValue.has(value)) byValue.set(value, prettyCategory(value));
+    });
+    return [...byValue.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([value, label]) => ({ value, label }));
   }, [places]);
 
   const countryOptions = useMemo(() => {
@@ -252,6 +342,11 @@ export default function PlacesPage() {
   }, [places]);
 
   const selectedWork = works.find(work => work.slug === workFilter);
+  const workTitleBySlug = useMemo(() => {
+    const map = {};
+    works.forEach(work => { map[work.slug] = work.title; });
+    return map;
+  }, [works]);
   const mapLink = showAllMap ? mapLinkUrlForPlaces(visiblePlaces) : mapLinkUrl(selectedPlace);
 
   useEffect(() => {
@@ -298,6 +393,40 @@ export default function PlacesPage() {
     }
   };
 
+  const upsertPlace = (nextPlace) => {
+    setPlaces(prev => {
+      const idx = prev.findIndex(place => place.slug === nextPlace.slug);
+      const next = idx >= 0
+        ? prev.map(place => place.slug === nextPlace.slug ? { ...place, ...nextPlace } : place)
+        : [...prev, nextPlace];
+      return [...next].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+    });
+  };
+
+  const createPlace = async () => {
+    let payload;
+    try {
+      payload = buildCreatePayloadFromDraft(createEditor);
+    } catch (e) {
+      setCreateMsg(e.message || "Invalid place details.");
+      return;
+    }
+    setCreating(true);
+    setCreateMsg("");
+    try {
+      const data = await placesApi.create(payload);
+      upsertPlace(data.place);
+      setSelectedSlug(data.place.slug);
+      setShowCreateEditor(false);
+      setCreateEditor(placeDraftFromPlace(null));
+      toast?.success("New place created.");
+    } catch (e) {
+      setCreateMsg(e.message || "Could not create place.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const submitSuggestion = async () => {
     if (!selectedPlace) return;
     const parsedLat = suggestDraft.lat === "" ? null : Number(suggestDraft.lat);
@@ -332,6 +461,30 @@ export default function PlacesPage() {
     }
   };
 
+  const submitNewPlaceSuggestion = async () => {
+    let payload;
+    try {
+      payload = buildCreatePayloadFromDraft(suggestNewDraft);
+    } catch (e) {
+      setSuggestNewMsg(e.message || "Invalid place details.");
+      return;
+    }
+    setSuggestingNew(true);
+    setSuggestNewMsg("");
+    try {
+      const data = await placesApi.suggestNew(payload, suggestNewReason);
+      setNewPlaceSuggestions(prev => [data.suggestion, ...prev]);
+      setShowSuggestNewEditor(false);
+      setSuggestNewDraft(placeDraftFromPlace(null));
+      setSuggestNewReason("");
+      toast?.success("New place suggestion submitted.");
+    } catch (e) {
+      setSuggestNewMsg(e.message || "Could not submit new place suggestion.");
+    } finally {
+      setSuggestingNew(false);
+    }
+  };
+
   const acceptSuggestion = async (id) => {
     try {
       await placesApi.acceptSuggestion(id);
@@ -353,6 +506,65 @@ export default function PlacesPage() {
       toast?.success("Suggestion rejected.");
     } catch (e) {
       toast?.error(e.message || "Could not reject suggestion.");
+    }
+  };
+
+  const acceptNewPlaceSuggestion = async (id) => {
+    try {
+      const data = await placesApi.acceptNewSuggestion(id);
+      if (data.place) {
+        upsertPlace(data.place);
+        setSelectedSlug(data.place.slug);
+      }
+      setNewPlaceSuggestions(prev => prev.map(s => (
+        s.id === id
+          ? { ...s, status: "accepted", createdPlace: data.place ? { slug: data.place.slug, name: data.place.name } : s.createdPlace }
+          : s
+      )));
+      toast?.success("New place suggestion accepted.");
+    } catch (e) {
+      toast?.error(e.message || "Could not accept new place suggestion.");
+    }
+  };
+
+  const rejectNewPlaceSuggestion = async (id) => {
+    try {
+      await placesApi.rejectNewSuggestion(id);
+      setNewPlaceSuggestions(prev => prev.map(s => s.id === id ? { ...s, status: "rejected" } : s));
+      toast?.success("New place suggestion rejected.");
+    } catch (e) {
+      toast?.error(e.message || "Could not reject new place suggestion.");
+    }
+  };
+
+  const excludeCitationMatch = async (citation) => {
+    if (!selectedPlace) return;
+    try {
+      const data = await placesApi.excludeCitation(selectedPlace.slug, citation.workSlug, citation.lineNumber, citation.lineText);
+      setCitations(prev => prev.filter(item => !(item.workSlug === citation.workSlug && item.lineNumber === citation.lineNumber)));
+      if (data?.exclusion) {
+        setCitationExclusions(prev => {
+          if (prev.some(item => item.id === data.exclusion.id)) return prev;
+          return [data.exclusion, ...prev];
+        });
+      }
+      toast?.success("Citation excluded for this place.");
+    } catch (e) {
+      toast?.error(e.message || "Could not exclude citation.");
+    }
+  };
+
+  const restoreCitationExclusion = async (id) => {
+    if (!selectedPlace) return;
+    try {
+      await placesApi.restoreCitationExclusion(selectedPlace.slug, id);
+      setCitationExclusions(prev => prev.filter(item => item.id !== id));
+      const refreshed = await placesApi.get(selectedSlug, workFilter);
+      setSelectedPlace(refreshed.place);
+      setCitations(refreshed.citations || []);
+      toast?.success("Citation exclusion removed.");
+    } catch (e) {
+      toast?.error(e.message || "Could not restore citation.");
     }
   };
 
@@ -381,7 +593,7 @@ export default function PlacesPage() {
         <select className="input" value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ minWidth: 180 }}>
           <option value="all">All Place Types</option>
           {typeOptions.map(type => (
-            <option key={type} value={type}>{prettyCategory(type)}</option>
+            <option key={type.value} value={type.value}>{type.label}</option>
           ))}
         </select>
         <select className="input" value={countryFilter} onChange={e => setCountryFilter(e.target.value)} style={{ minWidth: 180 }}>
@@ -500,6 +712,167 @@ export default function PlacesPage() {
           </div>
 
           <div style={{ border: "1px solid var(--border)", borderRadius: 18, background: "var(--surface)", padding: 18 }}>
+            {user?.isAdmin && (
+              <div style={{ borderBottom: "1px solid var(--border-light)", paddingBottom: 14, marginBottom: 16 }}>
+                {!showCreateEditor ? (
+                  <button className="btn btn-secondary" onClick={() => setShowCreateEditor(true)}>
+                    Add New Place
+                  </button>
+                ) : (
+                  <div style={{ display: "grid", gap: 10 }}>
+                    <div style={{ fontFamily: "var(--font-display)", fontSize: 13, letterSpacing: 2, textTransform: "uppercase", color: "var(--accent)" }}>
+                      Create New Place
+                    </div>
+                    <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                      <input className="input" value={createEditor.name} onChange={e => setCreateEditor(prev => ({ ...prev, name: e.target.value }))} placeholder="Name" />
+                      <input className="input" value={createEditor.modernName} onChange={e => setCreateEditor(prev => ({ ...prev, modernName: e.target.value }))} placeholder="Modern name" />
+                      <input className="input" value={createEditor.placeType} onChange={e => setCreateEditor(prev => ({ ...prev, placeType: e.target.value }))} placeholder="Place type" />
+                      <input className="input" value={createEditor.modernCountry} onChange={e => setCreateEditor(prev => ({ ...prev, modernCountry: e.target.value }))} placeholder="Country / region" />
+                    </div>
+                    <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                      <input className="input" value={createEditor.lat} onChange={e => setCreateEditor(prev => ({ ...prev, lat: e.target.value }))} placeholder="Latitude" />
+                      <input className="input" value={createEditor.lng} onChange={e => setCreateEditor(prev => ({ ...prev, lng: e.target.value }))} placeholder="Longitude" />
+                    </div>
+                    <input className="input" value={createEditor.aliases} onChange={e => setCreateEditor(prev => ({ ...prev, aliases: e.target.value }))} placeholder="Aliases (comma separated)" />
+                    <input className="input" value={createEditor.sourcePlays} onChange={e => setCreateEditor(prev => ({ ...prev, sourcePlays: e.target.value }))} placeholder="Source plays (comma separated)" />
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-muted)" }}>
+                      <input type="checkbox" checked={!!createEditor.isReal} onChange={e => setCreateEditor(prev => ({ ...prev, isReal: e.target.checked }))} />
+                      Real-world location
+                    </label>
+                    <textarea className="input" value={createEditor.description} onChange={e => setCreateEditor(prev => ({ ...prev, description: e.target.value }))} rows={3} placeholder="Description" style={{ resize: "vertical" }} />
+                    <textarea className="input" value={createEditor.historicalNote} onChange={e => setCreateEditor(prev => ({ ...prev, historicalNote: e.target.value }))} rows={3} placeholder="Historical note" style={{ resize: "vertical" }} />
+                    <input className="input" value={createEditor.imageUrl} onChange={e => setCreateEditor(prev => ({ ...prev, imageUrl: e.target.value }))} placeholder="Image URL" />
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button className="btn btn-primary btn-sm" onClick={createPlace} disabled={creating}>
+                        {creating ? "Creating..." : "Create Place"}
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          setShowCreateEditor(false);
+                          setCreateEditor(placeDraftFromPlace(null));
+                          setCreateMsg("");
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    {createMsg && <div style={{ fontSize: 13, color: "var(--danger)" }}>{createMsg}</div>}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {user && !user.isAdmin && (
+              <div style={{ borderBottom: "1px solid var(--border-light)", paddingBottom: 14, marginBottom: 16 }}>
+                {!showSuggestNewEditor ? (
+                  <button className="btn btn-secondary" onClick={() => setShowSuggestNewEditor(true)}>
+                    Suggest New Place
+                  </button>
+                ) : (
+                  <div style={{ display: "grid", gap: 10 }}>
+                    <div style={{ fontFamily: "var(--font-display)", fontSize: 13, letterSpacing: 2, textTransform: "uppercase", color: "var(--accent)" }}>
+                      Suggest New Place
+                    </div>
+                    <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                      <input className="input" value={suggestNewDraft.name} onChange={e => setSuggestNewDraft(prev => ({ ...prev, name: e.target.value }))} placeholder="Name" />
+                      <input className="input" value={suggestNewDraft.modernName} onChange={e => setSuggestNewDraft(prev => ({ ...prev, modernName: e.target.value }))} placeholder="Modern name" />
+                      <input className="input" value={suggestNewDraft.placeType} onChange={e => setSuggestNewDraft(prev => ({ ...prev, placeType: e.target.value }))} placeholder="Place type" />
+                      <input className="input" value={suggestNewDraft.modernCountry} onChange={e => setSuggestNewDraft(prev => ({ ...prev, modernCountry: e.target.value }))} placeholder="Country / region" />
+                    </div>
+                    <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                      <input className="input" value={suggestNewDraft.lat} onChange={e => setSuggestNewDraft(prev => ({ ...prev, lat: e.target.value }))} placeholder="Latitude" />
+                      <input className="input" value={suggestNewDraft.lng} onChange={e => setSuggestNewDraft(prev => ({ ...prev, lng: e.target.value }))} placeholder="Longitude" />
+                    </div>
+                    <input className="input" value={suggestNewDraft.aliases} onChange={e => setSuggestNewDraft(prev => ({ ...prev, aliases: e.target.value }))} placeholder="Aliases (comma separated)" />
+                    <input className="input" value={suggestNewDraft.sourcePlays} onChange={e => setSuggestNewDraft(prev => ({ ...prev, sourcePlays: e.target.value }))} placeholder="Source plays (comma separated)" />
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-muted)" }}>
+                      <input type="checkbox" checked={!!suggestNewDraft.isReal} onChange={e => setSuggestNewDraft(prev => ({ ...prev, isReal: e.target.checked }))} />
+                      Real-world location
+                    </label>
+                    <textarea className="input" value={suggestNewDraft.description} onChange={e => setSuggestNewDraft(prev => ({ ...prev, description: e.target.value }))} rows={3} placeholder="Description" style={{ resize: "vertical" }} />
+                    <textarea className="input" value={suggestNewDraft.historicalNote} onChange={e => setSuggestNewDraft(prev => ({ ...prev, historicalNote: e.target.value }))} rows={3} placeholder="Historical note" style={{ resize: "vertical" }} />
+                    <input className="input" value={suggestNewDraft.imageUrl} onChange={e => setSuggestNewDraft(prev => ({ ...prev, imageUrl: e.target.value }))} placeholder="Image URL" />
+                    <textarea className="input" value={suggestNewReason} onChange={e => setSuggestNewReason(e.target.value)} rows={2} placeholder="Why are you suggesting this place? (optional)" style={{ resize: "vertical" }} />
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button className="btn btn-primary btn-sm" onClick={submitNewPlaceSuggestion} disabled={suggestingNew}>
+                        {suggestingNew ? "Submitting..." : "Submit New Place"}
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          setShowSuggestNewEditor(false);
+                          setSuggestNewDraft(placeDraftFromPlace(null));
+                          setSuggestNewReason("");
+                          setSuggestNewMsg("");
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    {suggestNewMsg && <div style={{ fontSize: 13, color: "var(--danger)" }}>{suggestNewMsg}</div>}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {user && (
+              <div style={{ borderBottom: "1px solid var(--border-light)", paddingBottom: 14, marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 13, letterSpacing: 2, textTransform: "uppercase", color: "var(--accent)" }}>
+                    New Place Submissions
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--text-light)" }}>
+                    {newPlaceSuggestionsLoading ? "Loading..." : `${newPlaceSuggestions.length} total`}
+                  </div>
+                </div>
+                {newPlaceSuggestionsLoading ? (
+                  <div style={{ padding: 10 }}><div className="spinner" /></div>
+                ) : newPlaceSuggestions.length === 0 ? (
+                  <div style={{ color: "var(--text-light)", fontSize: 13 }}>No new place submissions yet.</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {newPlaceSuggestions.map(s => (
+                      <div key={s.id} style={{ border: "1px solid var(--border-light)", borderRadius: 10, padding: "10px 12px", background: "rgba(201,168,76,0.05)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                          <div style={{ fontSize: 13 }}>
+                            <strong>{s.displayName}</strong>
+                            <span style={{ color: "var(--text-light)", marginLeft: 8 }}>{new Date(s.createdAt).toLocaleString()}</span>
+                          </div>
+                          <span style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: s.status === "accepted" ? "var(--success)" : s.status === "rejected" ? "var(--danger)" : "var(--gold)" }}>
+                            {s.status}
+                          </span>
+                        </div>
+                        {s.reason && <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 6 }}>Reason: {s.reason}</div>}
+                        {s.createdPlace && (
+                          <div style={{ marginBottom: 6 }}>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setSelectedSlug(s.createdPlace.slug)}
+                            >
+                              Open Created Place: {s.createdPlace.name}
+                            </button>
+                          </div>
+                        )}
+                        <div style={{ fontSize: 12, color: "var(--text-light)", marginBottom: 6 }}>
+                          Suggested fields: {Object.keys(s.payload || {}).join(", ") || "None"}
+                        </div>
+                        <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: 12, color: "var(--text-muted)", background: "var(--bg)", padding: 8, borderRadius: 6, border: "1px solid var(--border-light)" }}>
+{JSON.stringify(s.payload || {}, null, 2)}
+                        </pre>
+                        {user.isAdmin && s.status === "pending" && (
+                          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                            <button className="btn btn-primary btn-sm" onClick={() => acceptNewPlaceSuggestion(s.id)}>Accept & Create</button>
+                            <button className="btn btn-secondary btn-sm" onClick={() => rejectNewPlaceSuggestion(s.id)}>Reject</button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {!selectedPlace ? (
               <div style={{ padding: 32, textAlign: "center", color: "var(--text-light)" }}>
                 Select a place to inspect its textual footprint.
@@ -782,13 +1155,9 @@ export default function PlacesPage() {
                   ) : (
                     <div style={{ display: "grid", gap: 10 }}>
                       {citations.map((citation, idx) => (
-                        <button
+                        <div
                           key={`${citation.workSlug}-${citation.lineNumber}-${idx}`}
-                          className="btn"
-                          onClick={() => nav(`/read/${citation.workSlug}?line=${citation.lineNumber}`)}
                           style={{
-                            display: "block",
-                            textAlign: "left",
                             border: "1px solid var(--border-light)",
                             borderRadius: 12,
                             padding: "12px 14px",
@@ -804,8 +1173,66 @@ export default function PlacesPage() {
                           <div style={{ color: "var(--text-muted)", lineHeight: 1.65 }}>
                             {citation.lineText}
                           </div>
-                        </button>
+                          <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => nav(`/read/${citation.workSlug}?line=${citation.lineNumber}`)}
+                            >
+                              Open In Reader
+                            </button>
+                            {user?.isAdmin && (
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => excludeCitationMatch(citation)}
+                              >
+                                Not Place
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       ))}
+                    </div>
+                  )}
+
+                  {user?.isAdmin && (
+                    <div style={{ marginTop: 14, borderTop: "1px solid var(--border-light)", paddingTop: 12 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 8 }}>
+                        <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "var(--accent)" }}>
+                          Excluded Citation Matches
+                        </div>
+                        <div style={{ fontSize: 12, color: "var(--text-light)" }}>
+                          {citationExclusionsLoading ? "Loading..." : `${citationExclusions.length} excluded`}
+                        </div>
+                      </div>
+                      {citationExclusionsLoading ? (
+                        <div style={{ padding: 10 }}><div className="spinner" /></div>
+                      ) : citationExclusions.length === 0 ? (
+                        <div style={{ fontSize: 13, color: "var(--text-light)" }}>
+                          No excluded citation matches.
+                        </div>
+                      ) : (
+                        <div style={{ display: "grid", gap: 8 }}>
+                          {citationExclusions.map((item) => (
+                            <div key={item.id} style={{ border: "1px solid var(--border-light)", borderRadius: 10, padding: "8px 10px", background: "rgba(122,30,46,0.04)" }}>
+                              <div style={{ fontSize: 13, marginBottom: 6 }}>
+                                <strong>{workTitleBySlug[item.workSlug] || item.workSlug}</strong>
+                                <span style={{ color: "var(--text-light)", marginLeft: 8 }}>Line {item.lineNumber}</span>
+                              </div>
+                              {item.lineText && (
+                                <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 6 }}>
+                                  {item.lineText}
+                                </div>
+                              )}
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => restoreCitationExclusion(item.id)}
+                              >
+                                Restore Match
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

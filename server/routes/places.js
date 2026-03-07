@@ -118,6 +118,71 @@ function parseJsonObject(raw, fallback = {}) {
   }
 }
 
+function slugify(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+function makeUniquePlaceSlug(preferred, nameFallback) {
+  const base = slugify(preferred || nameFallback) || `place-${Date.now()}`;
+  const exists = db.prepare("SELECT 1 FROM places WHERE slug=?");
+  let slug = base;
+  let n = 2;
+  while (exists.get(slug)) {
+    slug = `${base}-${n}`;
+    n += 1;
+  }
+  return slug;
+}
+
+function buildPlaceInsert(body = {}) {
+  const patch = sanitizePlacePatch(body);
+  const name = String(patch.name || "").trim();
+  if (!name) throw new Error("Name is required.");
+  return {
+    slug: makeUniquePlaceSlug(body.slug, name),
+    name,
+    modern_name: String(patch.modern_name || "").trim(),
+    place_type: String(patch.place_type || "city").trim() || "city",
+    modern_country: String(patch.modern_country || "").trim(),
+    lat: Object.prototype.hasOwnProperty.call(patch, "lat") ? patch.lat : null,
+    lng: Object.prototype.hasOwnProperty.call(patch, "lng") ? patch.lng : null,
+    description: String(patch.description || "").trim(),
+    historical_note: String(patch.historical_note || "").trim(),
+    image_url: String(patch.image_url || "").trim(),
+    aliases_json: patch.aliases_json || "[]",
+    is_real: Object.prototype.hasOwnProperty.call(patch, "is_real") ? patch.is_real : 1,
+    source_plays_json: patch.source_plays_json || "[]",
+  };
+}
+
+function insertPlaceRecord(place) {
+  const result = db.prepare(`
+    INSERT INTO places (slug, name, modern_name, place_type, modern_country, lat, lng, description, historical_note, image_url, aliases_json, is_real, source_plays_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    place.slug,
+    place.name,
+    place.modern_name,
+    place.place_type,
+    place.modern_country,
+    place.lat,
+    place.lng,
+    place.description,
+    place.historical_note,
+    place.image_url,
+    place.aliases_json,
+    place.is_real,
+    place.source_plays_json
+  );
+  return db.prepare("SELECT * FROM places WHERE id=?").get(result.lastInsertRowid);
+}
+
 function escRegExp(text) {
   return String(text || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -134,7 +199,32 @@ function placeTerms(place) {
 }
 
 function termRegex(term) {
-  return new RegExp(`\\b${escRegExp(term).replace(/\s+/g, "\\s+")}\\b`, "i");
+  const raw = String(term || "").trim();
+  if (!raw) return null;
+  const pattern = escRegExp(raw).replace(/\s+/g, "\\s+");
+  // Treat apostrophes as part of words; allow possessive forms like "Rome's",
+  // but avoid matching truncated words like "Abus'd" for place "Abus".
+  return new RegExp(`(?<![A-Za-z0-9'’])${pattern}(?:['’]s)?(?![A-Za-z0-9'’])`, "i");
+}
+
+function citationKey(workSlug, lineNumber) {
+  return `${String(workSlug || "")}:${Number(lineNumber) || 0}`;
+}
+
+function loadCitationExclusionSet(placeId) {
+  const rows = db.prepare("SELECT work_slug, line_number FROM place_citation_exclusions WHERE place_id=?").all(placeId);
+  return new Set(rows.map(row => citationKey(row.work_slug, row.line_number)));
+}
+
+function serializeCitationExclusion(row) {
+  return {
+    id: row.id,
+    workSlug: row.work_slug,
+    lineNumber: row.line_number,
+    lineText: row.line_text || "",
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  };
 }
 
 function parseWorkCache() {
@@ -155,7 +245,8 @@ function findPlaceMentions(place, parsedWorks, opts = {}) {
   const maxTotal = opts.maxTotal || 12;
   const maxPerWork = opts.maxPerWork || 2;
   const workSlug = opts.workSlug ? String(opts.workSlug) : "";
-  const regexes = placeTerms(place).map(termRegex);
+  const exclusionSet = opts.exclusionSet || null;
+  const regexes = placeTerms(place).map(termRegex).filter(Boolean);
   if (!regexes.length) return [];
 
   const citations = [];
@@ -163,13 +254,15 @@ function findPlaceMentions(place, parsedWorks, opts = {}) {
     if (workSlug && work.slug !== workSlug) continue;
     let hitsForWork = 0;
     for (let i = 0; i < work.lines.length; i++) {
+      const lineNumber = i + 1;
+      if (exclusionSet && exclusionSet.has(citationKey(work.slug, lineNumber))) continue;
       const lineText = work.lines[i];
       if (!regexes.some(re => re.test(lineText))) continue;
       citations.push({
         workSlug: work.slug,
         workTitle: work.title,
         workCategory: work.category,
-        lineNumber: i + 1,
+        lineNumber,
         lineText,
       });
       hitsForWork += 1;
@@ -253,6 +346,127 @@ r.post("/upload-image", requireAdmin, (req, res) => {
   const name = `${safeBase}-${crypto.randomBytes(6).toString("hex")}${ext}`;
   fs.writeFileSync(path.join(dir, name), buf);
   res.json({ url: `/media/places/${name}` });
+});
+
+r.post("/", requireAdmin, (req, res) => {
+  try {
+    const place = buildPlaceInsert(req.body || {});
+    const inserted = insertPlaceRecord(place);
+    res.status(201).json({ place: serializePlace(inserted) });
+  } catch (e) {
+    res.status(400).json({ error: e.message || "Invalid place payload." });
+  }
+});
+
+r.get("/suggestions/new", requireAuth, (req, res) => {
+  const rows = req.user.isAdmin
+    ? db.prepare(`
+      SELECT s.*, u.username, u.display_name, ru.display_name AS resolver_name, p.slug AS created_place_slug, p.name AS created_place_name
+      FROM place_create_suggestions s
+      JOIN users u ON u.id=s.user_id
+      LEFT JOIN users ru ON ru.id=s.resolved_by
+      LEFT JOIN places p ON p.id=s.created_place_id
+      ORDER BY s.created_at DESC
+    `).all()
+    : db.prepare(`
+      SELECT s.*, u.username, u.display_name, ru.display_name AS resolver_name, p.slug AS created_place_slug, p.name AS created_place_name
+      FROM place_create_suggestions s
+      JOIN users u ON u.id=s.user_id
+      LEFT JOIN users ru ON ru.id=s.resolved_by
+      LEFT JOIN places p ON p.id=s.created_place_id
+      WHERE s.user_id=?
+      ORDER BY s.created_at DESC
+    `).all(req.user.id);
+
+  const suggestions = rows.map(row => ({
+    id: row.id,
+    userId: row.user_id,
+    username: row.username,
+    displayName: row.display_name,
+    payload: parseJsonObject(row.payload_json, {}),
+    reason: row.reason || "",
+    status: row.status,
+    resolverName: row.resolver_name || "",
+    createdPlace: row.created_place_slug ? { slug: row.created_place_slug, name: row.created_place_name } : null,
+    createdAt: row.created_at,
+    resolvedAt: row.resolved_at,
+  }));
+
+  res.json({ suggestions });
+});
+
+r.post("/suggestions/new", requireAuth, suggestionLimit, (req, res) => {
+  const body = req.body || {};
+  const reason = String(body.reason || "").trim();
+  const rawChanges = body.changes && typeof body.changes === "object" ? body.changes : body;
+
+  let patch = {};
+  try {
+    patch = sanitizePlacePatch(rawChanges);
+  } catch (e) {
+    return res.status(400).json({ error: e.message || "Invalid place suggestion." });
+  }
+  if (!String(patch.name || "").trim()) {
+    return res.status(400).json({ error: "Name is required for a new place suggestion." });
+  }
+
+  const result = db.prepare(`
+    INSERT INTO place_create_suggestions (user_id, payload_json, reason)
+    VALUES (?, ?, ?)
+  `).run(req.user.id, JSON.stringify(patch), reason);
+
+  const created = db.prepare(`
+    SELECT s.*, u.username, u.display_name
+    FROM place_create_suggestions s
+    JOIN users u ON u.id=s.user_id
+    WHERE s.id=?
+  `).get(result.lastInsertRowid);
+
+  notifyAdmins("place_create_suggestion", `${created.display_name} submitted a new place suggestion.`, "/places");
+
+  res.json({
+    suggestion: {
+      id: created.id,
+      userId: created.user_id,
+      username: created.username,
+      displayName: created.display_name,
+      payload: parseJsonObject(created.payload_json, {}),
+      reason: created.reason || "",
+      status: created.status,
+      createdAt: created.created_at,
+    },
+  });
+});
+
+r.post("/suggestions/new/:id/accept", requireAdmin, (req, res) => {
+  const suggestion = db.prepare("SELECT * FROM place_create_suggestions WHERE id=?").get(req.params.id);
+  if (!suggestion) return res.status(404).json({ error: "Suggestion not found." });
+  if (suggestion.status !== "pending") return res.status(400).json({ error: "Suggestion already resolved." });
+
+  const payload = parseJsonObject(suggestion.payload_json, {});
+  let inserted;
+  try {
+    inserted = insertPlaceRecord(buildPlaceInsert(payload));
+  } catch (e) {
+    return res.status(400).json({ error: e.message || "Invalid new place payload." });
+  }
+
+  db.prepare("UPDATE place_create_suggestions SET status='accepted', resolved_by=?, resolved_at=datetime('now'), created_place_id=? WHERE id=?")
+    .run(req.user.id, inserted.id, req.params.id);
+
+  notify(suggestion.user_id, "place_create_suggestion_accepted", `Your new place suggestion for ${inserted.name} was accepted.`, `/places`);
+  res.json({ ok: true, place: serializePlace(inserted) });
+});
+
+r.post("/suggestions/new/:id/reject", requireAdmin, (req, res) => {
+  const suggestion = db.prepare("SELECT * FROM place_create_suggestions WHERE id=?").get(req.params.id);
+  if (!suggestion) return res.status(404).json({ error: "Suggestion not found." });
+  if (suggestion.status !== "pending") return res.status(400).json({ error: "Suggestion already resolved." });
+
+  db.prepare("UPDATE place_create_suggestions SET status='rejected', resolved_by=?, resolved_at=datetime('now') WHERE id=?")
+    .run(req.user.id, req.params.id);
+  notify(suggestion.user_id, "place_create_suggestion_rejected", "Your new place suggestion was not accepted.", "/places");
+  res.json({ ok: true });
 });
 
 r.put("/:slug", requireAdmin, (req, res) => {
@@ -395,19 +609,86 @@ r.post("/suggestions/:id/reject", requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+r.get("/:slug/citation-exclusions", requireAdmin, (req, res) => {
+  const place = db.prepare("SELECT id FROM places WHERE slug=?").get(req.params.slug);
+  if (!place) return res.status(404).json({ error: "Place not found." });
+  const rows = db.prepare(`
+    SELECT e.*, u.display_name AS created_by_name
+    FROM place_citation_exclusions e
+    LEFT JOIN users u ON u.id=e.created_by
+    WHERE e.place_id=?
+    ORDER BY e.created_at DESC
+  `).all(place.id);
+  res.json({
+    exclusions: rows.map(row => ({
+      ...serializeCitationExclusion(row),
+      createdByName: row.created_by_name || "",
+    })),
+  });
+});
+
+r.post("/:slug/citation-exclusions", requireAdmin, (req, res) => {
+  const place = db.prepare("SELECT id, name FROM places WHERE slug=?").get(req.params.slug);
+  if (!place) return res.status(404).json({ error: "Place not found." });
+
+  const body = req.body || {};
+  const workSlug = String(body.workSlug || "").trim();
+  const lineNumber = Number(body.lineNumber);
+  const lineText = String(body.lineText || "").trim();
+  if (!workSlug || !Number.isInteger(lineNumber) || lineNumber <= 0) {
+    return res.status(400).json({ error: "Valid workSlug and lineNumber are required." });
+  }
+
+  db.prepare(`
+    INSERT OR IGNORE INTO place_citation_exclusions (place_id, work_slug, line_number, line_text, created_by)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(place.id, workSlug, lineNumber, lineText, req.user.id);
+
+  const row = db.prepare(`
+    SELECT e.*, u.display_name AS created_by_name
+    FROM place_citation_exclusions e
+    LEFT JOIN users u ON u.id=e.created_by
+    WHERE e.place_id=? AND e.work_slug=? AND e.line_number=?
+  `).get(place.id, workSlug, lineNumber);
+  if (!row) return res.status(500).json({ error: "Could not store exclusion." });
+
+  res.json({
+    exclusion: {
+      ...serializeCitationExclusion(row),
+      createdByName: row?.created_by_name || "",
+    },
+  });
+});
+
+r.delete("/:slug/citation-exclusions/:id", requireAdmin, (req, res) => {
+  const place = db.prepare("SELECT id FROM places WHERE slug=?").get(req.params.slug);
+  if (!place) return res.status(404).json({ error: "Place not found." });
+  const row = db.prepare("SELECT id FROM place_citation_exclusions WHERE id=? AND place_id=?").get(req.params.id, place.id);
+  if (!row) return res.status(404).json({ error: "Exclusion not found." });
+  db.prepare("DELETE FROM place_citation_exclusions WHERE id=?").run(req.params.id);
+  res.json({ ok: true });
+});
+
 r.get("/:slug", (req, res) => {
   const row = db.prepare("SELECT * FROM places WHERE slug=?").get(req.params.slug);
   if (!row) return res.status(404).json({ error: "Place not found." });
 
   const parsedWorks = parseWorkCache();
   const workSlug = req.query.work ? String(req.query.work) : "";
-  const citations = findPlaceMentions(row, parsedWorks, { workSlug, maxTotal: 18, maxPerWork: 3 });
+  const exclusionSet = loadCitationExclusionSet(row.id);
+  const citations = findPlaceMentions(row, parsedWorks, {
+    workSlug,
+    maxTotal: 18,
+    maxPerWork: 3,
+    exclusionSet,
+  });
   const workCount = new Set(citations.map(item => item.workSlug)).size;
 
   res.json({
     place: serializePlace(row),
     workCount,
     citations,
+    excludedCount: exclusionSet.size,
   });
 });
 
