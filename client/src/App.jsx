@@ -21,6 +21,7 @@ import AdminReportsPage from "./pages/AdminReportsPage";
 import AdminAnalyticsPage from "./pages/AdminAnalyticsPage";
 import HowToPage from "./pages/HowToPage";
 import PlacesPage from "./pages/PlacesPage";
+import YearOfShakespearePage from "./pages/YearOfShakespearePage";
 
 export default function App() {
   const { user, refreshUser } = useAuth();
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="/my-library" element={<MyLibraryPage />} />
           <Route path="/layers" element={<LayersPage />} />
           <Route path="/places" element={<PlacesPage />} />
+          <Route path="/year-of-shakespeare" element={<YearOfShakespearePage />} />
           <Route path="/layers/:id" element={<LayerDetailPage />} />
           <Route path="/annotation/:id" element={<AnnotationDetailPage />} />
           <Route path="/admin-login" element={<AdminLoginPage />} />

@@ -43,6 +43,7 @@ export default function HomePage() {
         <div style={{ display:"flex", justifyContent:"center", gap:10, marginTop:18, flexWrap:"wrap" }}>
           <button className="btn btn-primary" onClick={() => nav("/how-to")}>How It Works</button>
           <button className="btn btn-secondary" onClick={() => nav("/places")}>Explore Places</button>
+          <button className="btn btn-secondary" onClick={() => nav("/year-of-shakespeare")}>Year Calendar</button>
           <button className="btn btn-secondary" onClick={() => nav("/layers")}>Featured Layers</button>
         </div>
         <div style={{ margin:"24px auto 0", display:"flex", justifyContent:"center", gap:8, color:"var(--border)" }}>
