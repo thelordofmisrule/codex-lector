@@ -21,6 +21,8 @@
   --success: #3D6B4F;
   --danger: #8B2020;
   --code-bg: #E8E0D0;
+  --accent-contrast: #FFF8F0;
+  --gold-contrast: #2A1F0E;
 }
 
 /* ─── Dark Theme ─────────────────────────────── */
@@ -46,6 +48,8 @@
   --success: #6AAF82;
   --danger: #D46060;
   --code-bg: #2E2820;
+  --accent-contrast: #FFF8F0;
+  --gold-contrast: #1A1612;
 }
 
 /* ─── Evangelion GUI Theme ─────────────────── */
@@ -71,9 +75,12 @@
   --success: #79FF69;
   --danger: #FF4965;
   --code-bg: #17201B;
-  --font-body: 'Chakra Petch', 'JetBrains Mono', sans-serif;
-  --font-display: 'Orbitron', 'Chakra Petch', sans-serif;
-  --font-fell: 'Chakra Petch', 'JetBrains Mono', sans-serif;
+  --accent-contrast: #121009;
+  --gold-contrast: #0D1308;
+  --font-body: 'Rajdhani', 'Chakra Petch', sans-serif;
+  --font-display: 'Orbitron', 'Rajdhani', sans-serif;
+  --font-fell: 'Rajdhani', 'Chakra Petch', sans-serif;
+  --font-mono: 'Share Tech Mono', 'JetBrains Mono', monospace;
   --font-eva-readout: 'Share Tech Mono', 'JetBrains Mono', monospace;
 }
 
@@ -102,6 +109,25 @@ body {
     repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 4px),
     linear-gradient(135deg, #0F1511 0%, #0A0F0D 52%, #1B150D 100%);
   background-attachment: fixed;
+}
+
+[data-theme="eva"] body,
+[data-theme="eva"] button,
+[data-theme="eva"] input,
+[data-theme="eva"] select,
+[data-theme="eva"] textarea,
+[data-theme="eva"] option,
+[data-theme="eva"] summary {
+  font-family: var(--font-body);
+}
+
+[data-theme="eva"] h1,
+[data-theme="eva"] h2,
+[data-theme="eva"] h3,
+[data-theme="eva"] h4,
+[data-theme="eva"] h5,
+[data-theme="eva"] h6 {
+  font-family: var(--font-display);
 }
 
 ::selection { background: var(--accent-faint); color: var(--accent); }
@@ -135,7 +161,7 @@ a:hover { text-decoration:underline; }
 .spinner { width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto; }
 
 .btn { font-family:var(--font-body);cursor:pointer;transition:all 0.15s;border:none;border-radius:5px;font-size:14px;line-height:1.4; }
-.btn-primary { background:var(--accent);color:#FFF8F0;padding:8px 18px; }
+.btn-primary { background:var(--accent);color:var(--accent-contrast);padding:8px 18px; }
 .btn-primary:hover { background:var(--accent-light); }
 .btn-secondary { background:transparent;border:1px solid var(--border);color:var(--text-muted);padding:7px 16px; }
 .btn-secondary:hover { background:var(--surface-hover); }
@@ -203,12 +229,14 @@ a:hover { text-decoration:underline; }
   text-transform: uppercase;
 }
 [data-theme="eva"] .btn-primary {
+  color: var(--accent-contrast);
+  font-weight: 700;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 1px rgba(255,106,0,0.3);
 }
 [data-theme="eva"] .btn-secondary {
   background: linear-gradient(180deg, rgba(167,255,46,0.08), rgba(255,106,0,0.04));
   border-color: rgba(167,255,46,0.32);
-  color: var(--gold-light);
+  color: var(--text);
 }
 [data-theme="eva"] .btn-ghost {
   color: var(--gold-light);
@@ -315,6 +343,53 @@ a:hover { text-decoration:underline; }
   letter-spacing: 0.24em !important;
   text-transform: uppercase;
   color: var(--text-light) !important;
+}
+
+[data-theme="eva"] .rich-text,
+[data-theme="eva"] .rich-text p,
+[data-theme="eva"] .rich-text li,
+[data-theme="eva"] .rich-text blockquote {
+  font-family: var(--font-body);
+}
+
+[data-theme="eva"] .rich-text blockquote {
+  font-style: normal;
+}
+
+[data-theme="eva"] .reader-page {
+  letter-spacing: 0.02em;
+}
+
+[data-theme="eva"] .reader-page .reader-line-text,
+[data-theme="eva"] .reader-page .reader-dramatis-body,
+[data-theme="eva"] .reader-page .reader-margin-annot,
+[data-theme="eva"] .reader-page .reader-annot-tooltip {
+  font-family: var(--font-body) !important;
+}
+
+[data-theme="eva"] .reader-page .reader-line-text {
+  letter-spacing: 0.025em;
+}
+
+[data-theme="eva"] .reader-page .reader-scene-heading,
+[data-theme="eva"] .reader-page .reader-stage-direction,
+[data-theme="eva"] .reader-page .reader-byline,
+[data-theme="eva"] .reader-page .reader-note {
+  font-family: var(--font-eva-readout) !important;
+  font-style: normal !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+}
+
+[data-theme="eva"] .reader-page .reader-act-heading,
+[data-theme="eva"] .reader-page .reader-speaker,
+[data-theme="eva"] .reader-page .reader-summary {
+  letter-spacing: 0.18em !important;
+}
+
+[data-theme="eva"] .reader-page .reader-stage-direction,
+[data-theme="eva"] .reader-page .reader-byline {
+  color: var(--gold-light) !important;
 }
 
 /* Multi-annotation overlap indicator */

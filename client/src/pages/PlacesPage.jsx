@@ -574,7 +574,7 @@ export default function PlacesPage() {
         <div style={{ fontSize: 13, fontFamily: "var(--font-display)", color: "var(--gold)", letterSpacing: 4, textTransform: "uppercase", marginBottom: 8 }}>
           Shakespearean Geography
         </div>
-        <h1 style={{ fontFamily: "'Cinzel Decorative',var(--font-display)", fontSize: 36, fontWeight: 400, color: "var(--accent)", letterSpacing: 2, marginBottom: 12 }}>
+        <h1 style={{ fontFamily: "var(--font-display)", fontSize: 36, fontWeight: 400, color: "var(--accent)", letterSpacing: 2, marginBottom: 12 }}>
           Places in the Works
         </h1>
         <p style={{ maxWidth: 780, lineHeight: 1.8, color: "var(--text-muted)", fontFamily: "var(--font-body)", margin: 0 }}>

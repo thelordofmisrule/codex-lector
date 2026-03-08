@@ -46,7 +46,7 @@ function MarginAnnot({ annot, userId, isAdmin, onEdit, onDelete, compact }) {
   );
 
   return (
-    <div style={{
+    <div className="reader-margin-annot" style={{
       fontSize: compact ? 13 : 14, lineHeight:1.6, padding: compact ? "4px 8px" : "6px 10px",
       borderLeft:`3px solid ${borderColors[annot.color]||"var(--gold)"}`,
       color:"var(--text)", fontFamily:"var(--font-fell)",
@@ -106,7 +106,7 @@ function AnnotTooltip({ pos, onSave, onCancel, myLayers, draftKey }) {
     if (draftKey) localStorage.setItem(`${draftKey}:layer`, value);
   };
   return (
-      <div style={{
+      <div className="reader-annot-tooltip" style={{
         position:"fixed", top:pos.y+8, left:Math.max(12,Math.min(pos.x,window.innerWidth-340)),
         background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:12,
         boxShadow:"0 8px 24px var(--shadow)", width:320, zIndex:200,
@@ -150,6 +150,7 @@ function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId,
       </div>
       <div style={{ flex:1 }}>
         <div
+          className="reader-line-text"
           dangerouslySetInnerHTML={{ __html:text }}
           style={{
             fontFamily:"var(--font-fell)",
@@ -173,22 +174,22 @@ function PlayView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, edi
     <>
       {data.dramatis && (
         <details style={{ marginBottom:24, background:"var(--surface)", borderRadius:8, padding:"12px 16px", border:"1px solid var(--border-light)" }}>
-          <summary style={{ fontFamily:"var(--font-display)", fontSize:13, letterSpacing:2, cursor:"pointer", color:"var(--text-muted)" }}>DRAMATIS PERSONAE</summary>
-          <div style={{ marginTop:10, fontSize:14, lineHeight:1.8, fontFamily:"var(--font-fell)" }} dangerouslySetInnerHTML={{ __html:data.dramatis }} />
+          <summary className="reader-summary" style={{ fontFamily:"var(--font-display)", fontSize:13, letterSpacing:2, cursor:"pointer", color:"var(--text-muted)" }}>DRAMATIS PERSONAE</summary>
+          <div className="reader-dramatis-body" style={{ marginTop:10, fontSize:14, lineHeight:1.8, fontFamily:"var(--font-fell)" }} dangerouslySetInnerHTML={{ __html:data.dramatis }} />
         </details>
       )}
       <div style={{ marginBottom:32 }}>
         {data.lines.map((item, idx) => {
-          if (item.type==="act") return <h2 key={idx} style={{ textAlign:"center", fontFamily:"var(--font-display)", fontSize:16, fontWeight:400, letterSpacing:4, margin:"44px 0 14px", color:"var(--accent)", borderTop:"1px solid var(--border-light)", borderBottom:"1px solid var(--border-light)", padding:"12px 0", textTransform:"uppercase" }}>{item.text}</h2>;
-          if (item.type==="scene") return <h3 key={idx} style={{ textAlign:"center", fontSize:15, fontWeight:400, fontStyle:"italic", color:"var(--text-muted)", margin:"24px 0 12px", letterSpacing:1, fontFamily:"var(--font-fell)" }}>{item.text}</h3>;
-          if (item.type==="stagedir") return <div key={idx} style={{ textAlign:"center", fontStyle:"italic", color:"var(--text-muted)", margin:"8px 0", fontSize:"0.9em", fontFamily:"var(--font-fell)" }}>[{item.text}]</div>;
+          if (item.type==="act") return <h2 key={idx} className="reader-act-heading" style={{ textAlign:"center", fontFamily:"var(--font-display)", fontSize:16, fontWeight:400, letterSpacing:4, margin:"44px 0 14px", color:"var(--accent)", borderTop:"1px solid var(--border-light)", borderBottom:"1px solid var(--border-light)", padding:"12px 0", textTransform:"uppercase" }}>{item.text}</h2>;
+          if (item.type==="scene") return <h3 key={idx} className="reader-scene-heading" style={{ textAlign:"center", fontSize:15, fontWeight:400, fontStyle:"italic", color:"var(--text-muted)", margin:"24px 0 12px", letterSpacing:1, fontFamily:"var(--font-fell)" }}>{item.text}</h3>;
+          if (item.type==="stagedir") return <div key={idx} className="reader-stage-direction" style={{ textAlign:"center", fontStyle:"italic", color:"var(--text-muted)", margin:"8px 0", fontSize:"0.9em", fontFamily:"var(--font-fell)" }}>[{item.text}]</div>;
           if (item.type==="speech") return (
             <div key={idx} style={{ marginBottom:12 }}>
               {item.speaker && (
-                <div style={{ fontFamily:"var(--font-display)", fontWeight:600, fontSize:13, letterSpacing:2, color:"var(--accent)", marginBottom:2, paddingLeft:48, textTransform:"uppercase" }}>{item.speaker}</div>
+                <div className="reader-speaker" style={{ fontFamily:"var(--font-display)", fontWeight:600, fontSize:13, letterSpacing:2, color:"var(--accent)", marginBottom:2, paddingLeft:48, textTransform:"uppercase" }}>{item.speaker}</div>
               )}
               {item.lines.map((line, li) => {
-                if (line.type==="stagedir") return <div key={li} style={{ fontStyle:"italic", color:"var(--text-muted)", paddingLeft:48, fontSize:"0.85em", fontFamily:"var(--font-fell)", margin:"4px 0" }}>[{line.text}]</div>;
+                if (line.type==="stagedir") return <div key={li} className="reader-stage-direction" style={{ fontStyle:"italic", color:"var(--text-muted)", paddingLeft:48, fontSize:"0.85em", fontFamily:"var(--font-fell)", margin:"4px 0" }}>[{line.text}]</div>;
                 const hasXmlN = Number.isFinite(line.n);
                 lineNum = hasXmlN ? line.n : (lineNum + 1);
                 const lineId = `l-${idx}-${li}`;
@@ -214,7 +215,7 @@ function PoetryView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, e
         <div key={si} style={{ marginBottom:28 }}>
           {(sec.title || sec.heading) && <h3 style={{ fontFamily:"var(--font-display)", fontSize:16, letterSpacing:2, color:"var(--accent)", margin:"20px 0 10px", textAlign:"center" }}>{sec.title || sec.heading}</h3>}
           {sec.lines.map((line, li) => {
-            if (line.type==="stagedir") return <div key={li} style={{ textAlign:"center", fontStyle:"italic", color:"var(--text-muted)", margin:"4px 0", fontSize:"0.85em" }}>[{line.text}]</div>;
+            if (line.type==="stagedir") return <div key={li} className="reader-stage-direction" style={{ textAlign:"center", fontStyle:"italic", color:"var(--text-muted)", margin:"4px 0", fontSize:"0.85em" }}>[{line.text}]</div>;
             const hasXmlN = Number.isFinite(line.n);
             lineNum = hasXmlN ? line.n : (lineNum + 1);
             const lineId = `p-${si}-${li}`;
@@ -531,7 +532,7 @@ export default function ReaderPage() {
   if (loading) return <div style={{padding:60,textAlign:"center"}}><div className="spinner"/></div>;
   if (!work) return <div style={{padding:60,textAlign:"center",color:"var(--danger)"}}>Work not found.</div>;
   if (!work.content) return (
-    <div className="animate-in" style={{maxWidth:560,margin:"60px auto",padding:"0 24px",textAlign:"center"}}>
+    <div className="animate-in reader-page" style={{maxWidth:560,margin:"60px auto",padding:"0 24px",textAlign:"center"}}>
       <h1 style={{fontFamily:"var(--font-display)",fontSize:28,color:"var(--accent)",marginBottom:12}}>{work.title}</h1>
       <p style={{color:"var(--text-muted)",fontFamily:"var(--font-fell)",fontStyle:"italic",lineHeight:1.7}}>
         Text not yet available.
@@ -558,7 +559,7 @@ export default function ReaderPage() {
   };
 
   return (
-    <div className="animate-in" onMouseUp={handleSelect}
+    <div className="animate-in reader-page" onMouseUp={handleSelect}
       style={{ maxWidth: showAnnots && annots.length > 0 ? 1020 : 740, margin:"0 auto", padding:"40px 24px 100px", fontSize, lineHeight:1.85, transition:"max-width 0.3s" }}>
 
       {showReaderHint && (
@@ -597,7 +598,7 @@ export default function ReaderPage() {
               <button key={m} className="btn btn-sm" onClick={()=>setAnnotMode(m)} style={{
                 borderRadius:0, fontSize:12, padding:"4px 10px",
                 background: annotMode===m ? "var(--accent)" : "var(--surface)",
-                color: annotMode===m ? "#FFF8F0" : "var(--text-muted)",
+                color: annotMode===m ? "var(--accent-contrast)" : "var(--text-muted)",
                 border:"none", fontFamily:"var(--font-display)", letterSpacing:1,
               }}>✎ {modeLabels[m]}</button>
             ))}
@@ -624,7 +625,7 @@ export default function ReaderPage() {
           </button>
 
           <span style={{ width:1, height:20, background:"var(--border)" }} />
-          <span style={{ fontSize:11, color:"var(--text-light)", fontFamily:"var(--font-fell)", fontStyle:"italic" }}>Click a word to look it up</span>
+          <span className="reader-note" style={{ fontSize:11, color:"var(--text-light)", fontFamily:"var(--font-fell)", fontStyle:"italic" }}>Click a word to look it up</span>
         </div>
       </div>
 
@@ -660,7 +661,7 @@ export default function ReaderPage() {
         </div>
       </div>
       <h1 style={{ textAlign:"center", fontFamily:"var(--font-display)", fontSize:"1.8em", fontWeight:400, letterSpacing:3, color:"var(--accent)", marginBottom:4 }}>{parsed.title || work.title}</h1>
-      <div style={{ textAlign:"center", fontFamily:"var(--font-fell)", fontStyle:"italic", color:"var(--text-light)", fontSize:15, marginBottom:4 }}>William Shakespeare</div>
+      <div className="reader-byline" style={{ textAlign:"center", fontFamily:"var(--font-fell)", fontStyle:"italic", color:"var(--text-light)", fontSize:15, marginBottom:4 }}>William Shakespeare</div>
       <div style={{ textAlign:"center", fontSize:11, color:"var(--text-light)", letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>
         {editionLabel} · {slug}
       </div>

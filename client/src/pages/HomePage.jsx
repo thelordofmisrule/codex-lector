@@ -36,7 +36,7 @@ export default function HomePage() {
       <div style={{ textAlign:"center", marginBottom:48 }}>
         <div className="eva-readout-meta" style={{ fontSize:13, fontFamily:"var(--font-display)", color:"var(--gold)", letterSpacing:4, textTransform:"uppercase", marginBottom:8 }}>The Works of</div>
         <div className="eva-readout-frame" style={{ marginBottom:12, maxWidth:"100%" }}>
-          <h1 className="eva-readout" data-readout="William Shakespeare" style={{ fontFamily:"'Cinzel Decorative',var(--font-display)", fontSize:44, fontWeight:400, color:"var(--accent)", letterSpacing:3, marginBottom:0 }}>
+          <h1 className="eva-readout" data-readout="William Shakespeare" style={{ fontFamily:"var(--font-display)", fontSize:44, fontWeight:400, color:"var(--accent)", letterSpacing:3, marginBottom:0 }}>
             William Shakespeare
             <span className="eva-readout-cursor" aria-hidden="true" />
           </h1>

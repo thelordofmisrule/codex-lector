@@ -126,7 +126,7 @@ export default function Header() {
               onKeyDown={(e)=>{ if (e.key === "Enter" || e.key === " ") nav("/"); }}
               style={{ cursor:"pointer", display:"flex", alignItems:"baseline", gap:8 }}
             >
-              <span className="eva-brand-word" style={{ fontFamily:"'Cinzel Decorative',var(--font-display)", fontSize:20, fontWeight:700, color:"var(--accent)", letterSpacing:1 }}>Codex</span>
+              <span className="eva-brand-word" style={{ fontFamily:"var(--font-display)", fontSize:20, fontWeight:700, color:"var(--accent)", letterSpacing:1 }}>Codex</span>
               <span className="eva-brand-subword" style={{ fontFamily:"var(--font-display)", fontSize:12, color:"var(--gold)", letterSpacing:3, textTransform:"uppercase" }}>Lector</span>
             </div>
           </div>
@@ -250,7 +250,7 @@ export default function Header() {
                   }}><img src={user.oauthAvatar} alt="Profile avatar" style={{ width:"100%", height:"100%", objectFit:"cover" }} /></button>
                 ) : (
                   <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);setShowMobileNav(false);setShowThemes(false);}} style={{
-                    background:"var(--accent)", color:"#FFF8F0", width:36, height:36, borderRadius:"50%",
+                    background:"var(--accent)", color:"var(--accent-contrast)", width:36, height:36, borderRadius:"50%",
                     display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:600, fontFamily:"var(--font-display)",
                   }}>{user.displayName?.[0]?.toUpperCase()||"?"}</button>
                 )}

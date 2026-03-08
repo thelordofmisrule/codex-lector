@@ -291,7 +291,7 @@ export default function YearOfShakespearePage() {
         <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 4, textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
           Reading Program
         </div>
-        <h1 style={{ margin: 0, fontFamily: "'Cinzel Decorative',var(--font-display)", fontSize: 34, color: "var(--accent)", letterSpacing: 1 }}>
+        <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 34, color: "var(--accent)", letterSpacing: 1 }}>
           Year of Shakespeare (2026-2027)
         </h1>
         <p style={{ marginTop: 12, marginBottom: 0, color: "var(--text-muted)", lineHeight: 1.75, maxWidth: 860 }}>

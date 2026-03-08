@@ -15,7 +15,7 @@ export default function HowToPage() {
         <div style={{ fontSize:13, fontFamily:"var(--font-display)", color:"var(--gold)", letterSpacing:4, textTransform:"uppercase", marginBottom:8 }}>
           How Codex Lector Works
         </div>
-        <h1 style={{ fontFamily:"'Cinzel Decorative',var(--font-display)", fontSize:40, fontWeight:400, color:"var(--accent)", letterSpacing:2, marginBottom:12 }}>
+        <h1 style={{ fontFamily:"var(--font-display)", fontSize:40, fontWeight:400, color:"var(--accent)", letterSpacing:2, marginBottom:12 }}>
           Read Shakespeare Actively
         </h1>
         <p style={{ fontFamily:"var(--font-fell)", fontSize:18, fontStyle:"italic", color:"var(--text-muted)", lineHeight:1.7, maxWidth:620, margin:"0 auto" }}>
