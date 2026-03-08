@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { works as worksApi } from "../lib/api";
+import { works as worksApi, progress as progressApi } from "../lib/api";
+import { useAuth } from "../lib/AuthContext";
 import calendarCsv from "../data/year_of_shakespeare_2026_2027_daily.csv?raw";
 
 function parseCsv(text) {
@@ -101,13 +102,89 @@ function longDateLabel(dateObj) {
   });
 }
 
+function normalizeTitleKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[\u2018\u2019']/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function candidateTitleKeys(value) {
+  const raw = String(value || "").trim();
+  const lower = raw.toLowerCase();
+  const keys = new Set();
+
+  const add = (v) => {
+    const normalized = normalizeTitleKey(v);
+    if (normalized) keys.add(normalized);
+  };
+
+  add(raw);
+  add(raw.replace(/,\s*part\s+(\d+)/i, " Part $1"));
+  add(raw.replace(/\s+part\s+(\d+)/i, ", Part $1"));
+
+  if (lower.startsWith("the ")) add(raw.replace(/^the\s+/i, ""));
+  else add(`The ${raw}`);
+
+  if (lower.startsWith("sonnets")) add("Sonnets");
+
+  return [...keys];
+}
+
+function resolveWorkLinks(workLabel, kind, workLookup) {
+  const candidates = candidateTitleKeys(workLabel);
+  let found = null;
+  for (const key of candidates) {
+    if (workLookup[key]) {
+      found = workLookup[key];
+      break;
+    }
+  }
+
+  if (!found && candidates.length) {
+    const target = candidates[0];
+    let best = null;
+    let bestScore = -1;
+    Object.entries(workLookup).forEach(([key, value]) => {
+      if (!key || (!key.includes(target) && !target.includes(key))) return;
+      const score = Math.min(key.length, target.length);
+      if (score > bestScore) {
+        bestScore = score;
+        best = value;
+      }
+    });
+    found = best;
+  }
+
+  const base = found || { modernSlug: "", firstFolioSlug: "", anySlug: "" };
+  const lowerKind = String(kind || "").toLowerCase();
+  const isPlay = lowerKind.includes("play");
+
+  if (isPlay) {
+    const actions = [];
+    const modernSlug = base.modernSlug || base.anySlug;
+    if (modernSlug) actions.push({ label: "Modern", slug: modernSlug });
+    if (base.firstFolioSlug) actions.push({ label: "First Folio", slug: base.firstFolioSlug });
+    if (!actions.length && base.anySlug) actions.push({ label: "Open Work", slug: base.anySlug });
+    return actions;
+  }
+
+  const poemSlug = base.modernSlug || base.anySlug || base.firstFolioSlug;
+  return poemSlug ? [{ label: "Open Work", slug: poemSlug }] : [];
+}
+
 export default function YearOfShakespearePage() {
   const nav = useNavigate();
+  const { user } = useAuth();
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState("all");
   const [arcFilter, setArcFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState("all");
-  const [titleToSlug, setTitleToSlug] = useState({});
+  const [workLookup, setWorkLookup] = useState({});
+  const [progressBySlug, setProgressBySlug] = useState({});
 
   const rows = useMemo(() => parseCalendarRows(calendarCsv), []);
 
@@ -116,15 +193,48 @@ export default function YearOfShakespearePage() {
     worksApi.list()
       .then((allWorks) => {
         if (cancelled) return;
-        const map = {};
+        const map = Object.create(null);
         (allWorks || []).forEach((w) => {
-          if (w?.title && w?.slug) map[String(w.title).toLowerCase()] = w.slug;
+          if (!w?.title || !w?.slug) return;
+          const key = normalizeTitleKey(w.title);
+          if (!key) return;
+          if (!map[key]) map[key] = { modernSlug: "", firstFolioSlug: "", anySlug: "" };
+          const entry = map[key];
+          if (!entry.anySlug) entry.anySlug = w.slug;
+          if (w.variant === "first-folio") {
+            if (!entry.firstFolioSlug) entry.firstFolioSlug = w.slug;
+          } else if (w.variant === "ps") {
+            entry.modernSlug = w.slug;
+          } else if (!entry.modernSlug) {
+            entry.modernSlug = w.slug;
+          }
         });
-        setTitleToSlug(map);
+        setWorkLookup(map);
       })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!user) {
+      setProgressBySlug({});
+      return () => { cancelled = true; };
+    }
+    progressApi.myAll()
+      .then((rows) => {
+        if (cancelled) return;
+        const map = Object.create(null);
+        (rows || []).forEach((row) => {
+          if (!row?.slug) return;
+          const line = Math.max(1, parseInt(row.max_line_reached, 10) || 1);
+          map[row.slug] = line;
+        });
+        setProgressBySlug(map);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user]);
 
   const kindOptions = useMemo(
     () => [...new Set(rows.map(r => r.kind).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
@@ -168,6 +278,12 @@ export default function YearOfShakespearePage() {
   }, [filtered]);
 
   const uniqueWorks = useMemo(() => new Set(rows.map(r => r.works).filter(Boolean)).size, [rows]);
+
+  const openWithResume = (slug) => {
+    if (!slug) return;
+    const line = parseInt(progressBySlug[slug], 10) || 0;
+    nav(`/read/${slug}${line > 1 ? `?line=${line}` : ""}`);
+  };
 
   return (
     <div className="animate-in" style={{ maxWidth: 1160, margin: "0 auto", padding: "40px 24px 56px" }}>
@@ -248,7 +364,8 @@ export default function YearOfShakespearePage() {
               </div>
               <div style={{ display: "grid", gap: 0 }}>
                 {monthRows.map((row) => {
-                  const workSlug = titleToSlug[row.works.toLowerCase()] || "";
+                  const actions = resolveWorkLinks(row.works, row.kind, workLookup)
+                    .filter((action, idx, arr) => action?.slug && arr.findIndex(a => a.slug === action.slug) === idx);
                   const isToday = row.date === todayIso;
                   return (
                     <div key={row.id} style={{
@@ -281,14 +398,21 @@ export default function YearOfShakespearePage() {
                         </div>
                       )}
                       {row.reason && (
-                        <div style={{ color: "var(--text-muted)", lineHeight: 1.65, marginBottom: workSlug ? 8 : 0 }}>
+                        <div style={{ color: "var(--text-muted)", lineHeight: 1.65, marginBottom: actions.length ? 8 : 0 }}>
                           {row.reason}
                         </div>
                       )}
-                      {workSlug && (
-                        <button className="btn btn-ghost btn-sm" onClick={() => nav(`/read/${workSlug}`)}>
-                          Open Work
-                        </button>
+                      {actions.length > 0 && (
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {actions.map((action) => {
+                            const resumeLine = parseInt(progressBySlug[action.slug], 10) || 0;
+                            return (
+                              <button key={`${row.id}-${action.slug}`} className="btn btn-ghost btn-sm" onClick={() => openWithResume(action.slug)}>
+                                {action.label}{resumeLine > 1 ? " (Resume)" : ""}
+                              </button>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
                   );
