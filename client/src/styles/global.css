@@ -71,6 +71,10 @@
   --success: #79FF69;
   --danger: #FF4965;
   --code-bg: #17201B;
+  --font-body: 'Chakra Petch', 'JetBrains Mono', sans-serif;
+  --font-display: 'Orbitron', 'Chakra Petch', sans-serif;
+  --font-fell: 'Chakra Petch', 'JetBrains Mono', sans-serif;
+  --font-eva-readout: 'Share Tech Mono', 'JetBrains Mono', monospace;
 }
 
 /* ─── Fonts ──────────────────────────────────── */
@@ -110,6 +114,23 @@ a:hover { text-decoration:underline; }
 
 @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
 @keyframes spin { to{transform:rotate(360deg)} }
+@keyframes evaSweep {
+  0% { transform: translateX(-115%); opacity: 0; }
+  8% { opacity: 0.18; }
+  48% { opacity: 0.34; }
+  60% { opacity: 0; }
+  100% { transform: translateX(115%); opacity: 0; }
+}
+@keyframes evaCursor {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.15; }
+}
+@keyframes evaGhost {
+  0%, 100% { opacity: 0.14; transform: translate(0, 0); }
+  18% { opacity: 0.22; transform: translate(1px, -1px); }
+  19% { opacity: 0.08; transform: translate(-1px, 1px); }
+  20% { opacity: 0.2; transform: translate(0, 0); }
+}
 .animate-in { animation: fadeIn 0.25s ease; }
 .spinner { width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto; }
 
@@ -212,6 +233,88 @@ a:hover { text-decoration:underline; }
 }
 [data-theme="eva"] .spinner {
   border-top-color: var(--gold-light);
+}
+[data-theme="eva"] .eva-brand-word {
+  font-family: var(--font-display) !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+  text-shadow: 0 0 18px rgba(255,106,0,0.16);
+}
+[data-theme="eva"] .eva-brand-subword {
+  font-family: var(--font-eva-readout) !important;
+  letter-spacing: 0.4em !important;
+  color: var(--gold-light) !important;
+}
+[data-theme="eva"] .eva-readout-frame {
+  position: relative;
+  display: inline-block;
+  padding: 16px 22px 14px;
+  border: 1px solid rgba(167,255,46,0.32);
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, rgba(255,106,0,0.08), rgba(255,106,0,0.01)),
+    linear-gradient(90deg, rgba(167,255,46,0.06), transparent 28%, transparent 72%, rgba(255,106,0,0.08));
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.03),
+    0 0 0 1px rgba(255,106,0,0.08),
+    0 16px 36px rgba(0,0,0,0.28);
+  overflow: hidden;
+  isolation: isolate;
+}
+[data-theme="eva"] .eva-readout-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(180deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 4px);
+  opacity: 0.3;
+  pointer-events: none;
+}
+[data-theme="eva"] .eva-readout {
+  position: relative;
+  display: inline-block;
+  font-family: var(--font-eva-readout) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.18em !important;
+  color: var(--gold-light) !important;
+  text-shadow:
+    0 0 12px rgba(167,255,46,0.16),
+    0 0 22px rgba(255,106,0,0.1);
+}
+[data-theme="eva"] .eva-readout::before {
+  content: attr(data-readout);
+  position: absolute;
+  inset: 0;
+  color: rgba(255,106,0,0.42);
+  z-index: -1;
+  animation: evaGhost 6s linear infinite;
+}
+[data-theme="eva"] .eva-readout::after {
+  content: "";
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  width: 26%;
+  left: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), rgba(255,106,0,0.3), rgba(255,255,255,0.06), transparent);
+  transform: translateX(-115%);
+  animation: evaSweep 4.8s linear infinite;
+  pointer-events: none;
+}
+[data-theme="eva"] .eva-readout-cursor {
+  display: inline-block;
+  width: 0.52em;
+  height: 0.92em;
+  margin-left: 0.28em;
+  transform: translateY(0.12em);
+  background: linear-gradient(180deg, var(--gold-light), var(--accent-light));
+  box-shadow: 0 0 14px rgba(167,255,46,0.25);
+  animation: evaCursor 1.05s steps(1, end) infinite;
+}
+[data-theme="eva"] .eva-readout-meta {
+  font-family: var(--font-eva-readout) !important;
+  letter-spacing: 0.24em !important;
+  text-transform: uppercase;
+  color: var(--text-light) !important;
 }
 
 /* Multi-annotation overlap indicator */

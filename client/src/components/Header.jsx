@@ -126,8 +126,8 @@ export default function Header() {
               onKeyDown={(e)=>{ if (e.key === "Enter" || e.key === " ") nav("/"); }}
               style={{ cursor:"pointer", display:"flex", alignItems:"baseline", gap:8 }}
             >
-              <span style={{ fontFamily:"'Cinzel Decorative',var(--font-display)", fontSize:20, fontWeight:700, color:"var(--accent)", letterSpacing:1 }}>Codex</span>
-              <span style={{ fontFamily:"var(--font-display)", fontSize:12, color:"var(--gold)", letterSpacing:3, textTransform:"uppercase" }}>Lector</span>
+              <span className="eva-brand-word" style={{ fontFamily:"'Cinzel Decorative',var(--font-display)", fontSize:20, fontWeight:700, color:"var(--accent)", letterSpacing:1 }}>Codex</span>
+              <span className="eva-brand-subword" style={{ fontFamily:"var(--font-display)", fontSize:12, color:"var(--gold)", letterSpacing:3, textTransform:"uppercase" }}>Lector</span>
             </div>
           </div>
 

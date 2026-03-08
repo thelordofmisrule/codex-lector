@@ -34,8 +34,13 @@ export default function HomePage() {
     <div className="animate-in" style={{ maxWidth:920, margin:"0 auto", padding:"48px 24px" }}>
       {/* Hero */}
       <div style={{ textAlign:"center", marginBottom:48 }}>
-        <div style={{ fontSize:13, fontFamily:"var(--font-display)", color:"var(--gold)", letterSpacing:4, textTransform:"uppercase", marginBottom:8 }}>The Works of</div>
-        <h1 style={{ fontFamily:"'Cinzel Decorative',var(--font-display)", fontSize:44, fontWeight:400, color:"var(--accent)", letterSpacing:3, marginBottom:12 }}>William Shakespeare</h1>
+        <div className="eva-readout-meta" style={{ fontSize:13, fontFamily:"var(--font-display)", color:"var(--gold)", letterSpacing:4, textTransform:"uppercase", marginBottom:8 }}>The Works of</div>
+        <div className="eva-readout-frame" style={{ marginBottom:12, maxWidth:"100%" }}>
+          <h1 className="eva-readout" data-readout="William Shakespeare" style={{ fontFamily:"'Cinzel Decorative',var(--font-display)", fontSize:44, fontWeight:400, color:"var(--accent)", letterSpacing:3, marginBottom:0 }}>
+            William Shakespeare
+            <span className="eva-readout-cursor" aria-hidden="true" />
+          </h1>
+        </div>
         <p style={{ fontFamily:"var(--font-fell)", fontSize:17, fontStyle:"italic", color:"var(--text-muted)", maxWidth:480, margin:"0 auto", lineHeight:1.7 }}>
           Annotated and presented for the studious reader.<br/>
           <span style={{ fontSize:14, color:"var(--text-light)" }}>Texts from PlayShakespeare.com · GFDL Licensed</span>
