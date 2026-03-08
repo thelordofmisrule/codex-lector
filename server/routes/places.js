@@ -490,6 +490,25 @@ r.put("/:slug", requireAdmin, (req, res) => {
   res.json({ place: serializePlace(updated) });
 });
 
+r.delete("/:slug", requireAdmin, (req, res) => {
+  const place = db.prepare("SELECT id, slug, name FROM places WHERE slug=?").get(req.params.slug);
+  if (!place) return res.status(404).json({ error: "Place not found." });
+
+  const removePlace = db.transaction((target) => {
+    db.prepare("DELETE FROM place_citation_exclusions WHERE place_id=?").run(target.id);
+    db.prepare("DELETE FROM place_edit_suggestions WHERE place_id=?").run(target.id);
+    db.prepare("UPDATE place_create_suggestions SET created_place_id=NULL WHERE created_place_id=?").run(target.id);
+    db.prepare("DELETE FROM places WHERE id=?").run(target.id);
+  });
+
+  try {
+    removePlace(place);
+    res.json({ ok: true, deleted: { slug: place.slug, name: place.name } });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Could not delete place." });
+  }
+});
+
 r.get("/:slug/suggestions", requireAuth, (req, res) => {
   const place = db.prepare("SELECT id FROM places WHERE slug=?").get(req.params.slug);
   if (!place) return res.status(404).json({ error: "Place not found." });

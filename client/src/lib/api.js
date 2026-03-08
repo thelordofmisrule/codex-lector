@@ -92,6 +92,7 @@ export const places = {
   get:(slug, workSlug="")=>req(`/places/${encodeURIComponent(slug)}${workSlug ? `?work=${encodeURIComponent(workSlug)}` : ""}`),
   create:data=>req("/places",{method:"POST",body:JSON.stringify(data)}),
   update:(slug, data)=>req(`/places/${encodeURIComponent(slug)}`,{method:"PUT",body:JSON.stringify(data)}),
+  delete:slug=>req(`/places/${encodeURIComponent(slug)}`,{method:"DELETE"}),
   suggestions:slug=>req(`/places/${encodeURIComponent(slug)}/suggestions`),
   suggest:(slug, changes, reason="")=>req(`/places/${encodeURIComponent(slug)}/suggestions`,{method:"POST",body:JSON.stringify({ changes, reason })}),
   acceptSuggestion:id=>req(`/places/suggestions/${id}/accept`,{method:"POST"}),

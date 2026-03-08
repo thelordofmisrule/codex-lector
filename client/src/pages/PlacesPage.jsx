@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { places as placesApi, works as worksApi } from "../lib/api";
+import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import PlacesMap from "../components/PlacesMap";
 
@@ -131,6 +132,7 @@ function buildCreatePayloadFromDraft(draft) {
 export default function PlacesPage() {
   const nav = useNavigate();
   const { user } = useAuth();
+  const { confirm } = useConfirm();
   const toast = useToast();
 
   const [works, setWorks] = useState([]);
@@ -149,6 +151,7 @@ export default function PlacesPage() {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
@@ -390,6 +393,35 @@ export default function PlacesPage() {
       toast?.error(e.message || "Could not save place details.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const deletePlace = async () => {
+    if (!selectedPlace || !user?.isAdmin || deleting) return;
+    const placeName = selectedPlace.name || selectedPlace.slug;
+    const ok = await confirm({
+      title: "Delete Place",
+      message: `Delete ${placeName}? This will remove the place, its edit suggestions, and its excluded citation matches.`,
+      confirmText: "Delete Place",
+      cancelText: "Keep Place",
+      danger: true,
+    });
+    if (!ok) return;
+
+    setDeleting(true);
+    try {
+      await placesApi.delete(selectedPlace.slug);
+      setPlaces(prev => prev.filter(place => place.slug !== selectedPlace.slug));
+      setSelectedSlug("");
+      setSelectedPlace(null);
+      setCitations([]);
+      setCitationExclusions([]);
+      setSuggestions([]);
+      toast?.success("Place deleted.");
+    } catch (e) {
+      toast?.error(e.message || "Could not delete place.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1082,8 +1114,16 @@ export default function PlacesPage() {
                             style={{ display: "none" }}
                           />
                         </label>
-                        <button className="btn btn-primary btn-sm" onClick={savePlace} disabled={saving}>
+                        <button className="btn btn-primary btn-sm" onClick={savePlace} disabled={saving || deleting}>
                           {saving ? "Saving..." : "Save Place"}
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={deletePlace}
+                          disabled={saving || deleting}
+                          style={{ borderColor: "var(--danger)", color: "var(--danger)" }}
+                        >
+                          {deleting ? "Deleting..." : "Delete Place"}
                         </button>
                       </div>
                     </div>
