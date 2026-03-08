@@ -640,13 +640,24 @@ export default function ReaderPage() {
 
       {/* Title */}
       <div style={{ textAlign:"center", marginBottom:10 }}>
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={() => navigate(`/search?work=${encodeURIComponent(slug)}&returnLine=${getCurrentViewportLineNumber()}`)}
-          style={{ color:"var(--text-light)", fontSize:12, fontFamily:"var(--font-display)", letterSpacing:1 }}
-        >
-          Search This Work
-        </button>
+        <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => navigate(`/search?work=${encodeURIComponent(slug)}&returnLine=${getCurrentViewportLineNumber()}`)}
+            style={{ color:"var(--text-light)", fontSize:12, fontFamily:"var(--font-display)", letterSpacing:1 }}
+          >
+            Search This Work
+          </button>
+          {parsed.type === "play" && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => navigate(`/people?work=${encodeURIComponent(slug)}`)}
+              style={{ color:"var(--text-light)", fontSize:12, fontFamily:"var(--font-display)", letterSpacing:1 }}
+            >
+              People Map
+            </button>
+          )}
+        </div>
       </div>
       <h1 style={{ textAlign:"center", fontFamily:"var(--font-display)", fontSize:"1.8em", fontWeight:400, letterSpacing:3, color:"var(--accent)", marginBottom:4 }}>{parsed.title || work.title}</h1>
       <div style={{ textAlign:"center", fontFamily:"var(--font-fell)", fontStyle:"italic", color:"var(--text-light)", fontSize:15, marginBottom:4 }}>William Shakespeare</div>

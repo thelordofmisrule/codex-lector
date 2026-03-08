@@ -144,5 +144,6 @@ a:hover { text-decoration:underline; }
 /* Hide margin annotations on narrow screens, show as popover on tap */
 @media (max-width: 860px) {
   .margin-annot-col { display:none !important; }
+  .people-main-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .people-scene-grid { grid-template-columns: minmax(0, 1fr) !important; }
 }
-
