@@ -24,6 +24,7 @@ db.exec(`
     oauth_provider TEXT,
     oauth_id TEXT,
     oauth_avatar TEXT,
+    can_publish_global BOOLEAN DEFAULT 0,
     needs_onboarding BOOLEAN DEFAULT 0,
     is_admin BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -308,6 +309,7 @@ try { db.exec("ALTER TABLE users ADD COLUMN avatar_color TEXT DEFAULT '#7A1E2E'"
 try { db.exec("ALTER TABLE users ADD COLUMN oauth_provider TEXT"); } catch {}
 try { db.exec("ALTER TABLE users ADD COLUMN oauth_id TEXT"); } catch {}
 try { db.exec("ALTER TABLE users ADD COLUMN oauth_avatar TEXT"); } catch {}
+try { db.exec("ALTER TABLE users ADD COLUMN can_publish_global BOOLEAN DEFAULT 0"); } catch {}
 try { db.exec("ALTER TABLE users ADD COLUMN needs_onboarding BOOLEAN DEFAULT 0"); } catch {}
 try { db.exec("UPDATE users SET email=NULL WHERE email IS NOT NULL"); } catch {}
 try { db.exec("ALTER TABLE annotations ADD COLUMN is_global BOOLEAN DEFAULT 0"); } catch {}
@@ -584,13 +586,29 @@ const upsertPlace = db.prepare(`
 `);
 for (const row of seededPlaces) upsertPlace.run(...row);
 
-// Create first admin user
 const bcrypt = require("bcryptjs");
-const admin = db.prepare("SELECT 1 FROM users WHERE username='admin'").get();
-if (!admin) {
+const petruch10 = db.prepare("SELECT id FROM users WHERE username='petruch10'").get();
+if (petruch10) {
+  const legacyAdmin = db.prepare("SELECT id FROM users WHERE username='admin'").get();
+  db.prepare("UPDATE users SET is_admin=1, can_publish_global=1 WHERE id=?").run(petruch10.id);
+  db.prepare("UPDATE users SET can_publish_global=0 WHERE username='admin'").run();
+  if (legacyAdmin && legacyAdmin.id !== petruch10.id) {
+    db.prepare("UPDATE annotations SET user_id=? WHERE is_global=1 AND user_id=?").run(petruch10.id, legacyAdmin.id);
+    console.log("Migrated legacy site-wide annotations from admin to @petruch10.");
+  }
+  console.log("Synced editorial role to @petruch10.");
+}
+
+// Optional bootstrap admin user for fresh installs. Set ADMIN_BOOTSTRAP_PASSWORD in .env to enable.
+const bootstrapAdminUsername = String(process.env.ADMIN_BOOTSTRAP_USERNAME || "admin").trim().toLowerCase();
+const bootstrapAdminPassword = String(process.env.ADMIN_BOOTSTRAP_PASSWORD || "");
+const admin = db.prepare("SELECT 1 FROM users WHERE username=?").get(bootstrapAdminUsername);
+if (bootstrapAdminPassword && !admin) {
   db.prepare("INSERT INTO users (username,display_name,password_hash,is_admin) VALUES (?,?,?,1)")
-    .run("admin", "Administrator", bcrypt.hashSync("codex2024", 10));
-  console.log("Created admin user: admin / codex2024");
+    .run(bootstrapAdminUsername, "Administrator", bcrypt.hashSync(bootstrapAdminPassword, 10));
+  console.log(`Created bootstrap admin user: ${bootstrapAdminUsername}`);
+} else if (!bootstrapAdminPassword && !admin) {
+  console.log("No bootstrap admin created. Sign in via OAuth, then run node scripts/set-admin.js <username> if needed.");
 }
 
 console.log("Database setup complete.");

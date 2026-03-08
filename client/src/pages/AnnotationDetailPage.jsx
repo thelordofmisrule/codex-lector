@@ -202,6 +202,7 @@ export default function AnnotationDetailPage() {
         note: ann.note,
         color: ann.color,
         selectedText: (parallelHighlight || chosen.text || "").trim(),
+        isGlobal: !!ann.is_global,
       });
       setShowParallel(false);
       toast?.success(`Copied to ${targetWork.title}.`);

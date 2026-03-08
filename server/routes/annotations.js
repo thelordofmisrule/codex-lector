@@ -40,7 +40,7 @@ r.get("/:workSlug", optionalAuth, (req, res) => {
   const filter = req.query.filter || "all";
   const userId = req.user?.id;
 
-  const cols = "a.*, u.display_name as author_name, u.is_admin as author_is_admin, al.name as layer_name";
+  const cols = "a.*, u.display_name as author_name, u.is_admin as author_is_admin, u.can_publish_global as author_can_publish_global, al.name as layer_name";
   const joins = "annotations a JOIN users u ON a.user_id=u.id LEFT JOIN annotation_layers al ON a.layer_id=al.id";
 
   let rows;
@@ -62,18 +62,18 @@ r.get("/:workSlug", optionalAuth, (req, res) => {
   res.json(rows);
 });
 
-/* Create annotation — any signed-in user. Admin creates global. */
+/* Create annotation — editorial users can publish site-wide notes. */
 r.post("/", requireAuth, annotationLimit, (req, res) => {
-  const { workId, lineId, note, color, selectedText } = req.body;
+  const { workId, lineId, note, color, selectedText, isGlobal } = req.body;
   if (!workId || !lineId || !note) return res.status(400).json({ error: "workId, lineId, note required." });
-  const isGlobal = req.user.isAdmin ? 1 : 0;
+  const publishGlobal = req.user.canPublishGlobal ? (isGlobal === undefined ? 1 : (isGlobal ? 1 : 0)) : 0;
   try {
     const priorCount = db.prepare("SELECT COUNT(*) AS n FROM annotations WHERE user_id=?").get(req.user.id)?.n || 0;
     const result = db.prepare(
       "INSERT INTO annotations (work_id, user_id, line_id, note, color, selected_text, is_global) VALUES (?,?,?,?,?,?,?)"
-    ).run(workId, req.user.id, lineId, note, color || 0, selectedText || "", isGlobal);
+    ).run(workId, req.user.id, lineId, note, color || 0, selectedText || "", publishGlobal);
     if (priorCount === 0) logEvent({ eventType:"first_annotation", userId:req.user.id, path:"/annotations" });
-    res.json(db.prepare("SELECT a.*, u.display_name as author_name, u.is_admin as author_is_admin FROM annotations a JOIN users u ON a.user_id=u.id WHERE a.id=?").get(result.lastInsertRowid));
+    res.json(db.prepare("SELECT a.*, u.display_name as author_name, u.is_admin as author_is_admin, u.can_publish_global as author_can_publish_global FROM annotations a JOIN users u ON a.user_id=u.id WHERE a.id=?").get(result.lastInsertRowid));
   } catch (e) {
     console.error("Annotation create error:", e);
     res.status(500).json({ error: "Failed to create annotation." });
@@ -85,10 +85,13 @@ r.put("/:id", requireAuth, (req, res) => {
   const ann = db.prepare("SELECT * FROM annotations WHERE id=?").get(req.params.id);
   if (!ann) return res.status(404).json({ error: "Not found." });
   if (ann.user_id !== req.user.id && !req.user.isAdmin) return res.status(403).json({ error: "Forbidden." });
-  const { note, color } = req.body;
-  db.prepare("UPDATE annotations SET note=COALESCE(?,note), color=COALESCE(?,color) WHERE id=?")
-    .run(note ?? null, color ?? null, req.params.id);
-  res.json(db.prepare("SELECT a.*, u.display_name as author_name, u.is_admin as author_is_admin FROM annotations a JOIN users u ON a.user_id=u.id WHERE a.id=?").get(req.params.id));
+  const { note, color, isGlobal } = req.body;
+  const nextGlobal = req.user.canPublishGlobal
+    ? (isGlobal === undefined ? ann.is_global : (isGlobal ? 1 : 0))
+    : ann.is_global;
+  db.prepare("UPDATE annotations SET note=COALESCE(?,note), color=COALESCE(?,color), is_global=? WHERE id=?")
+    .run(note ?? null, color ?? null, nextGlobal, req.params.id);
+  res.json(db.prepare("SELECT a.*, u.display_name as author_name, u.is_admin as author_is_admin, u.can_publish_global as author_can_publish_global FROM annotations a JOIN users u ON a.user_id=u.id WHERE a.id=?").get(req.params.id));
 });
 
 /* Delete annotation — owner or admin */

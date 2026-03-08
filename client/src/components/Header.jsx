@@ -263,6 +263,7 @@ export default function Header() {
                       <div style={{ fontSize:12, color:"var(--text-light)" }}>
                         @{user.username}
                         {user.isAdmin&&<span className="admin-badge" style={{marginLeft:4}}>Admin</span>}
+                        {user.canPublishGlobal&&<span className="admin-badge" style={{marginLeft:4}}>Editorial</span>}
                         {user.oauthProvider && <span style={{ marginLeft:4, opacity:0.6 }}>via {user.oauthProvider}</span>}
                       </div>
                     </div>

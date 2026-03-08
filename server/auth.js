@@ -2,18 +2,24 @@ const jwt = require("jsonwebtoken");
 const db = require("./db");
 const SECRET = process.env.JWT_SECRET || "codex-lector-dev-secret-CHANGE";
 
-const createToken = u => jwt.sign({ id:u.id, username:u.username, isAdmin:!!u.is_admin }, SECRET, { expiresIn:"30d" });
+const createToken = u => jwt.sign({
+  id:u.id,
+  username:u.username,
+  isAdmin:!!u.is_admin,
+  canPublishGlobal:!!u.can_publish_global,
+}, SECRET, { expiresIn:"30d" });
 const tok = req => req.cookies?.token || req.headers.authorization?.replace("Bearer ","") || null;
 
 function hydrateUser(payload) {
   if (!payload?.id) return null;
-  const user = db.prepare("SELECT id, username, is_admin FROM users WHERE id=?").get(payload.id);
+  const user = db.prepare("SELECT id, username, is_admin, can_publish_global FROM users WHERE id=?").get(payload.id);
   if (!user) return null;
   return {
     ...payload,
     id: user.id,
     username: user.username,
     isAdmin: !!user.is_admin,
+    canPublishGlobal: !!user.can_publish_global,
   };
 }
 

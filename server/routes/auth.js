@@ -24,6 +24,24 @@ const accountChangeLimit = createRateLimit({
   keyFn: (req) => `auth:acct:${req.ip}:${req.user?.id || "anon"}`,
 });
 
+function sanitizeNextPath(raw) {
+  const value = String(raw || "").trim();
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/api/")) return "/";
+  return value;
+}
+
+function consumeOauthNext(req) {
+  const nextPath = sanitizeNextPath(req.session?.oauthNext);
+  if (req.session) delete req.session.oauthNext;
+  return nextPath;
+}
+
+function buildFrontendRedirect(nextPath, authState) {
+  const url = new URL(sanitizeNextPath(nextPath), FRONTEND);
+  if (authState) url.searchParams.set("auth", authState);
+  return url.toString();
+}
+
 /* ── Which providers are available? (used by frontend to show buttons) ── */
 r.get("/providers", (req, res) => {
   res.json({ providers: enabledProviders, localLogin: true });
@@ -37,40 +55,55 @@ r.post("/login", loginLimit, (req, res) => {
     return res.status(401).json({ error: "Invalid credentials." });
   res.cookie("token", createToken(u), COOKIE);
   logEvent({ eventType:"login", userId:u.id, path:"/auth/login" });
-  res.json({ id:u.id, username:u.username, displayName:u.display_name, isAdmin:!!u.is_admin });
+  res.json({
+    id:u.id,
+    username:u.username,
+    displayName:u.display_name,
+    isAdmin:!!u.is_admin,
+    canPublishGlobal:!!u.can_publish_global,
+  });
 });
 
 /* ── OAuth routes ── */
 function oauthCallback(provider) {
   return (req, res, next) => {
-    pp.authenticate(provider, { session:false, failureRedirect:`${FRONTEND}/?auth=failed` }, (err, user) => {
-      if (err || !user) return res.redirect(`${FRONTEND}/?auth=failed`);
+    pp.authenticate(provider, { session:false }, (err, user) => {
+      const nextPath = consumeOauthNext(req);
+      if (err || !user) return res.redirect(buildFrontendRedirect(nextPath, "failed"));
       res.cookie("token", createToken(user), COOKIE);
-      res.redirect(`${FRONTEND}/?auth=success`);
+      res.redirect(buildFrontendRedirect(nextPath, "success"));
     })(req, res, next);
   };
 }
 
+function beginOauth(provider, options = {}) {
+  return (req, res, next) => {
+    if (req.session) req.session.oauthNext = sanitizeNextPath(req.query.next);
+    pp.authenticate(provider, { session:false, ...options })(req, res, next);
+  };
+}
+
 // Google
-r.get("/google", pp.authenticate("google", { session:false, scope:["profile","email"] }));
+r.get("/google", beginOauth("google", { scope:["profile"] }));
 r.get("/google/callback", oauthCallback("google"));
 
 // GitHub
-r.get("/github", pp.authenticate("github", { session:false, scope:["user:email"] }));
+r.get("/github", beginOauth("github", { scope:["read:user"] }));
 r.get("/github/callback", oauthCallback("github"));
 
 // Twitter
-r.get("/twitter", pp.authenticate("twitter", { session:false }));
+r.get("/twitter", beginOauth("twitter"));
 r.get("/twitter/callback", oauthCallback("twitter"));
 
 /* ── Session ── */
 r.get("/me", requireAuth, (req, res) => {
-  const u = db.prepare("SELECT id,username,display_name,is_admin,bio,avatar_color,oauth_provider,oauth_avatar,email,needs_onboarding,created_at FROM users WHERE id=?").get(req.user.id);
+  const u = db.prepare("SELECT id,username,display_name,is_admin,can_publish_global,bio,avatar_color,oauth_provider,oauth_avatar,needs_onboarding,created_at FROM users WHERE id=?").get(req.user.id);
   if (!u) return res.status(404).json({ error:"Not found." });
   res.json({
     id:u.id, username:u.username, displayName:u.display_name, isAdmin:!!u.is_admin,
+    canPublishGlobal:!!u.can_publish_global,
     bio:u.bio||"", avatarColor:u.avatar_color, oauthProvider:u.oauth_provider,
-    oauthAvatar:u.oauth_avatar, email:u.email, needsOnboarding:!!u.needs_onboarding,
+    oauthAvatar:u.oauth_avatar, needsOnboarding:!!u.needs_onboarding,
     createdAt:u.created_at,
   });
 });
@@ -90,9 +123,16 @@ r.post("/onboard", requireAuth, accountChangeLimit, (req, res) => {
   if (existing) return res.status(409).json({ error:"Username taken." });
   db.prepare("UPDATE users SET username=?, display_name=?, needs_onboarding=0 WHERE id=?")
     .run(clean, displayName.trim().slice(0,50), req.user.id);
-  const u = db.prepare("SELECT id,username,display_name,is_admin,bio,avatar_color,oauth_provider,oauth_avatar,needs_onboarding FROM users WHERE id=?").get(req.user.id);
+  const u = db.prepare("SELECT id,username,display_name,is_admin,can_publish_global,bio,avatar_color,oauth_provider,oauth_avatar,needs_onboarding FROM users WHERE id=?").get(req.user.id);
   logEvent({ eventType:"account_created", userId:req.user.id, path:"/auth/onboard" });
-  res.json({ id:u.id, username:u.username, displayName:u.display_name, isAdmin:!!u.is_admin, needsOnboarding:false });
+  res.json({
+    id:u.id,
+    username:u.username,
+    displayName:u.display_name,
+    isAdmin:!!u.is_admin,
+    canPublishGlobal:!!u.can_publish_global,
+    needsOnboarding:false,
+  });
 });
 
 /* ── Change username (any user, once set up) ── */
@@ -124,7 +164,7 @@ r.post("/change-password", requireAuth, accountChangeLimit, (req, res) => {
 
 /* ── Profile: get public profile ── */
 r.get("/profile/:username", (req, res) => {
-  const u = db.prepare("SELECT id,username,display_name,bio,avatar_color,oauth_provider,oauth_avatar,is_admin,created_at FROM users WHERE username=?")
+  const u = db.prepare("SELECT id,username,display_name,bio,avatar_color,oauth_provider,oauth_avatar,is_admin,can_publish_global,created_at FROM users WHERE username=?")
     .get(req.params.username.toLowerCase());
   if (!u) return res.status(404).json({ error:"User not found." });
 
@@ -135,7 +175,7 @@ r.get("/profile/:username", (req, res) => {
   res.json({
     id:u.id, username:u.username, displayName:u.display_name, bio:u.bio||"",
     avatarColor:u.avatar_color||"#7A1E2E", oauthProvider:u.oauth_provider,
-    oauthAvatar:u.oauth_avatar, isAdmin:!!u.is_admin, createdAt:u.created_at,
+    oauthAvatar:u.oauth_avatar, isAdmin:!!u.is_admin, canPublishGlobal:!!u.can_publish_global, createdAt:u.created_at,
     stats:{ annotations:annotCount, discussions:discCount, forumThreads:forumCount },
   });
 });
@@ -151,8 +191,17 @@ r.put("/profile", requireAuth, (req, res) => {
   if (updates.length === 0) return res.status(400).json({ error:"Nothing to update." });
   vals.push(req.user.id);
   db.prepare(`UPDATE users SET ${updates.join(",")} WHERE id=?`).run(...vals);
-  const u = db.prepare("SELECT id,username,display_name,bio,avatar_color,is_admin,created_at FROM users WHERE id=?").get(req.user.id);
-  res.json({ id:u.id, username:u.username, displayName:u.display_name, bio:u.bio||"", avatarColor:u.avatar_color, isAdmin:!!u.is_admin, createdAt:u.created_at });
+  const u = db.prepare("SELECT id,username,display_name,bio,avatar_color,is_admin,can_publish_global,created_at FROM users WHERE id=?").get(req.user.id);
+  res.json({
+    id:u.id,
+    username:u.username,
+    displayName:u.display_name,
+    bio:u.bio||"",
+    avatarColor:u.avatar_color,
+    isAdmin:!!u.is_admin,
+    canPublishGlobal:!!u.can_publish_global,
+    createdAt:u.created_at,
+  });
 });
 
 module.exports = r;

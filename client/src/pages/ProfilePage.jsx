@@ -134,6 +134,7 @@ export default function ProfilePage() {
           <div style={{ fontSize:14, color:"var(--text-light)" }}>
             @{profile.username}
             {profile.isAdmin && <span className="admin-badge" style={{marginLeft:8}}>Admin</span>}
+            {profile.canPublishGlobal && <span className="admin-badge" style={{marginLeft:8}}>Editorial</span>}
             {profile.oauthProvider && <span style={{ marginLeft:6, opacity:0.6, fontSize:12 }}>via {profile.oauthProvider}</span>}
           </div>
           <div style={{ fontSize:13, color:"var(--text-light)", marginTop:4 }}>Joined {fmt(profile.createdAt)}</div>

@@ -4,7 +4,7 @@ const Database = require("better-sqlite3");
 
 const rawUsername = process.argv[2];
 if (!rawUsername) {
-  console.error("Usage: node scripts/set-admin.js <username>");
+  console.error("Usage: node scripts/set-editorial.js <username>");
   process.exit(1);
 }
 
@@ -23,7 +23,7 @@ if (!user) {
   process.exit(1);
 }
 
-db.prepare("UPDATE users SET is_admin=1 WHERE id=?").run(user.id);
+db.prepare("UPDATE users SET can_publish_global=1 WHERE id=?").run(user.id);
 const updated = db.prepare("SELECT id, username, display_name, is_admin, can_publish_global FROM users WHERE id=?").get(user.id);
 
 console.log(JSON.stringify({
