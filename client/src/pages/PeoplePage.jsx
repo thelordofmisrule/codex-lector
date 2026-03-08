@@ -211,7 +211,7 @@ function GraphPanel({
               const touchesSelectedNode = selectedNodeId && (edge.sourceId === selectedNodeId || edge.targetId === selectedNodeId);
               const touchesSelectedEdge = selectedEdge && (edge.id === selectedEdge.id);
               const muted = (selectedNodeId && !touchesSelectedNode) || (selectedEdge && !touchesSelectedEdge);
-              const opacity = isSelected ? 0.95 : muted ? 0.12 : 0.25 + (edge.weight / maxWeight) * 0.55;
+              const opacity = isSelected ? 0.95 : muted ? 0.035 : 0.22 + (edge.weight / maxWeight) * 0.5;
               const stroke = isSelected
                 ? "var(--accent)"
                 : edgeMode === "turn_exchange"
@@ -247,7 +247,7 @@ function GraphPanel({
                       onSelectEdge(edge.id);
                     }}
                   />
-                  {edge.weight > 1 && (
+                  {edge.weight > 1 && !muted && (
                     <>
                       <circle cx={midX} cy={midY} r="11" fill="var(--surface)" opacity={muted ? 0.28 : 0.92} />
                       <text
@@ -276,6 +276,7 @@ function GraphPanel({
               const inSelectedEdge = selectedEdge && (selectedEdge.sourceId === node.id || selectedEdge.targetId === node.id);
               const isNeighbor = selectedNodeId ? neighborIds.has(node.id) : false;
               const muted = (selectedNodeId && !isSelected && !isNeighbor) || (selectedEdge && !inSelectedEdge);
+              const focusVisible = isSelected || inSelectedEdge || isNeighbor;
               const radius = clamp(12 + Math.sqrt(Math.max(1, node.lineCount || 1)) * 0.85 + node.connectionWeight * 0.18, 12, 32);
               const labelFontSize = isSelected ? 14 : 12;
               const approxLabelWidth = clamp(node.name.length * labelFontSize * 0.58, 44, 190);
@@ -300,6 +301,19 @@ function GraphPanel({
               labelY = clamp(labelY, topBound + labelFontSize, bottomBound - 4);
               const fill = isSelected ? "var(--accent)" : node.connectionWeight > 0 ? "var(--gold)" : "var(--surface)";
               const stroke = isSelected ? "var(--gold-light)" : "var(--accent)";
+              const labelPaddingX = 9;
+              const labelRectX = textAnchor === "start"
+                ? labelX - labelPaddingX
+                : textAnchor === "end"
+                  ? labelX - approxLabelWidth - labelPaddingX
+                  : labelX - (approxLabelWidth / 2) - labelPaddingX;
+              const labelRectWidth = approxLabelWidth + labelPaddingX * 2;
+              const showLabelBackdrop = focusVisible && !muted;
+              const labelFill = isSelected
+                ? "var(--accent)"
+                : inSelectedEdge
+                  ? "var(--text)"
+                  : "var(--text-muted)";
               return (
                 <g key={node.id}>
                   <circle
@@ -307,7 +321,7 @@ function GraphPanel({
                     cy={pos.y}
                     r={radius + (isSelected ? 4 : 0)}
                     fill={isSelected ? "var(--gold-faint)" : "transparent"}
-                    opacity={muted ? 0.18 : 0.9}
+                    opacity={muted ? 0.03 : 0.9}
                   />
                   <circle
                     cx={pos.x}
@@ -316,7 +330,7 @@ function GraphPanel({
                     fill={fill}
                     stroke={stroke}
                     strokeWidth={isSelected ? 3 : 1.5}
-                    opacity={muted ? 0.28 : 0.95}
+                    opacity={muted ? 0.08 : 0.95}
                     style={{ cursor: "pointer" }}
                     onClick={(event) => {
                       event.stopPropagation();
@@ -324,21 +338,36 @@ function GraphPanel({
                       onSelectNode(node.id);
                     }}
                   />
-                  <text
-                    x={labelX}
-                    y={labelY}
-                    textAnchor={textAnchor}
-                    style={{
-                      fontFamily: "var(--font-display)",
-                      fontSize: labelFontSize,
-                      fontWeight: isSelected ? 600 : 400,
-                      fill: muted ? "var(--text-light)" : "var(--text)",
-                      opacity: muted ? 0.45 : 1,
-                      pointerEvents: "none",
-                    }}
-                  >
-                    {node.name}
-                  </text>
+                  {!muted && showLabelBackdrop && (
+                    <rect
+                      x={labelRectX}
+                      y={labelY - labelFontSize - 4}
+                      width={labelRectWidth}
+                      height={labelFontSize + 12}
+                      rx={10}
+                      fill="var(--surface)"
+                      stroke={isSelected ? "var(--gold-light)" : "var(--border-light)"}
+                      strokeWidth={isSelected ? 1.5 : 1}
+                      opacity={isSelected ? 0.96 : 0.9}
+                    />
+                  )}
+                  {!muted && (
+                    <text
+                      x={labelX}
+                      y={labelY}
+                      textAnchor={textAnchor}
+                      style={{
+                        fontFamily: "var(--font-display)",
+                        fontSize: labelFontSize,
+                        fontWeight: isSelected ? 600 : 400,
+                        fill: labelFill,
+                        opacity: 1,
+                        pointerEvents: "none",
+                      }}
+                    >
+                      {node.name}
+                    </text>
+                  )}
                 </g>
               );
             })}
