@@ -5,8 +5,14 @@ import { auth as authApi, notifications as notifApi } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
 import AuthModal from "./AuthModal";
 
+const THEME_OPTIONS = [
+  { id:"light", label:"Light", icon:"☀️", note:"Parchment and candlelight" },
+  { id:"dark", label:"Dark", icon:"🌙", note:"Night reading" },
+  { id:"eva", label:"Evangelion GUI", icon:"GUI", note:"NERV command deck" },
+];
+
 export default function Header() {
-  const { user, logout, dark, toggleDark } = useAuth();
+  const { user, logout, themeMode, setThemeMode } = useAuth();
   const toast = useToast();
   const [showAuth, setShowAuth] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
@@ -16,11 +22,19 @@ export default function Header() {
   const [newPw, setNewPw] = useState("");
   const [pwMsg, setPwMsg] = useState("");
   const [showNotifs, setShowNotifs] = useState(false);
+  const [showThemes, setShowThemes] = useState(false);
   const [notifs, setNotifs] = useState([]);
   const [unread, setUnread] = useState(0);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 860);
   const nav = useNavigate();
   const loc = useLocation();
+  const currentTheme = THEME_OPTIONS.find(option => option.id === themeMode) || THEME_OPTIONS[0];
+  const darkChrome = themeMode === "dark" || themeMode === "eva";
+  const headerBackground = themeMode === "dark"
+    ? "rgba(26,22,18,0.95)"
+    : themeMode === "eva"
+      ? "rgba(10,13,11,0.96)"
+      : "rgba(242,235,217,0.94)";
 
   const links = [
     { to:"/", label:"Works" },
@@ -98,7 +112,7 @@ export default function Header() {
     <>
       <header style={{
         position:"sticky", top:0, zIndex:100,
-        background: dark ? "rgba(26,22,18,0.95)" : "rgba(242,235,217,0.94)",
+        background: headerBackground,
         backdropFilter:"blur(12px)", borderBottom:"1px solid var(--border)", padding:"0 24px",
       }}>
         <div style={{ maxWidth:1100, margin:"0 auto", display:"flex", alignItems:"center", justifyContent:"space-between", height:58 }}>
@@ -129,7 +143,7 @@ export default function Header() {
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             {isMobile && (
               <div style={{ position:"relative" }}>
-                <button className="btn btn-ghost" aria-label="Toggle navigation menu" onClick={()=>{setShowMobileNav(!showMobileNav);setMenu(false);setShowNotifs(false);}} style={{ fontSize:16, padding:"6px 10px" }}>
+                <button className="btn btn-ghost" aria-label="Toggle navigation menu" onClick={()=>{setShowMobileNav(!showMobileNav);setMenu(false);setShowNotifs(false);setShowThemes(false);}} style={{ fontSize:16, padding:"6px 10px" }}>
                   ☰
                 </button>
                 {showMobileNav && <div onClick={()=>setShowMobileNav(false)} style={{ position:"fixed", inset:0, zIndex:199 }} />}
@@ -149,7 +163,7 @@ export default function Header() {
             {/* Notification bell */}
             {user && (
               <div style={{ position:"relative" }}>
-                <button className="btn btn-ghost" aria-label="Toggle notifications" onClick={()=>{setShowNotifs(!showNotifs);setMenu(false);setShowMobileNav(false);}} title="Notifications" style={{
+                <button className="btn btn-ghost" aria-label="Toggle notifications" onClick={()=>{setShowNotifs(!showNotifs);setMenu(false);setShowMobileNav(false);setShowThemes(false);}} title="Notifications" style={{
                   fontSize:18, padding:"6px 10px", position:"relative",
                 }}>
                   🔔
@@ -191,24 +205,51 @@ export default function Header() {
               </div>
             )}
 
-            {/* Dark mode toggle */}
-            <button className="btn btn-ghost" aria-label={dark?"Switch to light mode":"Switch to dark mode"} onClick={toggleDark} title={dark?"Light mode":"Dark mode"} style={{
-              fontSize:20, padding:"6px 10px", borderRadius:6,
-              background: dark ? "rgba(255,248,240,0.08)" : "rgba(0,0,0,0.05)",
-              border:"1px solid var(--border-light)",
-            }}>
-              {dark ? "☀️" : "🌙"}
-            </button>
+            {/* Theme picker */}
+            <div style={{ position:"relative" }}>
+              <button className="btn btn-ghost" aria-label="Choose theme" onClick={()=>{setShowThemes(!showThemes);setMenu(false);setShowMobileNav(false);setShowNotifs(false);}} title={`Theme: ${currentTheme.label}`} style={{
+                fontSize: currentTheme.id === "eva" ? 11 : 19,
+                padding:"6px 10px", borderRadius:6,
+                background: darkChrome ? "rgba(255,248,240,0.08)" : "rgba(0,0,0,0.05)",
+                border:"1px solid var(--border-light)",
+                minWidth:44, fontFamily: currentTheme.id === "eva" ? "var(--font-display)" : undefined,
+                letterSpacing: currentTheme.id === "eva" ? 1.2 : 0,
+              }}>
+                {currentTheme.icon}
+              </button>
+              {showThemes && <div onClick={()=>setShowThemes(false)} style={{ position:"fixed", inset:0, zIndex:199 }} />}
+              {showThemes && (
+                <div style={{ position:"absolute", top:42, right:0, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, boxShadow:"0 8px 24px var(--shadow)", minWidth:220, padding:8, zIndex:200 }}>
+                  {THEME_OPTIONS.map(option => (
+                    <button
+                      key={option.id}
+                      className="btn"
+                      onClick={()=>{setThemeMode(option.id);setShowThemes(false);}}
+                      style={{
+                        width:"100%", textAlign:"left", padding:"10px 12px", borderRadius:6, background: themeMode===option.id ? "var(--accent-faint)" : "transparent",
+                        color: themeMode===option.id ? "var(--accent)" : "var(--text)", border:"1px solid transparent", marginBottom:4,
+                      }}
+                    >
+                      <span style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
+                        <span style={{ fontFamily:"var(--font-display)", fontSize:13, letterSpacing: option.id === "eva" ? 0.8 : 0 }}>{option.label}</span>
+                        <span style={{ fontSize: option.id === "eva" ? 11 : 16, fontFamily: option.id === "eva" ? "var(--font-display)" : undefined }}>{option.icon}</span>
+                      </span>
+                      <span style={{ display:"block", fontSize:11, color:"var(--text-light)", marginTop:2 }}>{option.note}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {user ? (
               <div style={{ position:"relative" }}>
                 {user.oauthAvatar ? (
-                  <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);setShowMobileNav(false);}} style={{
+                  <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);setShowMobileNav(false);setShowThemes(false);}} style={{
                     width:36, height:36, borderRadius:"50%", padding:0, border:"2px solid var(--accent)", overflow:"hidden",
                     display:"flex", alignItems:"center", justifyContent:"center", background:"var(--surface)",
                   }}><img src={user.oauthAvatar} alt="Profile avatar" style={{ width:"100%", height:"100%", objectFit:"cover" }} /></button>
                 ) : (
-                  <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);setShowMobileNav(false);}} style={{
+                  <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);setShowMobileNav(false);setShowThemes(false);}} style={{
                     background:"var(--accent)", color:"#FFF8F0", width:36, height:36, borderRadius:"50%",
                     display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:600, fontFamily:"var(--font-display)",
                   }}>{user.displayName?.[0]?.toUpperCase()||"?"}</button>

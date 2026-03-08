@@ -48,6 +48,31 @@
   --code-bg: #2E2820;
 }
 
+/* ─── Evangelion GUI Theme ─────────────────── */
+[data-theme="eva"] {
+  --bg: #0C110F;
+  --bg-dark: #131A17;
+  --bg-darker: #1B241F;
+  --surface: #141C19;
+  --surface-hover: #1B2521;
+  --text: #F3F4E3;
+  --text-muted: #B9C2A7;
+  --text-light: #80906F;
+  --accent: #FF6A00;
+  --accent-light: #FF8D1A;
+  --accent-faint: rgba(255,106,0,0.12);
+  --accent-border: rgba(255,106,0,0.34);
+  --gold: #A7FF2E;
+  --gold-light: #D6FF77;
+  --gold-faint: rgba(167,255,46,0.12);
+  --border: #314326;
+  --border-light: #22301B;
+  --shadow: rgba(0,0,0,0.42);
+  --success: #79FF69;
+  --danger: #FF4965;
+  --code-bg: #17201B;
+}
+
 /* ─── Fonts ──────────────────────────────────── */
 :root {
   --font-body: 'Cormorant Garamond', 'IM Fell English', Garamond, serif;
@@ -65,6 +90,14 @@ body {
   font-size: 17px;
   -webkit-font-smoothing: antialiased;
   transition: background 0.3s, color 0.3s;
+}
+
+[data-theme="eva"] body {
+  background:
+    linear-gradient(180deg, rgba(167,255,46,0.04), transparent 24%),
+    repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 4px),
+    linear-gradient(135deg, #0F1511 0%, #0A0F0D 52%, #1B150D 100%);
+  background-attachment: fixed;
 }
 
 ::selection { background: var(--accent-faint); color: var(--accent); }
@@ -102,6 +135,10 @@ a:hover { text-decoration:underline; }
 [data-theme="dark"] .hl-1 { background:rgba(212,112,94,0.15); }
 [data-theme="dark"] .hl-2 { background:rgba(106,175,130,0.15); }
 [data-theme="dark"] .hl-3 { background:rgba(123,111,173,0.15); }
+[data-theme="eva"] .hl-0 { background:rgba(167,255,46,0.16); border-bottom-color:var(--gold-light); }
+[data-theme="eva"] .hl-1 { background:rgba(255,106,0,0.14); border-bottom-color:var(--accent-light); }
+[data-theme="eva"] .hl-2 { background:rgba(121,255,105,0.14); border-bottom-color:#79FF69; }
+[data-theme="eva"] .hl-3 { background:rgba(255,73,101,0.14); border-bottom-color:#FF4965; }
 
 .tudor-rule { text-align:center;margin:32px 0;color:var(--border);font-size:18px;letter-spacing:8px; }
 .tudor-rule::before { content:"❧ ❦ ❧"; }
@@ -137,6 +174,45 @@ a:hover { text-decoration:underline; }
 .tag-chip { display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500;letter-spacing:0.3px;margin:2px 4px 2px 0;cursor:pointer;transition:opacity 0.15s;border:1px solid transparent; }
 .tag-chip:hover { opacity:0.8; }
 .tag-chip.active { border-color:currentColor; }
+
+[data-theme="eva"] a { color: var(--gold-light); }
+[data-theme="eva"] .btn {
+  border-radius: 2px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+[data-theme="eva"] .btn-primary {
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 1px rgba(255,106,0,0.3);
+}
+[data-theme="eva"] .btn-secondary {
+  background: linear-gradient(180deg, rgba(167,255,46,0.08), rgba(255,106,0,0.04));
+  border-color: rgba(167,255,46,0.32);
+  color: var(--gold-light);
+}
+[data-theme="eva"] .btn-ghost {
+  color: var(--gold-light);
+}
+[data-theme="eva"] .input {
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(167,255,46,0.05), rgba(255,106,0,0.03));
+  border-color: rgba(167,255,46,0.28);
+  box-shadow: inset 0 0 0 1px rgba(255,106,0,0.08);
+}
+[data-theme="eva"] .input:focus {
+  border-color: rgba(255,106,0,0.5);
+  box-shadow: 0 0 0 2px rgba(255,106,0,0.12), inset 0 0 0 1px rgba(167,255,46,0.14);
+}
+[data-theme="eva"] .tag-chip {
+  border-radius: 2px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+[data-theme="eva"] .admin-badge {
+  border-color: rgba(167,255,46,0.32);
+}
+[data-theme="eva"] .spinner {
+  border-top-color: var(--gold-light);
+}
 
 /* Multi-annotation overlap indicator */
 .hl-multi { border-bottom-style:double !important; border-bottom-width:3px !important; }
