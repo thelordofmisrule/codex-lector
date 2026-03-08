@@ -23,6 +23,11 @@ const GOOGLE_VERIFICATION = (process.env.GOOGLE_SITE_VERIFICATION || "").replace
 const BING_VERIFICATION = (process.env.BING_SITE_VERIFICATION || "").replace(/^msvalidate\.01=/, "");
 const STATIC_SOCIAL_IMAGE = process.env.SOCIAL_IMAGE_URL || process.env.OG_IMAGE_URL || "";
 
+if (process.env.NODE_ENV === "production") {
+  // Required so secure session cookies survive TLS termination at the reverse proxy.
+  app.set("trust proxy", 1);
+}
+
 /* ── Middleware ── */
 app.use(express.json({ limit:"50mb" }));
 app.use(cookieParser());
@@ -42,6 +47,7 @@ app.use(cors({
 
 app.use(session({
   secret: process.env.JWT_SECRET || "codex-lector-session-secret",
+  proxy: process.env.NODE_ENV === "production",
   resave: false,
   saveUninitialized: false,
   cookie: {
