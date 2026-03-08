@@ -23,6 +23,10 @@
   --code-bg: #E8E0D0;
   --accent-contrast: #FFF8F0;
   --gold-contrast: #2A1F0E;
+  --font-body: 'Cormorant Garamond', 'IM Fell English', Garamond, serif;
+  --font-display: 'Cinzel', 'Cinzel Decorative', Georgia, serif;
+  --font-fell: 'IM Fell English', 'Cormorant Garamond', serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
 /* ─── Dark Theme ─────────────────────────────── */
@@ -82,14 +86,6 @@
   --font-fell: 'Rajdhani', 'Chakra Petch', sans-serif;
   --font-mono: 'Share Tech Mono', 'JetBrains Mono', monospace;
   --font-eva-readout: 'Share Tech Mono', 'JetBrains Mono', monospace;
-}
-
-/* ─── Fonts ──────────────────────────────────── */
-:root {
-  --font-body: 'Cormorant Garamond', 'IM Fell English', Garamond, serif;
-  --font-display: 'Cinzel', 'Cinzel Decorative', Georgia, serif;
-  --font-fell: 'IM Fell English', 'Cormorant Garamond', serif;
-  --font-mono: 'JetBrains Mono', monospace;
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
