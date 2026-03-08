@@ -66,6 +66,7 @@ app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/reports", require("./routes/reports"));
 app.use("/api/analytics", require("./routes/analytics"));
 app.use("/api/places", require("./routes/places"));
+app.use("/api/chat", require("./routes/chat"));
 app.get("/api/health", (req,res) => res.json({ status:"ok" }));
 app.use("/media", express.static(path.join(__dirname, "..", "data", "media")));
 
@@ -177,6 +178,7 @@ app.get("/sitemap.xml", (req, res) => {
     `<url><loc>${SITE_URL}/forum</loc><priority>0.7</priority></url>`,
     `<url><loc>${SITE_URL}/blog</loc><priority>0.8</priority></url>`,
     `<url><loc>${SITE_URL}/layers</loc><priority>0.7</priority></url>`,
+    `<url><loc>${SITE_URL}/chat</loc><priority>0.7</priority></url>`,
     `<url><loc>${SITE_URL}/people</loc><priority>0.7</priority></url>`,
     `<url><loc>${SITE_URL}/places</loc><priority>0.7</priority></url>`,
     ...works.map(w => `<url><loc>${SITE_URL}/read/${w.slug}</loc><priority>0.9</priority></url>`),
@@ -433,6 +435,26 @@ if (process.env.NODE_ENV === "production") {
     <meta name="twitter:title" content="People in the Plays" />
     <meta name="twitter:description" content="${esc(desc)}" />
     <title>People in the Plays — ${SITE_NAME}</title>`;
+    res.send(renderHtml(meta));
+  });
+
+  app.get("/chat", (req, res) => {
+    const url = `${SITE_URL}/chat`;
+    const desc = "Join live conversation in the lobby, the Year of Shakespeare room, or work-specific reading rooms.";
+    const imageUrl = socialImageUrl("", "Live Chat", desc);
+    const meta = `
+    <meta name="description" content="${esc(desc)}" />
+    <link rel="canonical" href="${url}" />
+    ${verificationMeta()}
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Live Chat — ${SITE_NAME}" />
+    <meta property="og:description" content="${esc(desc)}" />
+    <meta property="og:url" content="${url}" />
+    <meta property="og:site_name" content="${SITE_NAME}" />
+    ${socialImageMeta(imageUrl, `Live Chat on ${SITE_NAME}`)}
+    <meta name="twitter:title" content="Live Chat" />
+    <meta name="twitter:description" content="${esc(desc)}" />
+    <title>Live Chat — ${SITE_NAME}</title>`;
     res.send(renderHtml(meta));
   });
 

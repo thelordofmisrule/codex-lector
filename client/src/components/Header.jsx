@@ -40,6 +40,7 @@ export default function Header() {
     { to:"/", label:"Works" },
     { to:"/people", label:"People" },
     { to:"/places", label:"Places" },
+    { to:"/chat", label:"Chat" },
     { to:"/year-of-shakespeare", label:"Year" },
     { to:"/how-to", label:"How To" },
     { to:"/layers", label:"Layers" },

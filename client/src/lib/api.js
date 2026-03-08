@@ -106,6 +106,16 @@ export const places = {
   restoreCitationExclusion:(slug, id)=>req(`/places/${encodeURIComponent(slug)}/citation-exclusions/${id}`,{method:"DELETE"}),
   uploadImage:(fileName,mimeType,dataUrl)=>req("/places/upload-image",{method:"POST",body:JSON.stringify({fileName,mimeType,dataUrl})}),
 };
+export const chat = {
+  rooms:()=>req("/chat/rooms"),
+  messages:(roomKey="", workSlug="", limit=80)=>req(`/chat/messages?${[
+    roomKey ? `room=${encodeURIComponent(roomKey)}` : "",
+    workSlug ? `work=${encodeURIComponent(workSlug)}` : "",
+    limit ? `limit=${encodeURIComponent(limit)}` : "",
+  ].filter(Boolean).join("&")}`),
+  post:(body, roomKey="", workSlug="")=>req("/chat/messages",{method:"POST",body:JSON.stringify({body,roomKey,workSlug})}),
+  delete:id=>req(`/chat/messages/${id}`,{method:"DELETE"}),
+};
 export const notifications = {
   list:()=>req("/notifications"),
   markRead:id=>req(`/notifications/${id}/read`,{method:"POST"}),

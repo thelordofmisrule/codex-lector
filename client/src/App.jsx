@@ -22,6 +22,7 @@ import AdminAnalyticsPage from "./pages/AdminAnalyticsPage";
 import HowToPage from "./pages/HowToPage";
 import PlacesPage from "./pages/PlacesPage";
 import PeoplePage from "./pages/PeoplePage";
+import ChatPage from "./pages/ChatPage";
 import YearOfShakespearePage from "./pages/YearOfShakespearePage";
 
 export default function App() {
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/layers" element={<LayersPage />} />
           <Route path="/places" element={<PlacesPage />} />
           <Route path="/people" element={<PeoplePage />} />
+          <Route path="/chat" element={<ChatPage />} />
           <Route path="/year-of-shakespeare" element={<YearOfShakespearePage />} />
           <Route path="/layers/:id" element={<LayerDetailPage />} />
           <Route path="/annotation/:id" element={<AnnotationDetailPage />} />

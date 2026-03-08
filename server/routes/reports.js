@@ -24,13 +24,20 @@ function targetLinkFor(targetType, targetId) {
     const reply = db.prepare("SELECT post_id FROM blog_replies WHERE id=?").get(id);
     return reply ? `/blog/${reply.post_id}#comment-${id}` : "";
   }
+  if (targetType === "chat_message") {
+    const message = db.prepare("SELECT room_key, work_slug FROM chat_messages WHERE id=?").get(id);
+    if (!message) return "/chat";
+    if (message.work_slug) return `/chat?work=${encodeURIComponent(message.work_slug)}#chat-message-${id}`;
+    if (message.room_key && message.room_key !== "lobby") return `/chat?room=${encodeURIComponent(message.room_key)}#chat-message-${id}`;
+    return `/chat#chat-message-${id}`;
+  }
   return "";
 }
 
 r.post("/", requireAuth, reportLimit, (req, res) => {
   const { targetType, targetId, reason, details } = req.body || {};
   if (!targetType || !targetId || !reason?.trim()) return res.status(400).json({ error:"targetType, targetId, and reason are required." });
-  const allowedTypes = new Set(["annotation", "forum_thread", "forum_reply", "blog_reply"]);
+  const allowedTypes = new Set(["annotation", "forum_thread", "forum_reply", "blog_reply", "chat_message"]);
   if (!allowedTypes.has(targetType)) return res.status(400).json({ error:"Unsupported report target." });
 
   const existing = db.prepare("SELECT id FROM content_reports WHERE user_id=? AND target_type=? AND target_id=? AND status='open'")

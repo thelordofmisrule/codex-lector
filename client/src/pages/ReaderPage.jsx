@@ -649,6 +649,13 @@ export default function ReaderPage() {
           >
             Search This Work
           </button>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => navigate(`/chat?work=${encodeURIComponent(slug)}`)}
+            style={{ color:"var(--text-light)", fontSize:12, fontFamily:"var(--font-display)", letterSpacing:1 }}
+          >
+            Live Chat
+          </button>
           {parsed.type === "play" && (
             <button
               className="btn btn-ghost btn-sm"

@@ -248,6 +248,20 @@ db.exec(`
     updated_at DATETIME
   );
 
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_key TEXT NOT NULL,
+    work_slug TEXT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    body TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME
+  );
+  CREATE INDEX IF NOT EXISTS idx_chat_messages_room_created
+    ON chat_messages(room_key, created_at);
+  CREATE INDEX IF NOT EXISTS idx_chat_messages_work_created
+    ON chat_messages(work_slug, created_at);
+
   CREATE TABLE IF NOT EXISTS content_reports (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id),
@@ -343,6 +357,17 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS word_index (
   PRIMARY KEY (word, work_id)
 )`); } catch {}
 try { db.exec("ALTER TABLE blog_posts ADD COLUMN header_image TEXT DEFAULT ''"); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  room_key TEXT NOT NULL,
+  work_slug TEXT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  body TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME
+)`); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_room_created ON chat_messages(room_key, created_at)"); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_work_created ON chat_messages(work_slug, created_at)"); } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS content_reports (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id),
