@@ -24,7 +24,6 @@ db.exec(`
     oauth_provider TEXT,
     oauth_id TEXT,
     oauth_avatar TEXT,
-    email TEXT,
     needs_onboarding BOOLEAN DEFAULT 0,
     is_admin BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -309,8 +308,8 @@ try { db.exec("ALTER TABLE users ADD COLUMN avatar_color TEXT DEFAULT '#7A1E2E'"
 try { db.exec("ALTER TABLE users ADD COLUMN oauth_provider TEXT"); } catch {}
 try { db.exec("ALTER TABLE users ADD COLUMN oauth_id TEXT"); } catch {}
 try { db.exec("ALTER TABLE users ADD COLUMN oauth_avatar TEXT"); } catch {}
-try { db.exec("ALTER TABLE users ADD COLUMN email TEXT"); } catch {}
 try { db.exec("ALTER TABLE users ADD COLUMN needs_onboarding BOOLEAN DEFAULT 0"); } catch {}
+try { db.exec("UPDATE users SET email=NULL WHERE email IS NOT NULL"); } catch {}
 try { db.exec("ALTER TABLE annotations ADD COLUMN is_global BOOLEAN DEFAULT 0"); } catch {}
 // Mark all existing annotations as global (they were admin-only before)
 try { db.exec("UPDATE annotations SET is_global=1 WHERE is_global=0"); } catch {}

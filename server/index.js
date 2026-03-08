@@ -44,7 +44,12 @@ app.use(session({
   secret: process.env.JWT_SECRET || "codex-lector-session-secret",
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 600000 },
+  cookie: {
+    maxAge: 600000,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  },
 }));
 app.use(passport.initialize());
 app.use(passport.session());

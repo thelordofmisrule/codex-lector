@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
+import AuthModal from "../components/AuthModal";
 import ReportButton from "../components/ReportButton";
 import { useAuth } from "../lib/AuthContext";
 import { useConfirm } from "../lib/ConfirmContext";
@@ -169,6 +170,7 @@ export default function ChatPage() {
   const [deletingId, setDeletingId] = useState("");
   const [streamState, setStreamState] = useState("connecting");
   const [error, setError] = useState("");
+  const [showAuth, setShowAuth] = useState(false);
   const messagePaneRef = useRef(null);
   const activeRoomRef = useRef({ roomKey: "lobby", workSlug: "" });
 
@@ -202,6 +204,13 @@ export default function ChatPage() {
   }, []);
 
   const loadSidebar = useCallback(async () => {
+    if (!user) {
+      setWorks([]);
+      setSpecialRooms(FALLBACK_SPECIAL_ROOMS);
+      setActiveWorkRooms([]);
+      setLoadingSidebar(false);
+      return;
+    }
     setLoadingSidebar(true);
     try {
       const [worksData, roomData] = await Promise.all([
@@ -212,15 +221,22 @@ export default function ChatPage() {
       setSpecialRooms(roomData.specialRooms?.length ? roomData.specialRooms : FALLBACK_SPECIAL_ROOMS);
       setActiveWorkRooms(roomData.activeWorkRooms || []);
     } catch (e) {
-      toast?.error(e.message || "Could not load chat rooms.");
+      if (e.status !== 401) toast?.error(e.message || "Could not load chat rooms.");
       setSpecialRooms(FALLBACK_SPECIAL_ROOMS);
       setActiveWorkRooms([]);
     } finally {
       setLoadingSidebar(false);
     }
-  }, [toast]);
+  }, [toast, user]);
 
   const loadMessages = useCallback(async () => {
+    if (!user) {
+      setLoadingMessages(false);
+      setError("");
+      setMessages([]);
+      setRoomInfo(FALLBACK_SPECIAL_ROOMS[0]);
+      return;
+    }
     setLoadingMessages(true);
     setError("");
     try {
@@ -229,7 +245,7 @@ export default function ChatPage() {
       setMessages(data.messages || []);
       requestAnimationFrame(() => scrollToBottom(true));
     } catch (e) {
-      setError(e.message || "Could not load this chat room.");
+      setError(e.status === 401 ? "Sign in to enter live chat." : (e.message || "Could not load this chat room."));
       setMessages([]);
       if (selectedWorkSlug || activeRoomKey !== "lobby") {
         setRoomSearchParams(setSearchParams, "lobby", "");
@@ -237,7 +253,7 @@ export default function ChatPage() {
     } finally {
       setLoadingMessages(false);
     }
-  }, [activeRoomKey, scrollToBottom, selectedWorkSlug, setSearchParams]);
+  }, [activeRoomKey, scrollToBottom, selectedWorkSlug, setSearchParams, user]);
 
   useEffect(() => {
     loadSidebar();
@@ -263,6 +279,10 @@ export default function ChatPage() {
   }, [selectedWorkSlug, setSearchParams, works]);
 
   useEffect(() => {
+    if (!user) {
+      setStreamState("connecting");
+      return undefined;
+    }
     const source = new EventSource("/api/chat/stream");
 
     const handleReady = () => setStreamState("live");
@@ -307,7 +327,7 @@ export default function ChatPage() {
     return () => {
       source.close();
     };
-  }, [scrollToBottom]);
+  }, [scrollToBottom, user]);
 
   useEffect(() => {
     if (!location.hash) return;
@@ -371,44 +391,68 @@ export default function ChatPage() {
   const roomStatusLabel = streamState === "live" ? "Live" : streamState === "reconnecting" ? "Reconnecting" : "Connecting";
 
   return (
-    <div className="animate-in" style={{ maxWidth: 1240, margin: "0 auto", padding: "38px 24px 72px" }}>
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 4, textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
-          Conversation
-        </div>
-        <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 34, color: "var(--accent)", letterSpacing: 1.5 }}>
-          Live Chat
-        </h1>
-        <p style={{ marginTop: 12, marginBottom: 0, color: "var(--text-muted)", lineHeight: 1.75, maxWidth: 860 }}>
-          Join the lobby, the shared Year of Shakespeare room, or a live room for any individual work.
-        </p>
-      </div>
-
-      <div className="chat-layout">
-        <aside style={{ display: "grid", gap: 16, alignSelf: "start" }}>
-          <div style={{ border: "1px solid var(--border-light)", borderRadius: 16, background: "var(--surface)", padding: 16 }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "var(--accent)", marginBottom: 10 }}>
-              Rooms
-            </div>
-            <div style={{ display: "grid", gap: 8 }}>
-              {(specialRooms || FALLBACK_SPECIAL_ROOMS).map((room) => {
-                const active = !selectedWorkSlug && activeRoomKey === room.key;
-                return (
-                  <button
-                    key={room.key}
-                    className={active ? "btn btn-primary" : "btn btn-secondary"}
-                    onClick={() => setRoomSearchParams(setSearchParams, room.key, "")}
-                    style={{ width: "100%", textAlign: "left", padding: "10px 12px" }}
-                  >
-                    <span style={{ display: "block", fontFamily: "var(--font-display)", color: active ? "inherit" : "var(--text)" }}>{room.label}</span>
-                    <span style={{ display: "block", fontSize: 12, color: active ? "inherit" : "var(--text-light)", marginTop: 3 }}>
-                      {room.messageCount || 0} messages
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+    <>
+      <div className="animate-in" style={{ maxWidth: 1240, margin: "0 auto", padding: "38px 24px 72px" }}>
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 4, textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
+            Conversation
           </div>
+          <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 34, color: "var(--accent)", letterSpacing: 1.5 }}>
+            Live Chat
+          </h1>
+          <p style={{ marginTop: 12, marginBottom: 0, color: "var(--text-muted)", lineHeight: 1.75, maxWidth: 860 }}>
+            Signed-in readers can join the lobby, the shared Year of Shakespeare room, or a live room for any individual work.
+          </p>
+        </div>
+
+        {!user ? (
+          <section style={{
+            maxWidth: 720,
+            border: "1px solid var(--border-light)",
+            borderRadius: 18,
+            background: "linear-gradient(180deg, rgba(201,168,76,0.06), rgba(122,30,46,0.03))",
+            padding: 24,
+            boxShadow: "0 14px 30px rgba(0,0,0,0.05)",
+          }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "var(--accent)", marginBottom: 10 }}>
+              Sign-In Required
+            </div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--accent)", marginBottom: 10 }}>
+              Chat is for signed-in readers only.
+            </div>
+            <p style={{ marginTop: 0, color: "var(--text-muted)", lineHeight: 1.75, marginBottom: 18 }}>
+              Sign in to read room history, follow live discussion, and join the conversation. This keeps chat limited to identified community members rather than open browsing.
+            </p>
+            <button className="btn btn-primary" onClick={() => setShowAuth(true)}>
+              Sign In to Enter Chat
+            </button>
+          </section>
+        ) : (
+          <div className="chat-layout">
+            <aside style={{ display: "grid", gap: 16, alignSelf: "start" }}>
+              <div style={{ border: "1px solid var(--border-light)", borderRadius: 16, background: "var(--surface)", padding: 16 }}>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "var(--accent)", marginBottom: 10 }}>
+                  Rooms
+                </div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  {(specialRooms || FALLBACK_SPECIAL_ROOMS).map((room) => {
+                    const active = !selectedWorkSlug && activeRoomKey === room.key;
+                    return (
+                      <button
+                        key={room.key}
+                        className={active ? "btn btn-primary" : "btn btn-secondary"}
+                        onClick={() => setRoomSearchParams(setSearchParams, room.key, "")}
+                        style={{ width: "100%", textAlign: "left", padding: "10px 12px" }}
+                      >
+                        <span style={{ display: "block", fontFamily: "var(--font-display)", color: active ? "inherit" : "var(--text)" }}>{room.label}</span>
+                        <span style={{ display: "block", fontSize: 12, color: active ? "inherit" : "var(--text-light)", marginTop: 3 }}>
+                          {room.messageCount || 0} messages
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
           <div style={{ border: "1px solid var(--border-light)", borderRadius: 16, background: "var(--surface)", padding: 16 }}>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "var(--accent)", marginBottom: 10 }}>
@@ -480,49 +524,49 @@ export default function ChatPage() {
               </div>
             )}
           </div>
-        </aside>
+            </aside>
 
-        <section style={{ minWidth: 0 }}>
-          <div style={{ border: "1px solid var(--border-light)", borderRadius: 18, background: "linear-gradient(180deg, rgba(201,168,76,0.06), rgba(122,30,46,0.03))", padding: 18, boxShadow: "0 14px 30px rgba(0,0,0,0.05)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap", marginBottom: 14 }}>
-              <div>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--accent)", marginBottom: 6 }}>
-                  {roomInfo.label}
-                </div>
-                <div style={{ color: "var(--text-muted)", lineHeight: 1.6, maxWidth: 720 }}>
-                  {roomInfo.description}
-                </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                  <span style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 12,
-                    textTransform: "uppercase",
-                    letterSpacing: 1.2,
-                    color: streamState === "live" ? "var(--success)" : "var(--gold)",
-                    border: "1px solid var(--border-light)",
-                    borderRadius: 999,
-                    padding: "4px 10px",
-                    background: "var(--surface)",
-                  }}>
-                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: streamState === "live" ? "var(--success)" : "var(--gold)" }} />
-                    {roomStatusLabel}
-                  </span>
-                  <span style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    fontSize: 12,
-                    color: "var(--text-light)",
-                    border: "1px solid var(--border-light)",
-                    borderRadius: 999,
-                    padding: "4px 10px",
-                    background: "var(--surface)",
-                  }}>
-                    {roomInfo.messageCount || messages.length} messages
-                  </span>
-                </div>
-              </div>
+            <section style={{ minWidth: 0 }}>
+              <div style={{ border: "1px solid var(--border-light)", borderRadius: 18, background: "linear-gradient(180deg, rgba(201,168,76,0.06), rgba(122,30,46,0.03))", padding: 18, boxShadow: "0 14px 30px rgba(0,0,0,0.05)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap", marginBottom: 14 }}>
+                  <div>
+                    <div style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--accent)", marginBottom: 6 }}>
+                      {roomInfo.label}
+                    </div>
+                    <div style={{ color: "var(--text-muted)", lineHeight: 1.6, maxWidth: 720 }}>
+                      {roomInfo.description}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                      <span style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        fontSize: 12,
+                        textTransform: "uppercase",
+                        letterSpacing: 1.2,
+                        color: streamState === "live" ? "var(--success)" : "var(--gold)",
+                        border: "1px solid var(--border-light)",
+                        borderRadius: 999,
+                        padding: "4px 10px",
+                        background: "var(--surface)",
+                      }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: streamState === "live" ? "var(--success)" : "var(--gold)" }} />
+                        {roomStatusLabel}
+                      </span>
+                      <span style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        fontSize: 12,
+                        color: "var(--text-light)",
+                        border: "1px solid var(--border-light)",
+                        borderRadius: 999,
+                        padding: "4px 10px",
+                        background: "var(--surface)",
+                      }}>
+                        {roomInfo.messageCount || messages.length} messages
+                      </span>
+                    </div>
+                  </div>
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {roomInfo.workSlug && (
@@ -538,11 +582,11 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {error && (
-              <div style={{ marginBottom: 14, padding: "12px 14px", borderRadius: 10, background: "rgba(139,31,31,0.08)", border: "1px solid rgba(139,31,31,0.22)", color: "var(--danger)" }}>
-                {error}
-              </div>
-            )}
+                {error && (
+                  <div style={{ marginBottom: 14, padding: "12px 14px", borderRadius: 10, background: "rgba(139,31,31,0.08)", border: "1px solid rgba(139,31,31,0.22)", color: "var(--danger)" }}>
+                    {error}
+                  </div>
+                )}
 
             <div
               ref={messagePaneRef}
@@ -578,32 +622,29 @@ export default function ChatPage() {
               )}
             </div>
 
-            {user ? (
-              <div>
-                <textarea
-                  className="input"
-                  value={compose}
-                  onChange={(event) => setComposeDraft(event.target.value)}
-                  placeholder={currentWork ? `Discuss ${currentWork.title} live...` : "Say something to the room..."}
-                  style={{ minHeight: 96, resize: "vertical", marginBottom: 10, lineHeight: 1.7 }}
-                />
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 12, color: "var(--text-light)" }}>
-                    Messages are public. Keep it civil and text-focused.
+                <div>
+                  <textarea
+                    className="input"
+                    value={compose}
+                    onChange={(event) => setComposeDraft(event.target.value)}
+                    placeholder={currentWork ? `Discuss ${currentWork.title} live...` : "Say something to the room..."}
+                    style={{ minHeight: 96, resize: "vertical", marginBottom: 10, lineHeight: 1.7 }}
+                  />
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 12, color: "var(--text-light)" }}>
+                      Messages are visible to signed-in readers. Keep it civil and text-focused.
+                    </div>
+                    <button className="btn btn-primary" onClick={submitMessage} disabled={sending || !compose.trim()}>
+                      {sending ? "Sending..." : "Send Message"}
+                    </button>
                   </div>
-                  <button className="btn btn-primary" onClick={submitMessage} disabled={sending || !compose.trim()}>
-                    {sending ? "Sending..." : "Send Message"}
-                  </button>
                 </div>
               </div>
-            ) : (
-              <div style={{ color: "var(--text-light)", fontStyle: "italic", lineHeight: 1.7 }}>
-                Sign in to send messages. You can still read the room without posting.
-              </div>
-            )}
+            </section>
           </div>
-        </section>
+        )}
       </div>
-    </div>
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+    </>
   );
 }

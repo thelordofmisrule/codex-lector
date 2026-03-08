@@ -122,7 +122,7 @@ function broadcast(eventName, payload) {
   }
 }
 
-r.get("/rooms", (req, res) => {
+r.get("/rooms", requireAuth, (req, res) => {
   const statsRows = db.prepare(`
     SELECT room_key, COUNT(*) AS message_count, MAX(created_at) AS last_message_at
     FROM chat_messages
@@ -162,7 +162,7 @@ r.get("/rooms", (req, res) => {
   res.json({ specialRooms, activeWorkRooms });
 });
 
-r.get("/messages", (req, res) => {
+r.get("/messages", requireAuth, (req, res) => {
   let room;
   try {
     room = resolveRoom(req.query.room, req.query.work);
@@ -199,7 +199,7 @@ r.get("/messages", (req, res) => {
   });
 });
 
-r.get("/stream", (req, res) => {
+r.get("/stream", requireAuth, (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
