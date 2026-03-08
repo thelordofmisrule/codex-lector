@@ -49,8 +49,12 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+const GRAPH_WIDTH = 860;
+const GRAPH_HEIGHT = 620;
+const GRAPH_PADDING = 72;
+const GRAPH_CENTER = { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 };
+
 function buildGraphLayout(nodes, edges, selectedNodeId) {
-  const center = { x: 390, y: 270 };
   const positions = {};
   if (!nodes.length) return positions;
 
@@ -65,15 +69,15 @@ function buildGraphLayout(nodes, edges, selectedNodeId) {
     ringNodes.forEach((node, index) => {
       const angle = angleOffset - Math.PI / 2 + (index / ringNodes.length) * Math.PI * 2;
       positions[node.id] = {
-        x: center.x + Math.cos(angle) * radius,
-        y: center.y + Math.sin(angle) * radius,
+        x: GRAPH_CENTER.x + Math.cos(angle) * radius,
+        y: GRAPH_CENTER.y + Math.sin(angle) * radius,
         angle,
       };
     });
   }
 
   if (selectedNodeId && orderedNodes.some((node) => node.id === selectedNodeId)) {
-    positions[selectedNodeId] = { ...center, angle: -Math.PI / 2 };
+    positions[selectedNodeId] = { ...GRAPH_CENTER, angle: -Math.PI / 2 };
     const neighborIds = new Set();
     edges.forEach((edge) => {
       if (edge.sourceId === selectedNodeId) neighborIds.add(edge.targetId);
@@ -81,17 +85,17 @@ function buildGraphLayout(nodes, edges, selectedNodeId) {
     });
     const innerRing = orderedNodes.filter((node) => node.id !== selectedNodeId && neighborIds.has(node.id));
     const outerRing = orderedNodes.filter((node) => node.id !== selectedNodeId && !neighborIds.has(node.id));
-    placeRing(innerRing, clamp(140 + innerRing.length * 3, 150, 200));
-    placeRing(outerRing, clamp(220 + outerRing.length * 2, 230, 280), innerRing.length ? Math.PI / innerRing.length : 0);
+    placeRing(innerRing, clamp(125 + innerRing.length * 3, 145, 185));
+    placeRing(outerRing, clamp(200 + outerRing.length * 2, 220, 245), innerRing.length ? Math.PI / innerRing.length : 0);
     return positions;
   }
 
   if (orderedNodes.length === 1) {
-    positions[orderedNodes[0].id] = { ...center, angle: -Math.PI / 2 };
+    positions[orderedNodes[0].id] = { ...GRAPH_CENTER, angle: -Math.PI / 2 };
     return positions;
   }
 
-  placeRing(orderedNodes, clamp(160 + orderedNodes.length * 4, 180, 260));
+  placeRing(orderedNodes, clamp(150 + orderedNodes.length * 3, 170, 225));
   return positions;
 }
 
@@ -171,8 +175,8 @@ function GraphPanel({
       ) : (
         <div style={{ flex: 1, minHeight: 0 }}>
           <svg
-            viewBox="0 0 780 540"
-            style={{ width: "100%", height: "100%", minHeight: 480, display: "block" }}
+            viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
+            style={{ width: "100%", height: "100%", minHeight: 480, display: "block", overflow: "visible" }}
             onClick={(event) => {
               if (event.target === event.currentTarget) {
                 onSelectNode("");
@@ -180,19 +184,19 @@ function GraphPanel({
               }
             }}
           >
-            <circle cx="390" cy="270" r="126" fill="var(--gold-faint)" />
-            <circle cx="390" cy="270" r="88" fill="var(--accent-faint)" />
+            <circle cx={GRAPH_CENTER.x} cy={GRAPH_CENTER.y} r="126" fill="var(--gold-faint)" />
+            <circle cx={GRAPH_CENTER.x} cy={GRAPH_CENTER.y} r="88" fill="var(--accent-faint)" />
             <text
-              x="390"
-              y="258"
+              x={GRAPH_CENTER.x}
+              y={GRAPH_CENTER.y - 12}
               textAnchor="middle"
               style={{ fontFamily: "var(--font-display)", fontSize: 16, letterSpacing: 1.2, fill: "var(--accent)" }}
             >
               {edgeMode === "turn_exchange" ? "Turn Exchanges" : "Shared Scenes"}
             </text>
             <text
-              x="390"
-              y="282"
+              x={GRAPH_CENTER.x}
+              y={GRAPH_CENTER.y + 12}
               textAnchor="middle"
               style={{ fontFamily: "var(--font-body)", fontSize: 13, fill: "var(--text-light)" }}
             >
@@ -273,13 +277,27 @@ function GraphPanel({
               const isNeighbor = selectedNodeId ? neighborIds.has(node.id) : false;
               const muted = (selectedNodeId && !isSelected && !isNeighbor) || (selectedEdge && !inSelectedEdge);
               const radius = clamp(12 + Math.sqrt(Math.max(1, node.lineCount || 1)) * 0.85 + node.connectionWeight * 0.18, 12, 32);
-              const labelX = pos.x + Math.cos(pos.angle || 0) * (radius + 14);
-              const labelY = pos.y + Math.sin(pos.angle || 0) * (radius + 14);
+              const labelFontSize = isSelected ? 14 : 12;
+              const approxLabelWidth = clamp(node.name.length * labelFontSize * 0.58, 44, 190);
+              let labelX = pos.x + Math.cos(pos.angle || 0) * (radius + 16);
+              let labelY = pos.y + Math.sin(pos.angle || 0) * (radius + 16);
               const textAnchor = Math.cos(pos.angle || 0) > 0.35
                 ? "start"
                 : Math.cos(pos.angle || 0) < -0.35
                   ? "end"
                   : "middle";
+              const leftBound = GRAPH_PADDING;
+              const rightBound = GRAPH_WIDTH - GRAPH_PADDING;
+              const topBound = GRAPH_PADDING;
+              const bottomBound = GRAPH_HEIGHT - GRAPH_PADDING;
+              if (textAnchor === "start") {
+                labelX = Math.min(labelX, rightBound - approxLabelWidth);
+              } else if (textAnchor === "end") {
+                labelX = Math.max(labelX, leftBound + approxLabelWidth);
+              } else {
+                labelX = clamp(labelX, leftBound + approxLabelWidth / 2, rightBound - approxLabelWidth / 2);
+              }
+              labelY = clamp(labelY, topBound + labelFontSize, bottomBound - 4);
               const fill = isSelected ? "var(--accent)" : node.connectionWeight > 0 ? "var(--gold)" : "var(--surface)";
               const stroke = isSelected ? "var(--gold-light)" : "var(--accent)";
               return (
@@ -312,7 +330,7 @@ function GraphPanel({
                     textAnchor={textAnchor}
                     style={{
                       fontFamily: "var(--font-display)",
-                      fontSize: isSelected ? 14 : 12,
+                      fontSize: labelFontSize,
                       fontWeight: isSelected ? 600 : 400,
                       fill: muted ? "var(--text-light)" : "var(--text)",
                       opacity: muted ? 0.45 : 1,
