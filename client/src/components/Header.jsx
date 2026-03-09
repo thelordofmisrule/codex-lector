@@ -12,7 +12,7 @@ const THEME_OPTIONS = [
 ];
 
 export default function Header() {
-  const { user, logout, themeMode, setThemeMode } = useAuth();
+  const { user, authReady, logout, themeMode, setThemeMode } = useAuth();
   const toast = useToast();
   const [showAuth, setShowAuth] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
@@ -65,7 +65,19 @@ export default function Header() {
       setUnread(d.unreadCount || 0);
     } catch {}
   }, [user]);
-  useEffect(() => { loadNotifs(); const t=setInterval(loadNotifs,30000); return ()=>clearInterval(t); }, [loadNotifs]);
+  useEffect(() => {
+    if (!user) {
+      setNotifs([]);
+      setUnread(0);
+      return undefined;
+    }
+    const initialLoad = setTimeout(loadNotifs, 1500);
+    const interval = setInterval(loadNotifs, 30000);
+    return () => {
+      clearTimeout(initialLoad);
+      clearInterval(interval);
+    };
+  }, [loadNotifs, user]);
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 860);
     window.addEventListener("resize", onResize);
@@ -293,8 +305,10 @@ export default function Header() {
                   </div>
                 )}
               </div>
-            ) : (
+            ) : authReady ? (
               <button className="btn btn-primary" onClick={()=>setShowAuth(true)} style={{ padding:"6px 16px", fontSize:13, fontFamily:"var(--font-display)" }}>Sign In</button>
+            ) : (
+              <div style={{ width:78, height:34 }} aria-hidden="true" />
             )}
           </div>
         </div>

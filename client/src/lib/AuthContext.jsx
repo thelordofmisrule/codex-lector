@@ -12,21 +12,27 @@ function initialThemeMode() {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [ready, setReady] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
   const [themeMode, setThemeMode] = useState(initialThemeMode);
 
-  useEffect(() => { api.me().then(setUser).catch(()=>{}).finally(()=>setReady(true)); }, []);
+  useEffect(() => {
+    api.me()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setAuthReady(true));
+  }, []);
 
   // Check for OAuth callback result
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const authResult = params.get("auth");
+    if (!authResult) return;
+    params.delete("auth");
+    const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}${window.location.hash}`;
     if (authResult === "success") {
       api.me().then(setUser).catch(()=>{});
-      window.history.replaceState({}, "", window.location.pathname);
-    } else if (authResult === "failed") {
-      window.history.replaceState({}, "", window.location.pathname);
     }
+    window.history.replaceState({}, "", nextUrl);
   }, []);
 
   useEffect(() => {
@@ -38,11 +44,19 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (u,p) => { const d=await api.login(u,p); setUser(d); return d; }, []);
   const logout = useCallback(async () => { await api.logout(); setUser(null); }, []);
   const toggleDark = useCallback(() => setThemeMode(mode => mode === "dark" ? "light" : "dark"), []);
-  const refreshUser = useCallback(async () => { try { const u = await api.me(); setUser(u); } catch {} }, []);
+  const refreshUser = useCallback(async () => {
+    try {
+      const u = await api.me();
+      setUser(u);
+    } catch {
+      setUser(null);
+    } finally {
+      setAuthReady(true);
+    }
+  }, []);
   const dark = themeMode === "dark";
 
-  if (!ready) return null;
-  return <Ctx.Provider value={{ user, login, logout, dark, themeMode, setThemeMode, toggleDark, refreshUser }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, authReady, login, logout, dark, themeMode, setThemeMode, toggleDark, refreshUser }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() { return useContext(Ctx); }

@@ -79,7 +79,10 @@ app.use("/api/analytics", require("./routes/analytics"));
 app.use("/api/places", require("./routes/places"));
 app.use("/api/chat", require("./routes/chat"));
 app.get("/api/health", (req,res) => res.json({ status:"ok" }));
-app.use("/media", express.static(path.join(__dirname, "..", "data", "media")));
+app.use("/media", express.static(path.join(__dirname, "..", "data", "media"), {
+  etag: true,
+  maxAge: "1d",
+}));
 
 /* ── RSS Feed ── */
 function esc(str) { return (str||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
@@ -237,7 +240,21 @@ if (process.env.NODE_ENV === "production") {
   const dist = path.join(__dirname, "..", "client", "dist");
   const indexHtml = fs.readFileSync(path.join(dist, "index.html"), "utf-8");
   const renderHtml = (meta = "") => indexHtml.replace("</head>", `${meta}\n</head>`);
-  app.use(express.static(dist, { index:false }));
+  app.use(express.static(dist, {
+    index:false,
+    etag:true,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".html")) {
+        res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+        return;
+      }
+      if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        return;
+      }
+      res.setHeader("Cache-Control", "public, max-age=3600");
+    },
+  }));
 
   if (INDEXNOW_KEY) {
     app.get(`/${INDEXNOW_KEY}.txt`, (req, res) => {
