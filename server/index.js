@@ -22,6 +22,7 @@ const SITE_DESC = "Annotated Shakespeare — read, discuss, and explore the work
 const GOOGLE_VERIFICATION = (process.env.GOOGLE_SITE_VERIFICATION || "").replace(/^google-site-verification=/, "");
 const BING_VERIFICATION = (process.env.BING_SITE_VERIFICATION || "").replace(/^msvalidate\.01=/, "");
 const STATIC_SOCIAL_IMAGE = process.env.SOCIAL_IMAGE_URL || process.env.OG_IMAGE_URL || "";
+const DEFAULT_SOCIAL_IMAGE = "/social-card.png";
 
 if (process.env.NODE_ENV === "production") {
   // Required so secure session cookies survive TLS termination at the reverse proxy.
@@ -111,8 +112,13 @@ function absoluteSocialImage(raw) {
   if (!raw) return "";
   return raw.startsWith("http") ? raw : `${SITE_URL}${raw}`;
 }
+function isSvgImage(raw) {
+  return /\.svg(?:[?#].*)?$/i.test(String(raw || "").trim());
+}
 function socialImageUrl(preferred = "", title = SITE_NAME, subtitle = SITE_DESC) {
-  return absoluteSocialImage(preferred || STATIC_SOCIAL_IMAGE) || socialCardUrl(title, subtitle);
+  const configured = preferred || STATIC_SOCIAL_IMAGE;
+  const safeConfigured = configured && !isSvgImage(configured) ? configured : "";
+  return absoluteSocialImage(safeConfigured || DEFAULT_SOCIAL_IMAGE) || socialCardUrl(title, subtitle);
 }
 function socialImageMeta(imageUrl, alt = SITE_NAME) {
   return `
@@ -122,6 +128,7 @@ function socialImageMeta(imageUrl, alt = SITE_NAME) {
     <meta property="og:image:alt" content="${esc(alt)}" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="${esc(imageUrl)}" />
+    <meta name="twitter:image:alt" content="${esc(alt)}" />
   `;
 }
 function defaultMeta(url = SITE_URL) {
