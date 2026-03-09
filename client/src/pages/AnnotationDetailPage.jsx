@@ -7,6 +7,7 @@ import ReportButton from "../components/ReportButton";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import { parsePlayShakespeareXML } from "../lib/textParser";
+import { preservedAnnotationTextStyle, quotedExcerpt, quotedText } from "../lib/annotationFormat";
 
 const ANNOT_TYPES = [
   { label:"Gloss", icon:"📖", color:"var(--gold-light)" },
@@ -300,12 +301,12 @@ export default function AnnotationDetailPage() {
         </div>
 
         {ann.selected_text && (
-          <div style={{ fontStyle:"italic", color:"var(--text-muted)", fontSize:16, marginBottom:10, padding:"8px 12px", background:"var(--bg)", borderRadius:4, fontFamily:"var(--font-fell)" }}>
-            "{ann.selected_text}"
+          <div style={{ fontStyle:"italic", color:"var(--text-muted)", fontSize:16, marginBottom:10, padding:"8px 12px", background:"var(--bg)", borderRadius:4, fontFamily:"var(--font-fell)", ...preservedAnnotationTextStyle }}>
+            {quotedText(ann.selected_text)}
           </div>
         )}
 
-        <div style={{ fontSize:18, lineHeight:1.85, fontFamily:"var(--font-fell)" }}>
+        <div style={{ fontSize:18, lineHeight:1.85, fontFamily:"var(--font-fell)", ...preservedAnnotationTextStyle }}>
           {ann.note}
         </div>
 
@@ -362,7 +363,7 @@ export default function AnnotationDetailPage() {
             </div>
             <div style={{ display:"grid", gap:10, marginBottom:12 }}>
               <div style={{ fontSize:13, color:"var(--text-light)" }}>
-                Source: <strong>{ann.work_title}</strong> · "{ann.selected_text || ann.note.slice(0,80)}"
+                Source: <strong>{ann.work_title}</strong> · {quotedExcerpt(ann.selected_text || ann.note, 80)}
               </div>
               <select className="input" value={parallelTargetSlug} onChange={async e => {
                 const v = e.target.value;
@@ -445,7 +446,7 @@ export default function AnnotationDetailPage() {
                   {s.status.toUpperCase()}
                 </span>
               </div>
-              <div style={{ fontSize:15, lineHeight:1.7, fontFamily:"var(--font-fell)", padding:"8px 10px", background:"var(--bg)", borderRadius:4, marginBottom:4 }}>
+              <div style={{ fontSize:15, lineHeight:1.7, fontFamily:"var(--font-fell)", padding:"8px 10px", background:"var(--bg)", borderRadius:4, marginBottom:4, ...preservedAnnotationTextStyle }}>
                 {s.suggestedNote}
               </div>
               {s.reason && <div style={{ fontSize:13, color:"var(--text-light)", fontStyle:"italic" }}>Reason: {s.reason}</div>}

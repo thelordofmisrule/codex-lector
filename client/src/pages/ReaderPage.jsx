@@ -5,6 +5,7 @@ import { works as worksApi, annotations as annotsApi, discussions as discApi, bo
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import { parsePlayShakespeareXML } from "../lib/textParser";
+import { preservedAnnotationTextStyle, quotedExcerpt } from "../lib/annotationFormat";
 import ThreadedComments from "../components/ThreadedComments";
 import WordLookup from "../components/WordLookup";
 
@@ -73,8 +74,8 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
           </span>
         )}
       </div>
-      {annot.selected_text && <div style={{ fontStyle:"italic", color:"var(--text-muted)", fontSize: compact ? 12 : 13, marginBottom:2 }}>"{annot.selected_text.slice(0,50)}{annot.selected_text.length>50?"…":""}"</div>}
-      <div style={{ color:"var(--text)" }}>
+      {annot.selected_text && <div style={{ fontStyle:"italic", color:"var(--text-muted)", fontSize: compact ? 12 : 13, marginBottom:2, ...preservedAnnotationTextStyle }}>{quotedExcerpt(annot.selected_text, 50)}</div>}
+      <div style={{ color:"var(--text)", ...preservedAnnotationTextStyle }}>
         {isLong && !expanded
           ? <>{annot.note.slice(0,60)}… <span style={{ color:"var(--accent)", fontSize:12, fontFamily:"var(--font-display)" }}>[more]</span></>
           : annot.note

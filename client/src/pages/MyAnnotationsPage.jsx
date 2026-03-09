@@ -4,6 +4,7 @@ import { useAuth } from "../lib/AuthContext";
 import { annotations as api } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
+import { preservedAnnotationTextStyle, quotedExcerpt } from "../lib/annotationFormat";
 
 const ANNOT_TYPES = [
   { label:"Gloss", icon:"📖", color:"var(--gold-light)" },
@@ -129,8 +130,8 @@ export default function MyAnnotationsPage() {
                       <button className="btn btn-ghost" style={{ fontSize:11, padding:"2px 6px", color:"var(--danger)" }} onClick={()=>deleteAnnot(a.id)}>Delete</button>
                     </div>
                   </div>
-                  {a.selected_text && <div style={{ fontStyle:"italic", color:"var(--text-muted)", fontSize:13, marginBottom:3 }}>"{a.selected_text.slice(0,80)}{a.selected_text.length>80?"…":""}"</div>}
-                  <div style={{ fontSize:14, color:"var(--text)", fontFamily:"var(--font-fell)", lineHeight:1.6 }}>{a.note}</div>
+                  {a.selected_text && <div style={{ fontStyle:"italic", color:"var(--text-muted)", fontSize:13, marginBottom:3, ...preservedAnnotationTextStyle }}>{quotedExcerpt(a.selected_text, 80)}</div>}
+                  <div style={{ fontSize:14, color:"var(--text)", fontFamily:"var(--font-fell)", lineHeight:1.6, ...preservedAnnotationTextStyle }}>{a.note}</div>
                 </div>
               );
             })}

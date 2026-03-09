@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { layers as api } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
+import { preservedAnnotationTextStyle, quotedExcerpt } from "../lib/annotationFormat";
 
 const ANNOT_TYPES = [
   { label:"Gloss", icon:"📖", color:"var(--gold-light)" },
@@ -80,8 +81,8 @@ export default function LayerDetailPage() {
                   <span style={{ fontSize:11, fontFamily:"var(--font-display)", letterSpacing:1, textTransform:"uppercase", color:type.color }}>
                     {type.icon} {type.label}
                   </span>
-                  {a.selected_text && <div style={{ fontStyle:"italic", color:"var(--text-muted)", fontSize:13, marginTop:2 }}>"{a.selected_text.slice(0,80)}{a.selected_text.length>80?"…":""}"</div>}
-                  <div style={{ fontSize:14, color:"var(--text)", fontFamily:"var(--font-fell)", lineHeight:1.6, marginTop:2 }}>{a.note}</div>
+                  {a.selected_text && <div style={{ fontStyle:"italic", color:"var(--text-muted)", fontSize:13, marginTop:2, ...preservedAnnotationTextStyle }}>{quotedExcerpt(a.selected_text, 80)}</div>}
+                  <div style={{ fontSize:14, color:"var(--text)", fontFamily:"var(--font-fell)", lineHeight:1.6, marginTop:2, ...preservedAnnotationTextStyle }}>{a.note}</div>
                 </div>
               );
             })}
