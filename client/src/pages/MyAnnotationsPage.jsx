@@ -4,7 +4,7 @@ import { useAuth } from "../lib/AuthContext";
 import { annotations as api } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
-import { preservedAnnotationTextStyle, quotedExcerpt } from "../lib/annotationFormat";
+import { preservedAnnotationTextStyle, quotedExcerpt, smartenAnnotationText } from "../lib/annotationFormat";
 
 const ANNOT_TYPES = [
   { label:"Gloss", icon:"📖", color:"var(--gold-light)" },
@@ -131,7 +131,7 @@ export default function MyAnnotationsPage() {
                     </div>
                   </div>
                   {a.selected_text && <div style={{ fontStyle:"italic", color:"var(--text-muted)", fontSize:13, marginBottom:3, ...preservedAnnotationTextStyle }}>{quotedExcerpt(a.selected_text, 80)}</div>}
-                  <div style={{ fontSize:14, color:"var(--text)", fontFamily:"var(--font-fell)", lineHeight:1.6, ...preservedAnnotationTextStyle }}>{a.note}</div>
+                  <div style={{ fontSize:14, color:"var(--text)", fontFamily:"var(--font-fell)", lineHeight:1.6, ...preservedAnnotationTextStyle }}>{smartenAnnotationText(a.note)}</div>
                 </div>
               );
             })}

@@ -7,7 +7,7 @@ import ReportButton from "../components/ReportButton";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import { parsePlayShakespeareXML } from "../lib/textParser";
-import { preservedAnnotationTextStyle, quotedExcerpt, quotedText } from "../lib/annotationFormat";
+import { preservedAnnotationTextStyle, quotedExcerpt, quotedText, smartenAnnotationText } from "../lib/annotationFormat";
 
 const ANNOT_TYPES = [
   { label:"Gloss", icon:"📖", color:"var(--gold-light)" },
@@ -307,7 +307,7 @@ export default function AnnotationDetailPage() {
         )}
 
         <div style={{ fontSize:18, lineHeight:1.85, fontFamily:"var(--font-fell)", ...preservedAnnotationTextStyle }}>
-          {ann.note}
+          {smartenAnnotationText(ann.note)}
         </div>
 
         <div style={{ fontSize:12, color:"var(--text-light)", marginTop:10 }}>
@@ -447,7 +447,7 @@ export default function AnnotationDetailPage() {
                 </span>
               </div>
               <div style={{ fontSize:15, lineHeight:1.7, fontFamily:"var(--font-fell)", padding:"8px 10px", background:"var(--bg)", borderRadius:4, marginBottom:4, ...preservedAnnotationTextStyle }}>
-                {s.suggestedNote}
+                {smartenAnnotationText(s.suggestedNote)}
               </div>
               {s.reason && <div style={{ fontSize:13, color:"var(--text-light)", fontStyle:"italic" }}>Reason: {s.reason}</div>}
               {isAdmin && s.status==="pending" && (
