@@ -6,6 +6,8 @@ import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import { parsePlayShakespeareXML } from "../lib/textParser";
 import { preservedAnnotationTextStyle, quotedExcerpt, smartenAnnotationText } from "../lib/annotationFormat";
+import { findPlaceAwarenessMatch, warmPlaceAwarenessIndex } from "../lib/placeAwareness";
+import PlaceAwareness from "../components/PlaceAwareness";
 import ThreadedComments from "../components/ThreadedComments";
 import WordLookup from "../components/WordLookup";
 
@@ -282,10 +284,12 @@ export default function ReaderPage() {
   });
   const [bookmark, setBookmark] = useState(null);
   const [wordLookup, setWordLookup] = useState(null); // { word, position:{x,y} }
+  const [placeAwareness, setPlaceAwareness] = useState(null); // { placeSlug, initialPlace, matchedTerm, selectionText, lineId, position }
   const [myLayers, setMyLayers] = useState([]);
   const [showReaderHint, setShowReaderHint] = useState(() => localStorage.getItem("codex-reader-hint-dismissed") !== "true");
   const progressRef = useRef({ maxLine:0, total:0, slug:null });
   const trackedSlugRef = useRef("");
+  const selectionLookupRef = useRef(0);
   const resumeLine = Math.max(0, parseInt(new URLSearchParams(location.search).get("line") || "0", 10) || 0);
   const copyPageLink = async () => {
     try {
@@ -342,6 +346,14 @@ export default function ReaderPage() {
   }, [work?.id, slug]);
 
   useEffect(() => {
+    if (!work?.id) return undefined;
+    const timer = setTimeout(() => {
+      warmPlaceAwarenessIndex().catch(() => {});
+    }, 2200);
+    return () => clearTimeout(timer);
+  }, [work?.id]);
+
+  useEffect(() => {
     const onKeyDown = (e) => {
       const tag = e.target?.tagName;
       const editingField = tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable;
@@ -354,17 +366,18 @@ export default function ReaderPage() {
         e.preventDefault();
         setBookmarkHere();
       } else if (e.key === "Escape") {
-        if (wordLookup || tooltip) {
+        if (wordLookup || tooltip || placeAwareness) {
           e.preventDefault();
           setWordLookup(null);
           setTooltip(null);
+          setPlaceAwareness(null);
           window.getSelection()?.removeAllRanges();
         }
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigate, user, wordLookup, tooltip, slug, getCurrentViewportLineNumber]);
+  }, [navigate, user, wordLookup, tooltip, placeAwareness, slug, getCurrentViewportLineNumber]);
 
   useEffect(() => {
     setLoading(true);
@@ -446,15 +459,42 @@ export default function ReaderPage() {
     }, 250);
   }, [loading, slug, resumeLine, work?.id]);
 
-  const handleSelect = useCallback(() => {
+  const handleSelect = useCallback(async () => {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
     const text = sel.toString().trim();
     if (text.length < 2) return;
+    const lookupToken = ++selectionLookupRef.current;
     const rect = sel.getRangeAt(0).getBoundingClientRect();
     let node = sel.getRangeAt(0).startContainer;
     while (node && !node.dataset?.lineid) node = node.parentElement;
     const lineId = node?.dataset?.lineid || "u";
+    const position = { x:rect.left+rect.width/2, y:rect.bottom };
+    const tokenCount = text.split(/\s+/).filter(Boolean).length;
+
+    if (/[A-Za-z]/.test(text) && text.length <= 80 && tokenCount <= 5) {
+      try {
+        const match = await findPlaceAwarenessMatch(text);
+        if (selectionLookupRef.current !== lookupToken) return;
+        if (match) {
+          setTooltip(null);
+          setWordLookup(null);
+          setPlaceAwareness({
+            placeSlug: match.slug,
+            initialPlace: match.place,
+            matchedTerm: match.matchedTerm,
+            selectionText: text,
+            lineId,
+            position,
+          });
+          return;
+        }
+      } catch {
+        // Ignore place lookup failures and fall back to the standard reader tools.
+      }
+    }
+
+    setPlaceAwareness(null);
 
     // Single word with no spaces → word lookup (works for everyone)
     if (!text.includes(" ") && text.length < 30) {
@@ -462,13 +502,14 @@ export default function ReaderPage() {
         word:text.toLowerCase().replace(/[^a-z']/g,""),
         selectedText:text,
         lineId,
-        position:{ x:rect.left+rect.width/2, y:rect.bottom },
+        position,
       });
       return;
     }
 
     // Multi-word selection → annotation (requires sign-in)
     if (!user) return;
+    setWordLookup(null);
     setTooltip({ x:rect.left+rect.width/2-160, y:rect.bottom, text, lineId });
   }, [user]);
 
@@ -602,6 +643,7 @@ export default function ReaderPage() {
           <div style={{ display:"grid", gap:4, fontSize:14, color:"var(--text-muted)", lineHeight:1.6 }}>
             <div>Select a phrase to annotate it.</div>
             <div>Click a single word for lookup, then choose to annotate if you want.</div>
+            <div>Select a place name to open Place Awareness.</div>
             <div>Press <strong>b</strong> to bookmark your place.</div>
             <div>Switch annotation layers or open the discussion below the text.</div>
           </div>
@@ -723,6 +765,26 @@ export default function ReaderPage() {
               lineId:wordLookup.lineId || "u",
             });
             setWordLookup(null);
+          } : undefined}
+        />
+      )}
+      {placeAwareness && (
+        <PlaceAwareness
+          placeSlug={placeAwareness.placeSlug}
+          initialPlace={placeAwareness.initialPlace}
+          matchedTerm={placeAwareness.matchedTerm}
+          selectionText={placeAwareness.selectionText}
+          workSlug={slug}
+          position={placeAwareness.position}
+          onClose={()=>{setPlaceAwareness(null);window.getSelection()?.removeAllRanges();}}
+          onAnnotate={user ? () => {
+            setTooltip({
+              x:placeAwareness.position.x - 160,
+              y:placeAwareness.position.y,
+              text:placeAwareness.selectionText,
+              lineId:placeAwareness.lineId || "u",
+            });
+            setPlaceAwareness(null);
           } : undefined}
         />
       )}

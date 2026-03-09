@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { places as placesApi, works as worksApi } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
@@ -131,18 +131,21 @@ function buildCreatePayloadFromDraft(draft) {
 
 export default function PlacesPage() {
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedPlaceParam = searchParams.get("place") || "";
+  const requestedWorkParam = searchParams.get("work") || "";
   const { user } = useAuth();
   const { confirm } = useConfirm();
   const toast = useToast();
 
   const [works, setWorks] = useState([]);
   const [places, setPlaces] = useState([]);
-  const [selectedSlug, setSelectedSlug] = useState("");
+  const [selectedSlug, setSelectedSlug] = useState(() => requestedPlaceParam);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [citations, setCitations] = useState([]);
   const [citationExclusions, setCitationExclusions] = useState([]);
   const [citationExclusionsLoading, setCitationExclusionsLoading] = useState(false);
-  const [workFilter, setWorkFilter] = useState("");
+  const [workFilter, setWorkFilter] = useState(() => requestedWorkParam);
   const [typeFilter, setTypeFilter] = useState("all");
   const [countryFilter, setCountryFilter] = useState("all");
   const [searchFilter, setSearchFilter] = useState("");
@@ -175,6 +178,13 @@ export default function PlacesPage() {
   const [editor, setEditor] = useState(() => placeDraftFromPlace(null));
 
   useEffect(() => {
+    setWorkFilter(prev => prev === requestedWorkParam ? prev : requestedWorkParam);
+    if (requestedPlaceParam) {
+      setSelectedSlug(prev => prev === requestedPlaceParam ? prev : requestedPlaceParam);
+    }
+  }, [requestedPlaceParam, requestedWorkParam]);
+
+  useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError("");
@@ -188,6 +198,7 @@ export default function PlacesPage() {
       const nextPlaces = placesData.places || [];
       setPlaces(nextPlaces);
       setSelectedSlug(prev => {
+        if (requestedPlaceParam && nextPlaces.some(p => p.slug === requestedPlaceParam)) return requestedPlaceParam;
         if (prev && nextPlaces.some(p => p.slug === prev)) return prev;
         return nextPlaces[0]?.slug || "";
       });
@@ -201,7 +212,7 @@ export default function PlacesPage() {
     });
 
     return () => { cancelled = true; };
-  }, [workFilter]);
+  }, [requestedPlaceParam, workFilter]);
 
   useEffect(() => {
     if (!selectedSlug) {
