@@ -13,6 +13,7 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
+const { rebuildSearchIndex } = require("../server/lib/workSearchIndex");
 
 const DB_PATH = path.join(__dirname, "..", "data", "codex.db");
 if (!fs.existsSync(DB_PATH)) { console.error("Run `npm run setup` first."); process.exit(1); }
@@ -219,6 +220,10 @@ function main() {
   const cats = db.prepare("SELECT category, COUNT(*) as n FROM works GROUP BY category ORDER BY category").all();
   console.log("By category:");
   for (const c of cats) console.log(`  ${c.category}: ${c.n}`);
+  console.log();
+
+  const searchSummary = rebuildSearchIndex(db, { logger: console });
+  console.log(`Search index rebuilt: ${searchSummary.lines} searchable lines across ${searchSummary.works} works.${searchSummary.ftsEnabled ? " FTS enabled." : " FTS unavailable; using fallback search."}`);
   console.log();
 
   db.close();

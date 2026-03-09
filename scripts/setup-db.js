@@ -6,6 +6,7 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
+const { rebuildSearchIndex } = require("../server/lib/workSearchIndex");
 
 const dir = path.join(__dirname, "..", "data");
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -610,6 +611,9 @@ if (bootstrapAdminPassword && !admin) {
 } else if (!bootstrapAdminPassword && !admin) {
   console.log("No bootstrap admin created. Sign in via OAuth, then run node scripts/set-admin.js <username> if needed.");
 }
+
+const searchSummary = rebuildSearchIndex(db, { logger: console });
+console.log(`Search index ready: ${searchSummary.lines} searchable lines across ${searchSummary.works} works.${searchSummary.ftsEnabled ? " FTS enabled." : " FTS unavailable; using fallback search."}`);
 
 console.log("Database setup complete.");
 db.close();
