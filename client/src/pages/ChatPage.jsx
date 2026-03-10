@@ -226,8 +226,13 @@ export default function ChatPage() {
   }, [isPaneNearBottom]);
 
   const handlePaneScroll = useCallback(() => {
-    if (isPaneNearBottom()) setShowJumpToLatest(false);
-  }, [isPaneNearBottom]);
+    if (!isPaneNearBottom()) return;
+    setShowJumpToLatest(false);
+    const latestMessageId = messages[messages.length - 1]?.id || roomInfo.lastMessageId || 0;
+    if (latestMessageId) {
+      void markCurrentRoomSeen(roomInfo, latestMessageId);
+    }
+  }, [isPaneNearBottom, markCurrentRoomSeen, messages, roomInfo]);
 
   const syncRoomCollections = useCallback((room, options = {}) => {
     if (!room?.key) return;
@@ -379,7 +384,7 @@ export default function ChatPage() {
           markUnreadIfSubscribed: true,
         }));
         setMessages((prev) => mergeMessages(prev, [payload.message]));
-        requestAnimationFrame(() => scrollToBottom(false));
+        requestAnimationFrame(() => scrollToBottom(shouldAutoRead));
         if (shouldAutoRead) {
           void markCurrentRoomSeen(payload.room, payload.message.id);
         } else {
@@ -780,7 +785,8 @@ export default function ChatPage() {
                   title="Jump to latest messages"
                   style={{
                     position: "absolute",
-                    right: 18,
+                    left: "50%",
+                    transform: "translateX(-50%)",
                     bottom: 18,
                     width: 48,
                     height: 48,
