@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import EvaLabel from "../components/EvaLabel";
 import { works as worksApi } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
 import { buildPeopleGraphFromXML, buildPeopleNetwork } from "../lib/peopleGraph";
@@ -811,10 +812,10 @@ export default function PeoplePage() {
     <div className="animate-in" style={{ maxWidth: 1280, margin: "0 auto", padding: "36px 24px 80px" }}>
       <div style={{ textAlign: "center", marginBottom: 24 }}>
         <div style={{ fontFamily: "var(--font-display)", letterSpacing: 2, color: "var(--gold)", fontSize: 12, textTransform: "uppercase", marginBottom: 8 }}>
-          People
+          <EvaLabel jp="人物" className="eva-bilingual--meta">People</EvaLabel>
         </div>
         <h1 style={{ fontFamily: "var(--font-display)", fontSize: 34, color: "var(--accent)", fontWeight: 400, letterSpacing: 2, marginBottom: 8 }}>
-          People in the Plays
+          <EvaLabel jp="登場人物網" className="eva-bilingual--hero">People in the Plays</EvaLabel>
         </h1>
         <p style={{ maxWidth: 760, margin: "0 auto", color: "var(--text-muted)", lineHeight: 1.7, fontSize: 16 }}>
           Explore who appears together, who exchanges turns, and how a play’s social structure shifts by act and scene.

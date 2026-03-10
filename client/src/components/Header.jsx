@@ -4,12 +4,25 @@ import { useAuth } from "../lib/AuthContext";
 import { auth as authApi, chat as chatApi, notifications as notifApi } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
 import AuthModal from "./AuthModal";
+import EvaLabel from "./EvaLabel";
 
 const THEME_OPTIONS = [
   { id:"light", label:"Light", icon:"☀️", note:"Parchment and candlelight" },
   { id:"dark", label:"Dark", icon:"🌙", note:"Night reading" },
   { id:"eva", label:"Evangelion GUI", icon:"GUI", note:"NERV command deck" },
 ];
+
+const EVA_NAV_LABELS = {
+  Works: "作品",
+  People: "人物",
+  Places: "地理",
+  Chat: "通信室",
+  Year: "年次",
+  "How To": "案内",
+  Layers: "注釈層",
+  Forum: "談話室",
+  Blog: "記録帳",
+};
 
 export default function Header() {
   const { user, authReady, logout, themeMode, setThemeMode } = useAuth();
@@ -128,10 +141,15 @@ export default function Header() {
   }, []);
 
   const renderNavLabel = (label) => {
-    if (label !== "Chat") return label;
+    const textLabel = label === "🔍" ? label : (
+      themeMode === "eva" && EVA_NAV_LABELS[label]
+        ? <EvaLabel jp={EVA_NAV_LABELS[label]} className="eva-bilingual--nav">{label}</EvaLabel>
+        : label
+    );
+    if (label !== "Chat") return textLabel;
     return (
       <span style={{ display:"inline-flex", alignItems:"center", gap:7 }}>
-        <span>{label}</span>
+        <span>{textLabel}</span>
         <span
           aria-hidden="true"
           style={{
@@ -204,6 +222,7 @@ export default function Header() {
             >
               <span className="eva-brand-word" style={{ fontFamily:"var(--font-display)", fontSize:20, fontWeight:700, color:"var(--accent)", letterSpacing:1 }}>Codex</span>
               <span className="eva-brand-subword" style={{ fontFamily:"var(--font-display)", fontSize:12, color:"var(--gold)", letterSpacing:3, textTransform:"uppercase" }}>Lector</span>
+              <span className="eva-brand-jp" lang="ja">コデックス・レクトル</span>
             </div>
           </div>
 
@@ -242,7 +261,11 @@ export default function Header() {
                 <button className="btn btn-ghost" aria-label="Toggle notifications" onClick={()=>{setShowNotifs(!showNotifs);setMenu(false);setShowMobileNav(false);setShowThemes(false);}} title="Notifications" style={{
                   fontSize:18, padding:"6px 10px", position:"relative",
                 }}>
-                  🔔
+                  {themeMode === "eva" ? (
+                    <span className="eva-alert-chip">ALRT</span>
+                  ) : (
+                    "🔔"
+                  )}
                   {unread > 0 && <span style={{ position:"absolute", top:2, right:2, width:16, height:16, borderRadius:"50%", background:"var(--danger)", color:"#fff", fontSize:10, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center" }}>{unread > 9 ? "9+" : unread}</span>}
                 </button>
                 {showNotifs && <div onClick={()=>setShowNotifs(false)} style={{ position:"fixed", inset:0, zIndex:199 }} />}

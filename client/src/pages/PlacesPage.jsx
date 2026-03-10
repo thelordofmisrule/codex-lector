@@ -4,6 +4,7 @@ import { useAuth } from "../lib/AuthContext";
 import { places as placesApi, works as worksApi } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
+import EvaLabel from "../components/EvaLabel";
 import PlacesMap from "../components/PlacesMap";
 
 function prettyCategory(cat) {
@@ -615,10 +616,10 @@ export default function PlacesPage() {
     <div className="animate-in" style={{ maxWidth: 1240, margin: "0 auto", padding: "40px 24px 56px" }}>
       <div style={{ marginBottom: 28 }}>
         <div style={{ fontSize: 13, fontFamily: "var(--font-display)", color: "var(--gold)", letterSpacing: 4, textTransform: "uppercase", marginBottom: 8 }}>
-          Shakespearean Geography
+          <EvaLabel jp="地理情報" className="eva-bilingual--meta">Shakespearean Geography</EvaLabel>
         </div>
         <h1 style={{ fontFamily: "var(--font-display)", fontSize: 36, fontWeight: 400, color: "var(--accent)", letterSpacing: 2, marginBottom: 12 }}>
-          Places in the Works
+          <EvaLabel jp="作品地理" className="eva-bilingual--hero">Places in the Works</EvaLabel>
         </h1>
         <p style={{ maxWidth: 780, lineHeight: 1.8, color: "var(--text-muted)", fontFamily: "var(--font-body)", margin: 0 }}>
           Explore Shakespearean settings across cities, regions, rivers, battlefields, streets, and imagined locations. The map uses live
