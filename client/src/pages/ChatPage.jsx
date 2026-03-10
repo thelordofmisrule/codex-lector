@@ -225,15 +225,6 @@ export default function ChatPage() {
     }
   }, [isPaneNearBottom]);
 
-  const handlePaneScroll = useCallback(() => {
-    if (!isPaneNearBottom()) return;
-    setShowJumpToLatest(false);
-    const latestMessageId = messages[messages.length - 1]?.id || roomInfo.lastMessageId || 0;
-    if (latestMessageId) {
-      void markCurrentRoomSeen(roomInfo, latestMessageId);
-    }
-  }, [isPaneNearBottom, markCurrentRoomSeen, messages, roomInfo]);
-
   const syncRoomCollections = useCallback((room, options = {}) => {
     if (!room?.key) return;
     if (room.kind === "work" && room.workSlug) {
@@ -270,6 +261,15 @@ export default function ChatPage() {
       }
     } catch {}
   }, [emitChatSummaryRefresh, syncRoomInfo, user]);
+
+  const handlePaneScroll = useCallback(() => {
+    if (!isPaneNearBottom()) return;
+    setShowJumpToLatest(false);
+    const latestMessageId = messages[messages.length - 1]?.id || roomInfo.lastMessageId || 0;
+    if (latestMessageId) {
+      void markCurrentRoomSeen(roomInfo, latestMessageId);
+    }
+  }, [isPaneNearBottom, markCurrentRoomSeen, messages, roomInfo]);
 
   const loadSidebar = useCallback(async () => {
     if (!user) {
