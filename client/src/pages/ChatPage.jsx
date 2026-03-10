@@ -181,6 +181,7 @@ export default function ChatPage() {
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [sending, setSending] = useState(false);
   const [savingSubscription, setSavingSubscription] = useState(false);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [deletingId, setDeletingId] = useState("");
   const [streamState, setStreamState] = useState("connecting");
   const [error, setError] = useState("");
@@ -222,6 +223,10 @@ export default function ChatPage() {
     if (force || nearBottom) {
       pane.scrollTop = pane.scrollHeight;
     }
+  }, [isPaneNearBottom]);
+
+  const handlePaneScroll = useCallback(() => {
+    if (isPaneNearBottom()) setShowJumpToLatest(false);
   }, [isPaneNearBottom]);
 
   const syncRoomCollections = useCallback((room, options = {}) => {
@@ -297,6 +302,7 @@ export default function ChatPage() {
     }
     setLoadingMessages(true);
     setError("");
+    setShowJumpToLatest(false);
     try {
       const data = await chatApi.messages(selectedWorkSlug ? "" : activeRoomKey, selectedWorkSlug, 90);
       setRoomInfo(data.room || FALLBACK_SPECIAL_ROOMS[0]);
@@ -376,6 +382,8 @@ export default function ChatPage() {
         requestAnimationFrame(() => scrollToBottom(false));
         if (shouldAutoRead) {
           void markCurrentRoomSeen(payload.room, payload.message.id);
+        } else {
+          setShowJumpToLatest(true);
         }
       } catch {}
     };
@@ -427,6 +435,7 @@ export default function ChatPage() {
       const data = await chatApi.post(body, selectedWorkSlug ? "" : activeRoomKey, selectedWorkSlug);
       if (data.room) syncRoomInfo(data.room, { forceRead: true, lastSeenMessageId: data.message?.id || data.room.lastMessageId || 0 });
       setMessages((prev) => mergeMessages(prev, [data.message]));
+      setShowJumpToLatest(false);
       setCompose("");
       localStorage.removeItem(draftKey);
       requestAnimationFrame(() => scrollToBottom(true));
@@ -478,6 +487,14 @@ export default function ChatPage() {
   };
 
   const roomStatusLabel = streamState === "live" ? "Live" : streamState === "reconnecting" ? "Reconnecting" : "Connecting";
+  const jumpToLatest = useCallback(() => {
+    const latestMessageId = messages[messages.length - 1]?.id || roomInfo.lastMessageId || 0;
+    setShowJumpToLatest(false);
+    requestAnimationFrame(() => scrollToBottom(true));
+    if (latestMessageId) {
+      void markCurrentRoomSeen(roomInfo, latestMessageId);
+    }
+  }, [markCurrentRoomSeen, messages, roomInfo, scrollToBottom]);
 
   return (
     <>
@@ -721,37 +738,67 @@ export default function ChatPage() {
                   </div>
                 )}
 
-            <div
-              ref={messagePaneRef}
-              style={{
-                border: "1px solid var(--border-light)",
-                borderRadius: 16,
-                background: "var(--bg)",
-                minHeight: 420,
-                maxHeight: 620,
-                overflowY: "auto",
-                padding: 14,
-                display: "grid",
-                gap: 10,
-                marginBottom: 14,
-              }}
-            >
-              {loadingMessages ? (
-                <div style={{ padding: 40, textAlign: "center" }}><div className="spinner" /></div>
-              ) : messages.length === 0 ? (
-                <div style={{ padding: 36, textAlign: "center", color: "var(--text-light)", lineHeight: 1.7 }}>
-                  No messages yet. Start the room if you want to be first.
-                </div>
-              ) : (
-                messages.map((message) => (
-                  <MessageCard
-                    key={message.id}
-                    message={message}
-                    currentUser={user}
-                    deletingId={deletingId}
-                    onDelete={deleteMessage}
-                  />
-                ))
+            <div style={{ position: "relative", marginBottom: 14 }}>
+              <div
+                ref={messagePaneRef}
+                onScroll={handlePaneScroll}
+                style={{
+                  border: "1px solid var(--border-light)",
+                  borderRadius: 16,
+                  background: "var(--bg)",
+                  minHeight: 420,
+                  maxHeight: 620,
+                  overflowY: "auto",
+                  padding: 14,
+                  display: "grid",
+                  gap: 10,
+                }}
+              >
+                {loadingMessages ? (
+                  <div style={{ padding: 40, textAlign: "center" }}><div className="spinner" /></div>
+                ) : messages.length === 0 ? (
+                  <div style={{ padding: 36, textAlign: "center", color: "var(--text-light)", lineHeight: 1.7 }}>
+                    No messages yet. Start the room if you want to be first.
+                  </div>
+                ) : (
+                  messages.map((message) => (
+                    <MessageCard
+                      key={message.id}
+                      message={message}
+                      currentUser={user}
+                      deletingId={deletingId}
+                      onDelete={deleteMessage}
+                    />
+                  ))
+                )}
+              </div>
+              {showJumpToLatest && (
+                <button
+                  className="btn"
+                  onClick={jumpToLatest}
+                  aria-label="Jump to latest messages"
+                  title="Jump to latest messages"
+                  style={{
+                    position: "absolute",
+                    right: 18,
+                    bottom: 18,
+                    width: 48,
+                    height: 48,
+                    borderRadius: "50%",
+                    border: "1px solid rgba(255,255,255,0.22)",
+                    background: "rgba(20, 24, 24, 0.62)",
+                    color: "#fff",
+                    backdropFilter: "blur(10px)",
+                    boxShadow: "0 14px 28px rgba(0,0,0,0.18)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 22,
+                    zIndex: 2,
+                  }}
+                >
+                  ↓
+                </button>
               )}
             </div>
 
