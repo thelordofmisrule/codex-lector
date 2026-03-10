@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import EvaLabel from "../components/EvaLabel";
 
 export default function HowToPage() {
   const items = [
@@ -14,10 +13,10 @@ export default function HowToPage() {
     <div className="animate-in" style={{ maxWidth:860, margin:"0 auto", padding:"48px 24px 80px" }}>
       <div style={{ textAlign:"center", marginBottom:30 }}>
         <div style={{ fontSize:13, fontFamily:"var(--font-display)", color:"var(--gold)", letterSpacing:4, textTransform:"uppercase", marginBottom:8 }}>
-          <EvaLabel jp="運用概要" className="eva-bilingual--meta">How Codex Lector Works</EvaLabel>
+          How Codex Lector Works
         </div>
         <h1 style={{ fontFamily:"var(--font-display)", fontSize:40, fontWeight:400, color:"var(--accent)", letterSpacing:2, marginBottom:12 }}>
-          <EvaLabel jp="能動読解" className="eva-bilingual--hero">Read Shakespeare Actively</EvaLabel>
+          Read Shakespeare Actively
         </h1>
         <p style={{ fontFamily:"var(--font-fell)", fontSize:18, fontStyle:"italic", color:"var(--text-muted)", lineHeight:1.7, maxWidth:620, margin:"0 auto" }}>
           Codex Lector is a line-by-line Shakespeare reader built for annotation, comparison, and discussion.

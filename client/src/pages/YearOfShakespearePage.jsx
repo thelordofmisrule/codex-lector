@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import EvaLabel from "../components/EvaLabel";
 import { works as worksApi, progress as progressApi } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import calendarCsv from "../data/year_of_shakespeare_2026_2027_daily.csv?raw";
@@ -290,10 +289,10 @@ export default function YearOfShakespearePage() {
     <div className="animate-in" style={{ maxWidth: 1160, margin: "0 auto", padding: "40px 24px 56px" }}>
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 4, textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
-          <EvaLabel jp="読書計画" className="eva-bilingual--meta">Reading Program</EvaLabel>
+          Reading Program
         </div>
         <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 34, color: "var(--accent)", letterSpacing: 1 }}>
-          <EvaLabel jp="シェイクスピア年次計画" className="eva-bilingual--hero">Year of Shakespeare (2026-2027)</EvaLabel>
+          Year of Shakespeare (2026-2027)
         </h1>
         <p style={{ marginTop: 12, marginBottom: 0, color: "var(--text-muted)", lineHeight: 1.75, maxWidth: 860 }}>
           A daily reading calendar mapped to seasonal arcs, anchor moments, and thematic progression across plays and poems.

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { works as api } from "../lib/api";
-import EvaLabel from "../components/EvaLabel";
 
 const CATS = [
   { key:"tragedy", label:"Tragedies", icon:"🗡" },
@@ -35,12 +34,10 @@ export default function HomePage() {
     <div className="animate-in" style={{ maxWidth:920, margin:"0 auto", padding:"48px 24px" }}>
       {/* Hero */}
       <div style={{ textAlign:"center", marginBottom:48 }}>
-        <div className="eva-readout-meta" style={{ fontSize:13, fontFamily:"var(--font-display)", color:"var(--gold)", letterSpacing:4, textTransform:"uppercase", marginBottom:8 }}>
-          <EvaLabel jp="著作集" className="eva-bilingual--meta">The Works of</EvaLabel>
-        </div>
+        <div className="eva-readout-meta" style={{ fontSize:13, fontFamily:"var(--font-display)", color:"var(--gold)", letterSpacing:4, textTransform:"uppercase", marginBottom:8 }}>The Works of</div>
         <div className="eva-readout-frame" style={{ marginBottom:12, maxWidth:"100%" }}>
           <h1 className="eva-readout" data-readout="William Shakespeare" style={{ fontFamily:"var(--font-display)", fontSize:44, fontWeight:400, color:"var(--accent)", letterSpacing:3, marginBottom:0 }}>
-            <EvaLabel jp="ウィリアム・シェイクスピア" className="eva-bilingual--hero">William Shakespeare</EvaLabel>
+            William Shakespeare
             <span className="eva-readout-cursor" aria-hidden="true" />
           </h1>
         </div>

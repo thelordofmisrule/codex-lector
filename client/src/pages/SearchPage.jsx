@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import EvaLabel from "../components/EvaLabel";
 import { works as api } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
 
@@ -212,9 +211,7 @@ export default function SearchPage() {
   return (
     <div className="animate-in" style={{ maxWidth: 980, margin: "0 auto", padding: "48px 24px 72px" }}>
       <div style={{ maxWidth: 760, marginBottom: 28 }}>
-        <h1 style={{ fontFamily: "var(--font-display)", fontSize: 28, letterSpacing: 2, marginBottom: 6 }}>
-          <EvaLabel jp="本文検索" className="eva-bilingual--hero">Text Search</EvaLabel>
-        </h1>
+        <h1 style={{ fontFamily: "var(--font-display)", fontSize: 28, letterSpacing: 2, marginBottom: 6 }}>Text Search</h1>
         <p style={{ fontFamily: "var(--font-fell)", fontStyle: "italic", color: "var(--text-muted)", fontSize: 15, lineHeight: 1.7, marginBottom: 18 }}>
           {scopedDescription}
         </p>

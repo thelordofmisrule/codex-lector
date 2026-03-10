@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import AuthModal from "../components/AuthModal";
-import EvaLabel from "../components/EvaLabel";
 import ReportButton from "../components/ReportButton";
 import { useAuth } from "../lib/AuthContext";
 import { useConfirm } from "../lib/ConfirmContext";
@@ -541,10 +540,10 @@ export default function ChatPage() {
       <div className="animate-in" style={{ maxWidth: 1240, margin: "0 auto", padding: "20px 24px 24px" }}>
         <div style={{ marginBottom: 18 }}>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 4, textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
-            <EvaLabel jp="通信" className="eva-bilingual--meta">Conversation</EvaLabel>
+            Conversation
           </div>
           <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 32, color: "var(--accent)", letterSpacing: 1.5 }}>
-            <EvaLabel jp="ライブ通信室" className="eva-bilingual--hero">Live Chat</EvaLabel>
+            Live Chat
           </h1>
           <p style={{ marginTop: 8, marginBottom: 0, color: "var(--text-muted)", lineHeight: 1.6, maxWidth: 860 }}>
             Signed-in readers can join the lobby, the shared Year of Shakespeare room, or a live room for any individual work.
