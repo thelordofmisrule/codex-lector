@@ -537,7 +537,7 @@ export default function ChatPage() {
 
   return (
     <>
-      <div className="animate-in" style={{ maxWidth: 1240, margin: "0 auto", padding: "38px 24px 72px" }}>
+      <div className="animate-in" style={{ maxWidth: 1240, margin: "0 auto", padding: "24px 24px 32px" }}>
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 4, textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
             Conversation
@@ -574,7 +574,7 @@ export default function ChatPage() {
           </section>
         ) : (
           <div className="chat-layout">
-            <aside style={{ display: "grid", gap: 16, alignSelf: "start" }}>
+            <aside className="chat-sidebar-shell">
               <div style={{ border: "1px solid var(--border-light)", borderRadius: 16, background: "var(--surface)", padding: 16 }}>
                 <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "var(--accent)", marginBottom: 10 }}>
                   Rooms
@@ -691,8 +691,8 @@ export default function ChatPage() {
           </div>
             </aside>
 
-            <section style={{ minWidth: 0 }}>
-              <div style={{ border: "1px solid var(--border-light)", borderRadius: 18, background: "linear-gradient(180deg, rgba(201,168,76,0.06), rgba(122,30,46,0.03))", padding: 18, boxShadow: "0 14px 30px rgba(0,0,0,0.05)" }}>
+            <section className="chat-room-shell">
+              <div className="chat-room-panel" style={{ border: "1px solid var(--border-light)", borderRadius: 18, background: "linear-gradient(180deg, rgba(201,168,76,0.06), rgba(122,30,46,0.03))", padding: 18, boxShadow: "0 14px 30px rgba(0,0,0,0.05)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap", marginBottom: 14 }}>
                   <div>
                     <div style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--accent)", marginBottom: 6 }}>
@@ -777,16 +777,15 @@ export default function ChatPage() {
                   </div>
                 )}
 
-            <div style={{ position: "relative", marginBottom: 14 }}>
+            <div className="chat-message-stack">
               <div
+                className="chat-message-pane"
                 ref={messagePaneRef}
                 onScroll={handlePaneScroll}
                 style={{
                   border: "1px solid var(--border-light)",
                   borderRadius: 16,
                   background: "var(--bg)",
-                  minHeight: 420,
-                  maxHeight: 620,
                   overflowY: "auto",
                   padding: 14,
                   display: "grid",
