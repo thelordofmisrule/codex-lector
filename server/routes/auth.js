@@ -69,7 +69,10 @@ function oauthCallback(provider) {
   return (req, res, next) => {
     pp.authenticate(provider, { session:false }, (err, user) => {
       const nextPath = consumeOauthNext(req);
-      if (err || !user) return res.redirect(buildFrontendRedirect(nextPath, "failed"));
+      if (err || !user) {
+        console.error(`[auth] ${provider} oauth failed`, err ? err.message : "no user returned");
+        return res.redirect(buildFrontendRedirect(nextPath, "failed"));
+      }
       res.cookie("token", createToken(user), COOKIE);
       res.redirect(buildFrontendRedirect(nextPath, "success"));
     })(req, res, next);

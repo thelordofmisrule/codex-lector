@@ -7,6 +7,7 @@ const db = require("./db");
 
 const AVATAR_COLORS = ["#7A1E2E","#2E5A3C","#1E3A5F","#5C3D6E","#8B6914","#6B3A2E","#2E6B6B","#4A4A6A"];
 const randomColor = () => AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+const OAUTH_BASE_URL = (process.env.SITE_URL || process.env.BASE_URL || "http://localhost:3001").replace(/\/$/, "");
 
 /**
  * Find or create a user from an OAuth profile.
@@ -16,7 +17,6 @@ const randomColor = () => AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS
 function findOrCreateOAuthUser(provider, profile, done) {
   try {
     const oauthId = profile.id;
-    const email = profile.emails?.[0]?.value || null;
     const displayName = profile.displayName || profile.username || "User";
     const avatar = profile.photos?.[0]?.value || null;
 
@@ -24,9 +24,9 @@ function findOrCreateOAuthUser(provider, profile, done) {
     let user = db.prepare("SELECT * FROM users WHERE oauth_provider=? AND oauth_id=?").get(provider, oauthId);
 
     if (user) {
-      // Update avatar and email on each login
-      db.prepare("UPDATE users SET oauth_avatar=COALESCE(?,oauth_avatar), email=COALESCE(?,email) WHERE id=?")
-        .run(avatar, email, user.id);
+      // Keep avatars fresh without expanding the stored OAuth profile.
+      db.prepare("UPDATE users SET oauth_avatar=COALESCE(?,oauth_avatar) WHERE id=?")
+        .run(avatar, user.id);
       return done(null, user);
     }
 
@@ -39,8 +39,8 @@ function findOrCreateOAuthUser(provider, profile, done) {
     }
 
     const result = db.prepare(
-      "INSERT INTO users (username, display_name, oauth_provider, oauth_id, oauth_avatar, email, avatar_color, needs_onboarding) VALUES (?,?,?,?,?,?,?,1)"
-    ).run(username, displayName, provider, oauthId, avatar, email, randomColor());
+      "INSERT INTO users (username, display_name, oauth_provider, oauth_id, oauth_avatar, avatar_color, needs_onboarding) VALUES (?,?,?,?,?,?,1)"
+    ).run(username, displayName, provider, oauthId, avatar, randomColor());
 
     user = db.prepare("SELECT * FROM users WHERE id=?").get(result.lastInsertRowid);
     done(null, user);
@@ -58,8 +58,8 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${process.env.BASE_URL || "http://localhost:3001"}/api/auth/google/callback`,
-    scope: ["profile", "email"],
+    callbackURL: `${OAUTH_BASE_URL}/api/auth/google/callback`,
+    scope: ["profile"],
   }, (accessToken, refreshToken, profile, done) => {
     findOrCreateOAuthUser("google", profile, done);
   }));
@@ -73,8 +73,8 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
   passport.use(new GitHubStrategy({
     clientID: process.env.GITHUB_CLIENT_ID,
     clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    callbackURL: `${process.env.BASE_URL || "http://localhost:3001"}/api/auth/github/callback`,
-    scope: ["user:email"],
+    callbackURL: `${OAUTH_BASE_URL}/api/auth/github/callback`,
+    scope: ["read:user"],
   }, (accessToken, refreshToken, profile, done) => {
     findOrCreateOAuthUser("github", profile, done);
   }));
@@ -88,8 +88,7 @@ if (process.env.TWITTER_CONSUMER_KEY && process.env.TWITTER_CONSUMER_SECRET) {
   passport.use(new TwitterStrategy({
     consumerKey: process.env.TWITTER_CONSUMER_KEY,
     consumerSecret: process.env.TWITTER_CONSUMER_SECRET,
-    callbackURL: `${process.env.BASE_URL || "http://localhost:3001"}/api/auth/twitter/callback`,
-    includeEmail: true,
+    callbackURL: `${OAUTH_BASE_URL}/api/auth/twitter/callback`,
   }, (token, tokenSecret, profile, done) => {
     findOrCreateOAuthUser("twitter", profile, done);
   }));
