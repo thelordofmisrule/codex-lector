@@ -189,6 +189,9 @@ export default function ChatPage() {
   const messagePaneRef = useRef(null);
   const activeRoomRef = useRef({ roomKey: "lobby", workSlug: "" });
   const lastSeenRef = useRef(new Map());
+  const roomInfoRef = useRef(FALLBACK_SPECIAL_ROOMS[0]);
+  const pendingAutoScrollRef = useRef(false);
+  const pendingSeenMessageIdRef = useRef(0);
 
   const selectedWorkSlug = searchParams.get("work") || "";
   const selectedRoomParam = searchParams.get("room") || "";
@@ -244,6 +247,12 @@ export default function ChatPage() {
 
   const emitChatSummaryRefresh = useCallback(() => {
     window.dispatchEvent(new Event("codex:chat-summary-refresh"));
+  }, []);
+
+  const scheduleAutoScroll = useCallback((lastSeenMessageId = 0) => {
+    pendingAutoScrollRef.current = true;
+    pendingSeenMessageIdRef.current = Number(lastSeenMessageId) || 0;
+    setShowJumpToLatest(false);
   }, []);
 
   const markCurrentRoomSeen = useCallback(async (room, explicitLastSeenId = 0) => {
@@ -313,9 +322,8 @@ export default function ChatPage() {
       setRoomInfo(data.room || FALLBACK_SPECIAL_ROOMS[0]);
       if (data.room) syncRoomCollections(data.room);
       setMessages(data.messages || []);
-      requestAnimationFrame(() => scrollToBottom(true));
       if ((data.room?.lastMessageId || 0) > 0) {
-        void markCurrentRoomSeen(data.room, data.room.lastMessageId);
+        scheduleAutoScroll(data.room.lastMessageId);
       }
     } catch (e) {
       setError(e.status === 401 ? "Sign in to enter live chat." : (e.message || "Could not load this chat room."));
@@ -326,7 +334,7 @@ export default function ChatPage() {
     } finally {
       setLoadingMessages(false);
     }
-  }, [activeRoomKey, markCurrentRoomSeen, scrollToBottom, selectedWorkSlug, setSearchParams, syncRoomCollections, user]);
+  }, [activeRoomKey, scheduleAutoScroll, selectedWorkSlug, setSearchParams, syncRoomCollections, user]);
 
   useEffect(() => {
     loadSidebar();
@@ -337,8 +345,33 @@ export default function ChatPage() {
   }, [activeRoomKey, selectedWorkSlug]);
 
   useEffect(() => {
+    roomInfoRef.current = roomInfo;
+  }, [roomInfo]);
+
+  useEffect(() => {
     loadMessages();
   }, [loadMessages]);
+
+  useEffect(() => {
+    if (!pendingAutoScrollRef.current) return undefined;
+    let raf2 = 0;
+    const raf1 = window.requestAnimationFrame(() => {
+      scrollToBottom(true);
+      raf2 = window.requestAnimationFrame(() => {
+        scrollToBottom(true);
+        pendingAutoScrollRef.current = false;
+        const latestMessageId = pendingSeenMessageIdRef.current || messages[messages.length - 1]?.id || roomInfoRef.current.lastMessageId || 0;
+        pendingSeenMessageIdRef.current = 0;
+        if (latestMessageId) {
+          void markCurrentRoomSeen(roomInfoRef.current, latestMessageId);
+        }
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(raf1);
+      if (raf2) window.cancelAnimationFrame(raf2);
+    };
+  }, [markCurrentRoomSeen, messages, scrollToBottom]);
 
   useEffect(() => {
     const nextDraft = localStorage.getItem(draftKey) || "";
@@ -384,9 +417,8 @@ export default function ChatPage() {
           markUnreadIfSubscribed: true,
         }));
         setMessages((prev) => mergeMessages(prev, [payload.message]));
-        requestAnimationFrame(() => scrollToBottom(shouldAutoRead));
         if (shouldAutoRead) {
-          void markCurrentRoomSeen(payload.room, payload.message.id);
+          scheduleAutoScroll(payload.message.id);
         } else {
           setShowJumpToLatest(true);
         }
@@ -416,7 +448,7 @@ export default function ChatPage() {
     return () => {
       source.close();
     };
-  }, [isPaneNearBottom, markCurrentRoomSeen, scrollToBottom, user]);
+  }, [isPaneNearBottom, scheduleAutoScroll, user]);
 
   useEffect(() => {
     if (!location.hash) return;
@@ -440,10 +472,9 @@ export default function ChatPage() {
       const data = await chatApi.post(body, selectedWorkSlug ? "" : activeRoomKey, selectedWorkSlug);
       if (data.room) syncRoomInfo(data.room, { forceRead: true, lastSeenMessageId: data.message?.id || data.room.lastMessageId || 0 });
       setMessages((prev) => mergeMessages(prev, [data.message]));
-      setShowJumpToLatest(false);
       setCompose("");
       localStorage.removeItem(draftKey);
-      requestAnimationFrame(() => scrollToBottom(true));
+      scheduleAutoScroll(data.message?.id || data.room?.lastMessageId || 0);
     } catch (e) {
       toast?.error(e.message || "Could not send message.");
     } finally {
@@ -495,7 +526,10 @@ export default function ChatPage() {
   const jumpToLatest = useCallback(() => {
     const latestMessageId = messages[messages.length - 1]?.id || roomInfo.lastMessageId || 0;
     setShowJumpToLatest(false);
-    requestAnimationFrame(() => scrollToBottom(true));
+    requestAnimationFrame(() => {
+      scrollToBottom(true);
+      requestAnimationFrame(() => scrollToBottom(true));
+    });
     if (latestMessageId) {
       void markCurrentRoomSeen(roomInfo, latestMessageId);
     }
