@@ -125,12 +125,12 @@ function MessageCard({ message, currentUser, deletingId, onDelete }) {
       style={{
         border: "1px solid var(--border-light)",
         borderRadius: 14,
-        padding: "12px 14px",
+        padding: "10px 12px",
         background: "var(--surface)",
         boxShadow: "0 10px 24px rgba(0,0,0,0.04)",
       }}
     >
-      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
         <Avatar message={message} />
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
@@ -155,7 +155,7 @@ function MessageCard({ message, currentUser, deletingId, onDelete }) {
               )}
             </div>
           </div>
-          <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, color: "var(--text)" }}>
+          <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.62, color: "var(--text)" }}>
             {message.body}
           </div>
         </div>
@@ -537,15 +537,15 @@ export default function ChatPage() {
 
   return (
     <>
-      <div className="animate-in" style={{ maxWidth: 1240, margin: "0 auto", padding: "24px 24px 32px" }}>
-        <div style={{ marginBottom: 24 }}>
+      <div className="animate-in" style={{ maxWidth: 1240, margin: "0 auto", padding: "20px 24px 24px" }}>
+        <div style={{ marginBottom: 18 }}>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 4, textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
             Conversation
           </div>
-          <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 34, color: "var(--accent)", letterSpacing: 1.5 }}>
+          <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 32, color: "var(--accent)", letterSpacing: 1.5 }}>
             Live Chat
           </h1>
-          <p style={{ marginTop: 12, marginBottom: 0, color: "var(--text-muted)", lineHeight: 1.75, maxWidth: 860 }}>
+          <p style={{ marginTop: 8, marginBottom: 0, color: "var(--text-muted)", lineHeight: 1.6, maxWidth: 860 }}>
             Signed-in readers can join the lobby, the shared Year of Shakespeare room, or a live room for any individual work.
           </p>
         </div>
@@ -692,84 +692,59 @@ export default function ChatPage() {
             </aside>
 
             <section className="chat-room-shell">
-              <div className="chat-room-panel" style={{ border: "1px solid var(--border-light)", borderRadius: 18, background: "linear-gradient(180deg, rgba(201,168,76,0.06), rgba(122,30,46,0.03))", padding: 18, boxShadow: "0 14px 30px rgba(0,0,0,0.05)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap", marginBottom: 14 }}>
-                  <div>
-                    <div style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--accent)", marginBottom: 6 }}>
+              <div className="chat-room-panel" style={{ border: "1px solid var(--border-light)", borderRadius: 18, background: "linear-gradient(180deg, rgba(201,168,76,0.06), rgba(122,30,46,0.03))", padding: 14, boxShadow: "0 14px 30px rgba(0,0,0,0.05)" }}>
+                <div className="chat-room-header">
+                  <div className="chat-room-title-row">
+                    <div style={{ fontFamily: "var(--font-display)", fontSize: 22, color: "var(--accent)" }}>
                       {roomInfo.label}
                     </div>
-                    <div style={{ color: "var(--text-muted)", lineHeight: 1.6, maxWidth: 720 }}>
-                      {roomInfo.description}
-                    </div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                      <span style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 6,
-                        fontSize: 12,
-                        textTransform: "uppercase",
-                        letterSpacing: 1.2,
-                        color: streamState === "live" ? "var(--success)" : "var(--gold)",
-                        border: "1px solid var(--border-light)",
-                        borderRadius: 999,
-                        padding: "4px 10px",
-                        background: "var(--surface)",
-                      }}>
-                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: streamState === "live" ? "var(--success)" : "var(--gold)" }} />
-                        {roomStatusLabel}
-                      </span>
-                      <span style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        fontSize: 12,
-                        color: "var(--text-light)",
-                        border: "1px solid var(--border-light)",
-                        borderRadius: 999,
-                        padding: "4px 10px",
-                        background: "var(--surface)",
-                      }}>
-                        {roomInfo.messageCount || messages.length} messages
-                      </span>
-                      {roomInfo.isSubscribed && (
-                        <span style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 6,
-                          fontSize: 12,
-                          textTransform: "uppercase",
-                          letterSpacing: 1.2,
-                          color: "var(--success)",
-                          border: "1px solid rgba(67,122,61,0.22)",
-                          borderRadius: 999,
-                          padding: "4px 10px",
-                          background: "rgba(67,122,61,0.08)",
-                        }}>
-                          Subscribed
-                        </span>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button
+                        className={roomInfo.isSubscribed ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm"}
+                        onClick={toggleSubscription}
+                        disabled={savingSubscription}
+                      >
+                        {savingSubscription ? "Saving..." : (roomInfo.isSubscribed ? "Unsubscribe" : "Subscribe")}
+                      </button>
+                      {roomInfo.workSlug && (
+                        <Link className="btn btn-secondary btn-sm" to={`/read/${roomInfo.workSlug}`}>
+                          Open Text
+                        </Link>
+                      )}
+                      {roomInfo.key === "year-2026-2027" && (
+                        <Link className="btn btn-secondary btn-sm" to="/year-of-shakespeare">
+                          Open Calendar
+                        </Link>
                       )}
                     </div>
                   </div>
 
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  className={roomInfo.isSubscribed ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm"}
-                  onClick={toggleSubscription}
-                  disabled={savingSubscription}
-                >
-                  {savingSubscription ? "Saving..." : (roomInfo.isSubscribed ? "Unsubscribe" : "Subscribe")}
-                </button>
-                {roomInfo.workSlug && (
-                  <Link className="btn btn-secondary btn-sm" to={`/read/${roomInfo.workSlug}`}>
-                    Open Text
-                  </Link>
-                )}
-                {roomInfo.key === "year-2026-2027" && (
-                  <Link className="btn btn-secondary btn-sm" to="/year-of-shakespeare">
-                    Open Calendar
-                  </Link>
-                )}
-              </div>
-            </div>
+                  <div className="chat-room-meta-line">
+                    <span className="chat-room-description">{roomInfo.description}</span>
+                    <span
+                      className="chat-room-meta-pill"
+                      style={{ color: streamState === "live" ? "var(--success)" : "var(--gold)" }}
+                    >
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: streamState === "live" ? "var(--success)" : "var(--gold)" }} />
+                      {roomStatusLabel}
+                    </span>
+                    <span className="chat-room-meta-pill">
+                      {roomInfo.messageCount || messages.length} messages
+                    </span>
+                    {roomInfo.isSubscribed && (
+                      <span
+                        className="chat-room-meta-pill"
+                        style={{
+                          color: "var(--success)",
+                          borderColor: "rgba(67,122,61,0.22)",
+                          background: "rgba(67,122,61,0.08)",
+                        }}
+                      >
+                        Subscribed
+                      </span>
+                    )}
+                  </div>
+                </div>
 
                 {error && (
                   <div style={{ marginBottom: 14, padding: "12px 14px", borderRadius: 10, background: "rgba(139,31,31,0.08)", border: "1px solid rgba(139,31,31,0.22)", color: "var(--danger)" }}>
@@ -787,9 +762,9 @@ export default function ChatPage() {
                   borderRadius: 16,
                   background: "var(--bg)",
                   overflowY: "auto",
-                  padding: 14,
+                  padding: 12,
                   display: "grid",
-                  gap: 10,
+                  gap: 8,
                 }}
               >
                 {loadingMessages ? (
@@ -841,16 +816,15 @@ export default function ChatPage() {
               )}
             </div>
 
-                <div>
+                <div className="chat-compose-area">
                   <textarea
-                    className="input"
+                    className="input chat-compose-input"
                     value={compose}
                     onChange={(event) => setComposeDraft(event.target.value)}
                     placeholder={currentWork ? `Discuss ${currentWork.title} live...` : "Say something to the room..."}
-                    style={{ minHeight: 96, resize: "vertical", marginBottom: 10, lineHeight: 1.7 }}
                   />
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                    <div style={{ fontSize: 12, color: "var(--text-light)" }}>
+                  <div className="chat-compose-footer">
+                    <div className="chat-compose-note">
                       Messages are visible to signed-in readers. Use `@username` to mention someone directly, and subscribe to rooms if you want unread activity to light up in the header.
                     </div>
                     <button className="btn btn-primary" onClick={submitMessage} disabled={sending || !compose.trim()}>
