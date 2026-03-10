@@ -116,12 +116,15 @@ export const places = {
   uploadImage:(fileName,mimeType,dataUrl)=>req("/places/upload-image",{method:"POST",body:JSON.stringify({fileName,mimeType,dataUrl})}),
 };
 export const chat = {
+  summary:()=>req("/chat/summary"),
   rooms:()=>req("/chat/rooms"),
   messages:(roomKey="", workSlug="", limit=80)=>req(`/chat/messages?${[
     roomKey ? `room=${encodeURIComponent(roomKey)}` : "",
     workSlug ? `work=${encodeURIComponent(workSlug)}` : "",
     limit ? `limit=${encodeURIComponent(limit)}` : "",
   ].filter(Boolean).join("&")}`),
+  subscribe:(subscribed, roomKey="", workSlug="")=>req("/chat/rooms/subscribe",{method:"POST",body:JSON.stringify({subscribed,roomKey,workSlug})}),
+  markSeen:(roomKey="", workSlug="", lastSeenMessageId=0)=>req("/chat/rooms/seen",{method:"POST",body:JSON.stringify({roomKey,workSlug,lastSeenMessageId})}),
   post:(body, roomKey="", workSlug="")=>req("/chat/messages",{method:"POST",body:JSON.stringify({body,roomKey,workSlug})}),
   delete:id=>req(`/chat/messages/${id}`,{method:"DELETE"}),
 };

@@ -55,19 +55,32 @@ function setRoomSearchParams(setSearchParams, roomKey = "lobby", workSlug = "") 
   setSearchParams(params);
 }
 
-function updateSpecialRoomList(list, room) {
+function mergeRoomState(existing, room, options = {}) {
+  const merged = { ...(existing || {}), ...(room || {}) };
+  const subscribed = !!(merged.isSubscribed);
+  if (options.markUnreadIfSubscribed && subscribed) merged.hasUnread = true;
+  if (options.forceRead) merged.hasUnread = false;
+  if (options.lastSeenMessageId !== undefined) {
+    merged.lastSeenMessageId = Number(options.lastSeenMessageId) || 0;
+  }
+  return merged;
+}
+
+function updateSpecialRoomList(list, room, options = {}) {
   return (list || []).map((item) => (
     item.key === room.key
-      ? { ...item, messageCount: room.messageCount, lastMessageAt: room.lastMessageAt }
+      ? mergeRoomState(item, room, options)
       : item
   ));
 }
 
-function upsertActiveWorkRoom(list, room) {
+function upsertActiveWorkRoom(list, room, options = {}) {
+  const existing = (list || []).find((item) => item.workSlug === room.workSlug) || null;
   if ((room.messageCount || 0) <= 0) {
     return (list || []).filter((item) => item.workSlug !== room.workSlug);
   }
-  const next = [room, ...(list || []).filter((item) => item.workSlug !== room.workSlug)];
+  const nextRoom = mergeRoomState(existing, room, options);
+  const next = [nextRoom, ...(list || []).filter((item) => item.workSlug !== room.workSlug)];
   return next
     .sort((a, b) => String(b.lastMessageAt || "").localeCompare(String(a.lastMessageAt || "")))
     .slice(0, 24);
@@ -167,12 +180,14 @@ export default function ChatPage() {
   const [loadingSidebar, setLoadingSidebar] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [sending, setSending] = useState(false);
+  const [savingSubscription, setSavingSubscription] = useState(false);
   const [deletingId, setDeletingId] = useState("");
   const [streamState, setStreamState] = useState("connecting");
   const [error, setError] = useState("");
   const [showAuth, setShowAuth] = useState(false);
   const messagePaneRef = useRef(null);
   const activeRoomRef = useRef({ roomKey: "lobby", workSlug: "" });
+  const lastSeenRef = useRef(new Map());
 
   const selectedWorkSlug = searchParams.get("work") || "";
   const selectedRoomParam = searchParams.get("room") || "";
@@ -194,14 +209,57 @@ export default function ChatPage() {
     [works, selectedWorkSlug],
   );
 
+  const isPaneNearBottom = useCallback(() => {
+    const pane = messagePaneRef.current;
+    if (!pane) return true;
+    return pane.scrollHeight - pane.scrollTop - pane.clientHeight < 120;
+  }, []);
+
   const scrollToBottom = useCallback((force = false) => {
     const pane = messagePaneRef.current;
     if (!pane) return;
-    const nearBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 120;
+    const nearBottom = isPaneNearBottom();
     if (force || nearBottom) {
       pane.scrollTop = pane.scrollHeight;
     }
+  }, [isPaneNearBottom]);
+
+  const syncRoomCollections = useCallback((room, options = {}) => {
+    if (!room?.key) return;
+    if (room.kind === "work" && room.workSlug) {
+      setActiveWorkRooms((prev) => upsertActiveWorkRoom(prev, room, options));
+      return;
+    }
+    setSpecialRooms((prev) => updateSpecialRoomList(prev, room, options));
   }, []);
+
+  const syncRoomInfo = useCallback((room, options = {}) => {
+    if (!room?.key) return;
+    syncRoomCollections(room, options);
+    if (room.key === activeRoomRef.current.roomKey) {
+      setRoomInfo((prev) => mergeRoomState(prev, room, options));
+    }
+  }, [syncRoomCollections]);
+
+  const emitChatSummaryRefresh = useCallback(() => {
+    window.dispatchEvent(new Event("codex:chat-summary-refresh"));
+  }, []);
+
+  const markCurrentRoomSeen = useCallback(async (room, explicitLastSeenId = 0) => {
+    if (!user || !room?.key) return;
+    const lastSeenMessageId = Number(explicitLastSeenId || room.lastMessageId || 0);
+    if (!lastSeenMessageId) return;
+    const prior = Number(lastSeenRef.current.get(room.key) || 0);
+    if (prior >= lastSeenMessageId) return;
+    lastSeenRef.current.set(room.key, lastSeenMessageId);
+    try {
+      const data = await chatApi.markSeen(room.workSlug ? "" : room.key, room.workSlug || "", lastSeenMessageId);
+      if (data?.room) {
+        syncRoomInfo(data.room, { forceRead: true, lastSeenMessageId });
+        emitChatSummaryRefresh();
+      }
+    } catch {}
+  }, [emitChatSummaryRefresh, syncRoomInfo, user]);
 
   const loadSidebar = useCallback(async () => {
     if (!user) {
@@ -242,8 +300,12 @@ export default function ChatPage() {
     try {
       const data = await chatApi.messages(selectedWorkSlug ? "" : activeRoomKey, selectedWorkSlug, 90);
       setRoomInfo(data.room || FALLBACK_SPECIAL_ROOMS[0]);
+      if (data.room) syncRoomCollections(data.room);
       setMessages(data.messages || []);
       requestAnimationFrame(() => scrollToBottom(true));
+      if ((data.room?.lastMessageId || 0) > 0) {
+        void markCurrentRoomSeen(data.room, data.room.lastMessageId);
+      }
     } catch (e) {
       setError(e.status === 401 ? "Sign in to enter live chat." : (e.message || "Could not load this chat room."));
       setMessages([]);
@@ -253,7 +315,7 @@ export default function ChatPage() {
     } finally {
       setLoadingMessages(false);
     }
-  }, [activeRoomKey, scrollToBottom, selectedWorkSlug, setSearchParams, user]);
+  }, [activeRoomKey, markCurrentRoomSeen, scrollToBottom, selectedWorkSlug, setSearchParams, syncRoomCollections, user]);
 
   useEffect(() => {
     loadSidebar();
@@ -292,15 +354,29 @@ export default function ChatPage() {
       try {
         const payload = JSON.parse(event.data || "{}");
         if (!payload?.message || !payload?.room) return;
+        const isActiveRoom = payload.message.roomKey === activeRoomRef.current.roomKey;
         if (payload.room.kind === "work" && payload.room.workSlug) {
-          setActiveWorkRooms((prev) => upsertActiveWorkRoom(prev, payload.room));
+          setActiveWorkRooms((prev) => upsertActiveWorkRoom(prev, payload.room, {
+            markUnreadIfSubscribed: !isActiveRoom,
+          }));
         } else {
-          setSpecialRooms((prev) => updateSpecialRoomList(prev, payload.room));
+          setSpecialRooms((prev) => updateSpecialRoomList(prev, payload.room, {
+            markUnreadIfSubscribed: !isActiveRoom,
+          }));
         }
-        if (payload.message.roomKey !== activeRoomRef.current.roomKey) return;
-        setRoomInfo(payload.room);
+        if (!isActiveRoom) return;
+        const shouldAutoRead = document.visibilityState !== "hidden" && isPaneNearBottom();
+        setRoomInfo((prev) => mergeRoomState(prev, payload.room, shouldAutoRead ? {
+          forceRead: true,
+          lastSeenMessageId: payload.message.id,
+        } : {
+          markUnreadIfSubscribed: true,
+        }));
         setMessages((prev) => mergeMessages(prev, [payload.message]));
         requestAnimationFrame(() => scrollToBottom(false));
+        if (shouldAutoRead) {
+          void markCurrentRoomSeen(payload.room, payload.message.id);
+        }
       } catch {}
     };
     const handleDelete = (event) => {
@@ -313,7 +389,7 @@ export default function ChatPage() {
           setSpecialRooms((prev) => updateSpecialRoomList(prev, payload.room));
         }
         if (!payload || payload.roomKey !== activeRoomRef.current.roomKey) return;
-        if (payload.room) setRoomInfo(payload.room);
+        if (payload.room) setRoomInfo((prev) => mergeRoomState(prev, payload.room));
         setMessages((prev) => prev.filter((message) => message.id !== payload.id));
       } catch {}
     };
@@ -327,7 +403,7 @@ export default function ChatPage() {
     return () => {
       source.close();
     };
-  }, [scrollToBottom, user]);
+  }, [isPaneNearBottom, markCurrentRoomSeen, scrollToBottom, user]);
 
   useEffect(() => {
     if (!location.hash) return;
@@ -349,13 +425,8 @@ export default function ChatPage() {
     setSending(true);
     try {
       const data = await chatApi.post(body, selectedWorkSlug ? "" : activeRoomKey, selectedWorkSlug);
-      setRoomInfo(data.room || roomInfo);
+      if (data.room) syncRoomInfo(data.room, { forceRead: true, lastSeenMessageId: data.message?.id || data.room.lastMessageId || 0 });
       setMessages((prev) => mergeMessages(prev, [data.message]));
-      if (data.room?.kind === "work" && data.room.workSlug) {
-        setActiveWorkRooms((prev) => upsertActiveWorkRoom(prev, data.room));
-      } else if (data.room) {
-        setSpecialRooms((prev) => updateSpecialRoomList(prev, data.room));
-      }
       setCompose("");
       localStorage.removeItem(draftKey);
       requestAnimationFrame(() => scrollToBottom(true));
@@ -363,6 +434,24 @@ export default function ChatPage() {
       toast?.error(e.message || "Could not send message.");
     } finally {
       setSending(false);
+    }
+  };
+
+  const toggleSubscription = async () => {
+    if (!user || savingSubscription || !roomInfo?.key) return;
+    setSavingSubscription(true);
+    try {
+      const next = !roomInfo.isSubscribed;
+      const data = await chatApi.subscribe(next, roomInfo.workSlug ? "" : roomInfo.key, roomInfo.workSlug || "");
+      if (data?.room) {
+        syncRoomInfo(data.room, { forceRead: next, lastSeenMessageId: data.room.lastSeenMessageId || data.room.lastMessageId || 0 });
+        emitChatSummaryRefresh();
+        toast?.success(next ? "Room subscribed." : "Room unsubscribed.");
+      }
+    } catch (e) {
+      toast?.error(e.message || "Could not update room subscription.");
+    } finally {
+      setSavingSubscription(false);
     }
   };
 
@@ -444,7 +533,17 @@ export default function ChatPage() {
                         onClick={() => setRoomSearchParams(setSearchParams, room.key, "")}
                         style={{ width: "100%", textAlign: "left", padding: "10px 12px" }}
                       >
-                        <span style={{ display: "block", fontFamily: "var(--font-display)", color: active ? "inherit" : "var(--text)" }}>{room.label}</span>
+                        <span style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-display)", color: active ? "inherit" : "var(--text)" }}>
+                          <span>{room.label}</span>
+                          {room.isSubscribed && (
+                            <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1.1, opacity: active ? 0.9 : 0.7 }}>
+                              Subscribed
+                            </span>
+                          )}
+                          {room.hasUnread && (
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--success)", boxShadow: "0 0 0 3px rgba(67,122,61,0.12)" }} />
+                          )}
+                        </span>
                         <span style={{ display: "block", fontSize: 12, color: active ? "inherit" : "var(--text-light)", marginTop: 3 }}>
                           {room.messageCount || 0} messages
                         </span>
@@ -513,7 +612,17 @@ export default function ChatPage() {
                       onClick={() => setRoomSearchParams(setSearchParams, "", room.workSlug)}
                       style={{ width: "100%", textAlign: "left", padding: "8px 10px" }}
                     >
-                      <span style={{ display: "block", fontFamily: "var(--font-display)", color: active ? "inherit" : "var(--text)" }}>{room.label}</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-display)", color: active ? "inherit" : "var(--text)" }}>
+                        <span>{room.label}</span>
+                        {room.isSubscribed && (
+                          <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1.1, opacity: active ? 0.9 : 0.7 }}>
+                            Subscribed
+                          </span>
+                        )}
+                        {room.hasUnread && (
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--success)", boxShadow: "0 0 0 3px rgba(67,122,61,0.12)" }} />
+                        )}
+                      </span>
                       <span style={{ display: "block", fontSize: 12, color: active ? "inherit" : "var(--text-light)", marginTop: 2 }}>
                         {room.messageCount || 0} messages
                         {room.lastMessageAt ? ` • ${fmtMessageTime(room.lastMessageAt)}` : ""}
@@ -565,10 +674,34 @@ export default function ChatPage() {
                       }}>
                         {roomInfo.messageCount || messages.length} messages
                       </span>
+                      {roomInfo.isSubscribed && (
+                        <span style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          fontSize: 12,
+                          textTransform: "uppercase",
+                          letterSpacing: 1.2,
+                          color: "var(--success)",
+                          border: "1px solid rgba(67,122,61,0.22)",
+                          borderRadius: 999,
+                          padding: "4px 10px",
+                          background: "rgba(67,122,61,0.08)",
+                        }}>
+                          Subscribed
+                        </span>
+                      )}
                     </div>
                   </div>
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  className={roomInfo.isSubscribed ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm"}
+                  onClick={toggleSubscription}
+                  disabled={savingSubscription}
+                >
+                  {savingSubscription ? "Saving..." : (roomInfo.isSubscribed ? "Unsubscribe" : "Subscribe")}
+                </button>
                 {roomInfo.workSlug && (
                   <Link className="btn btn-secondary btn-sm" to={`/read/${roomInfo.workSlug}`}>
                     Open Text
@@ -632,7 +765,7 @@ export default function ChatPage() {
                   />
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                     <div style={{ fontSize: 12, color: "var(--text-light)" }}>
-                      Messages are visible to signed-in readers. Keep it civil and text-focused.
+                      Messages are visible to signed-in readers. Use `@username` to mention someone directly, and subscribe to rooms if you want unread activity to light up in the header.
                     </div>
                     <button className="btn btn-primary" onClick={submitMessage} disabled={sending || !compose.trim()}>
                       {sending ? "Sending..." : "Send Message"}

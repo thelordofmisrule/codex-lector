@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
-import { auth as authApi, notifications as notifApi } from "../lib/api";
+import { auth as authApi, chat as chatApi, notifications as notifApi } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
 import AuthModal from "./AuthModal";
 
@@ -25,7 +25,9 @@ export default function Header() {
   const [showThemes, setShowThemes] = useState(false);
   const [notifs, setNotifs] = useState([]);
   const [unread, setUnread] = useState(0);
+  const [chatUnread, setChatUnread] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 860);
+  const chatRefreshTimerRef = useRef(null);
   const nav = useNavigate();
   const loc = useLocation();
   const currentTheme = THEME_OPTIONS.find(option => option.id === themeMode) || THEME_OPTIONS[0];
@@ -65,24 +67,85 @@ export default function Header() {
       setUnread(d.unreadCount || 0);
     } catch {}
   }, [user]);
+  const loadChatSummary = useCallback(async () => {
+    if (!user) return;
+    try {
+      const d = await chatApi.summary();
+      setChatUnread(!!d?.hasUnread);
+    } catch {}
+  }, [user]);
   useEffect(() => {
     if (!user) {
       setNotifs([]);
       setUnread(0);
+      setChatUnread(false);
       return undefined;
     }
-    const initialLoad = setTimeout(loadNotifs, 1500);
-    const interval = setInterval(loadNotifs, 30000);
+    const initialLoad = setTimeout(() => {
+      loadNotifs();
+      loadChatSummary();
+    }, 1500);
+    const interval = setInterval(() => {
+      loadNotifs();
+      loadChatSummary();
+    }, 30000);
     return () => {
       clearTimeout(initialLoad);
       clearInterval(interval);
     };
-  }, [loadNotifs, user]);
+  }, [loadChatSummary, loadNotifs, user]);
+  useEffect(() => {
+    if (!user) return undefined;
+    const source = new EventSource("/api/chat/stream");
+    const refresh = () => {
+      if (chatRefreshTimerRef.current) clearTimeout(chatRefreshTimerRef.current);
+      chatRefreshTimerRef.current = setTimeout(() => {
+        loadChatSummary();
+        loadNotifs();
+      }, 250);
+    };
+    source.addEventListener("message", refresh);
+    source.addEventListener("delete", refresh);
+    source.onerror = () => {};
+    return () => {
+      if (chatRefreshTimerRef.current) clearTimeout(chatRefreshTimerRef.current);
+      source.close();
+    };
+  }, [loadChatSummary, loadNotifs, user]);
+  useEffect(() => {
+    if (!user) return undefined;
+    const refresh = () => {
+      loadChatSummary();
+      loadNotifs();
+    };
+    window.addEventListener("codex:chat-summary-refresh", refresh);
+    return () => window.removeEventListener("codex:chat-summary-refresh", refresh);
+  }, [loadChatSummary, loadNotifs, user]);
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 860);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  const renderNavLabel = (label) => {
+    if (label !== "Chat") return label;
+    return (
+      <span style={{ display:"inline-flex", alignItems:"center", gap:7 }}>
+        <span>{label}</span>
+        <span
+          aria-hidden="true"
+          style={{
+            width:8,
+            height:8,
+            borderRadius:"50%",
+            background: chatUnread ? "var(--success)" : "rgba(0,0,0,0.14)",
+            boxShadow: chatUnread ? "0 0 0 3px rgba(67,122,61,0.12)" : "none",
+            transition:"background 0.15s ease, box-shadow 0.15s ease",
+          }}
+        />
+      </span>
+    );
+  };
 
   const markNotifRead = async (n) => {
     if (!n.read) {
@@ -149,7 +212,7 @@ export default function Header() {
               <button key={l.to} className="btn btn-ghost" onClick={()=>nav(l.to)} style={{
                 padding:"8px 14px", fontFamily:"var(--font-display)", fontSize:13,
                 color:active(l.to)?"var(--accent)":"var(--text-muted)", fontWeight:active(l.to)?600:400,
-              }}>{l.label}</button>
+              }}>{renderNavLabel(l.label)}</button>
             ))}
           </nav>}
 
@@ -166,7 +229,7 @@ export default function Header() {
                       <button key={l.to} className="btn btn-ghost" onClick={()=>{nav(l.to);setShowMobileNav(false);}} style={{
                         width:"100%", textAlign:"left", padding:"8px 10px", fontSize:14,
                         color:active(l.to)?"var(--accent)":"var(--text-muted)", fontWeight:active(l.to)?600:400,
-                      }}>{l.label === "🔍" ? "Search" : l.label}</button>
+                      }}>{l.label === "🔍" ? "Search" : renderNavLabel(l.label)}</button>
                     ))}
                   </div>
                 )}

@@ -1,6 +1,7 @@
 const express = require("express");
 const db = require("../db");
 const { requireAuth } = require("../auth");
+const { notify } = require("../notify");
 const { createRateLimit } = require("../rateLimit");
 
 const r = express.Router();
@@ -73,15 +74,54 @@ function resolveRoom(roomKeyRaw, workSlugRaw) {
   throw new Error("Unknown chat room.");
 }
 
-function serializeRoom(room, stats = {}) {
+function normalizeStats(row) {
+  return {
+    messageCount: Number(row?.message_count) || 0,
+    lastMessageAt: row?.last_message_at || null,
+    lastMessageId: Number(row?.last_message_id) || 0,
+  };
+}
+
+function roomStats(roomKey) {
+  return normalizeStats(db.prepare(`
+    SELECT COUNT(*) AS message_count, MAX(created_at) AS last_message_at, MAX(id) AS last_message_id
+    FROM chat_messages
+    WHERE room_key=?
+  `).get(roomKey));
+}
+
+function loadMembership(userId, roomKey) {
+  return db.prepare(`
+    SELECT room_key, work_slug, is_subscribed, last_seen_message_id, last_seen_at
+    FROM chat_room_memberships
+    WHERE user_id=? AND room_key=?
+  `).get(userId, roomKey) || null;
+}
+
+function membershipState(row, stats = {}) {
+  const isSubscribed = !!row?.is_subscribed;
+  const lastSeenMessageId = Number(row?.last_seen_message_id) || 0;
+  return {
+    isSubscribed,
+    lastSeenMessageId,
+    hasUnread: isSubscribed && (Number(stats.lastMessageId) || 0) > lastSeenMessageId,
+  };
+}
+
+function serializeRoom(room, stats = {}, membership = null) {
+  const state = membershipState(membership, stats);
   return {
     key: room.roomKey,
     label: room.label,
     kind: room.kind,
     description: room.description,
     workSlug: room.workSlug || "",
-    messageCount: stats.messageCount || 0,
+    messageCount: Number(stats.messageCount) || 0,
     lastMessageAt: stats.lastMessageAt || null,
+    lastMessageId: Number(stats.lastMessageId) || 0,
+    isSubscribed: state.isSubscribed,
+    hasUnread: state.hasUnread,
+    lastSeenMessageId: state.lastSeenMessageId,
   };
 }
 
@@ -122,26 +162,161 @@ function broadcast(eventName, payload) {
   }
 }
 
+function markRoomSeen(userId, room, lastSeenMessageId) {
+  const seenId = Math.max(0, Number(lastSeenMessageId) || 0);
+  db.prepare(`
+    INSERT INTO chat_room_memberships (
+      user_id, room_key, work_slug, is_subscribed, last_seen_message_id, last_seen_at, created_at, updated_at
+    )
+    VALUES (?, ?, ?, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT(user_id, room_key) DO UPDATE SET
+      work_slug=excluded.work_slug,
+      last_seen_message_id=CASE
+        WHEN excluded.last_seen_message_id > COALESCE(chat_room_memberships.last_seen_message_id, 0)
+          THEN excluded.last_seen_message_id
+        ELSE COALESCE(chat_room_memberships.last_seen_message_id, 0)
+      END,
+      last_seen_at=CURRENT_TIMESTAMP,
+      updated_at=CURRENT_TIMESTAMP
+  `).run(userId, room.roomKey, room.workSlug || null, seenId);
+}
+
+function setRoomSubscription(userId, room, subscribed, stats) {
+  if (subscribed) {
+    const seenId = Math.max(0, Number(stats?.lastMessageId) || 0);
+    db.prepare(`
+      INSERT INTO chat_room_memberships (
+        user_id, room_key, work_slug, is_subscribed, last_seen_message_id, last_seen_at, created_at, updated_at
+      )
+      VALUES (?, ?, ?, 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT(user_id, room_key) DO UPDATE SET
+        work_slug=excluded.work_slug,
+        is_subscribed=1,
+        last_seen_message_id=CASE
+          WHEN excluded.last_seen_message_id > COALESCE(chat_room_memberships.last_seen_message_id, 0)
+            THEN excluded.last_seen_message_id
+          ELSE COALESCE(chat_room_memberships.last_seen_message_id, 0)
+        END,
+        last_seen_at=CURRENT_TIMESTAMP,
+        updated_at=CURRENT_TIMESTAMP
+    `).run(userId, room.roomKey, room.workSlug || null, seenId);
+    return;
+  }
+
+  db.prepare(`
+    INSERT INTO chat_room_memberships (
+      user_id, room_key, work_slug, is_subscribed, created_at, updated_at
+    )
+    VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT(user_id, room_key) DO UPDATE SET
+      work_slug=excluded.work_slug,
+      is_subscribed=0,
+      updated_at=CURRENT_TIMESTAMP
+  `).run(userId, room.roomKey, room.workSlug || null);
+}
+
+function messageLink(room, messageId) {
+  const params = new URLSearchParams();
+  if (room.workSlug) params.set("work", room.workSlug);
+  else if (room.roomKey && room.roomKey !== "lobby") params.set("room", room.roomKey);
+  const suffix = messageId ? `#chat-message-${messageId}` : "";
+  return `/chat${params.toString() ? `?${params.toString()}` : ""}${suffix}`;
+}
+
+function extractMentionedUsernames(body) {
+  const matches = new Set();
+  const regex = /(^|[^a-z0-9_])@([a-z0-9_]{3,24})(?=$|[^a-z0-9_])/gi;
+  let match = regex.exec(body);
+  while (match) {
+    matches.add(String(match[2] || "").toLowerCase());
+    match = regex.exec(body);
+  }
+  return [...matches];
+}
+
+function notifyMentionedUsers(author, room, message) {
+  const usernames = extractMentionedUsernames(message.body)
+    .filter((username) => username && username !== String(author.username || "").toLowerCase());
+  if (!usernames.length) return;
+
+  const placeholders = usernames.map(() => "?").join(",");
+  const users = db.prepare(`
+    SELECT id, username
+    FROM users
+    WHERE username IN (${placeholders})
+  `).all(...usernames);
+
+  const authorName = author.displayName || author.display_name || author.username || "Someone";
+  for (const user of users) {
+    notify(
+      user.id,
+      "chat_mention",
+      `${authorName} mentioned you in ${room.label}.`,
+      messageLink(room, message.id),
+    );
+  }
+}
+
+function loadMembershipMap(userId) {
+  const rows = db.prepare(`
+    SELECT room_key, work_slug, is_subscribed, last_seen_message_id, last_seen_at
+    FROM chat_room_memberships
+    WHERE user_id=?
+  `).all(userId);
+  return new Map(rows.map((row) => [row.room_key, row]));
+}
+
+r.get("/summary", requireAuth, (req, res) => {
+  const mentionCount = Number(db.prepare(`
+    SELECT COUNT(*) AS n
+    FROM notifications
+    WHERE user_id=? AND type='chat_mention' AND read=0
+  `).get(req.user.id)?.n) || 0;
+
+  const unreadRoomRows = db.prepare(`
+    SELECT m.room_key
+    FROM chat_room_memberships m
+    JOIN (
+      SELECT room_key, MAX(id) AS last_message_id
+      FROM chat_messages
+      GROUP BY room_key
+    ) stats ON stats.room_key = m.room_key
+    WHERE m.user_id=?
+      AND m.is_subscribed=1
+      AND COALESCE(stats.last_message_id, 0) > COALESCE(m.last_seen_message_id, 0)
+  `).all(req.user.id);
+
+  const unreadRoomKeys = unreadRoomRows.map((row) => row.room_key);
+  res.json({
+    unreadMentionCount: mentionCount,
+    unreadRoomCount: unreadRoomKeys.length,
+    unreadRoomKeys,
+    hasUnread: mentionCount > 0 || unreadRoomKeys.length > 0,
+  });
+});
+
 r.get("/rooms", requireAuth, (req, res) => {
   const statsRows = db.prepare(`
-    SELECT room_key, COUNT(*) AS message_count, MAX(created_at) AS last_message_at
+    SELECT room_key, work_slug, COUNT(*) AS message_count, MAX(created_at) AS last_message_at, MAX(id) AS last_message_id
     FROM chat_messages
-    GROUP BY room_key
+    GROUP BY room_key, work_slug
   `).all();
   const roomStats = new Map(statsRows.map((row) => [
     row.room_key,
-    { messageCount: Number(row.message_count) || 0, lastMessageAt: row.last_message_at || null },
+    normalizeStats(row),
   ]));
+  const membershipMap = loadMembershipMap(req.user.id);
 
   const specialRooms = Object.values(SPECIAL_ROOMS).map((room) => (
     serializeRoom(
       { roomKey: room.key, workSlug: "", label: room.label, kind: room.kind, description: room.description },
       roomStats.get(room.key) || {},
+      membershipMap.get(room.key) || null,
     )
   ));
 
   const activeWorkRooms = db.prepare(`
-    SELECT m.work_slug, w.title, COUNT(*) AS message_count, MAX(m.created_at) AS last_message_at
+    SELECT m.work_slug, w.title, COUNT(*) AS message_count, MAX(m.created_at) AS last_message_at, MAX(m.id) AS last_message_id
     FROM chat_messages m
     JOIN works w ON w.slug=m.work_slug
     WHERE m.work_slug IS NOT NULL AND m.work_slug<>''
@@ -154,10 +329,7 @@ r.get("/rooms", requireAuth, (req, res) => {
     label: row.title,
     kind: "work",
     description: `Live chat for ${row.title}.`,
-  }, {
-    messageCount: Number(row.message_count) || 0,
-    lastMessageAt: row.last_message_at || null,
-  }));
+  }, normalizeStats(row), membershipMap.get(`work:${row.work_slug}`) || null));
 
   res.json({ specialRooms, activeWorkRooms });
 });
@@ -184,19 +356,44 @@ r.get("/messages", requireAuth, (req, res) => {
     LIMIT ?
   `).all(room.roomKey, limit);
 
-  const stats = db.prepare(`
-    SELECT COUNT(*) AS message_count, MAX(created_at) AS last_message_at
-    FROM chat_messages
-    WHERE room_key=?
-  `).get(room.roomKey);
+  const stats = roomStats(room.roomKey);
+  const membership = loadMembership(req.user.id, room.roomKey);
 
   res.json({
-    room: serializeRoom(room, {
-      messageCount: Number(stats?.message_count) || 0,
-      lastMessageAt: stats?.last_message_at || null,
-    }),
+    room: serializeRoom(room, stats, membership),
     messages: rows.reverse().map(serializeMessage),
   });
+});
+
+r.post("/rooms/subscribe", requireAuth, (req, res) => {
+  let room;
+  try {
+    room = resolveRoom(req.body?.roomKey, req.body?.workSlug);
+  } catch (e) {
+    return res.status(400).json({ error: e.message || "Unknown chat room." });
+  }
+
+  const subscribed = !!req.body?.subscribed;
+  const stats = roomStats(room.roomKey);
+  setRoomSubscription(req.user.id, room, subscribed, stats);
+  const membership = loadMembership(req.user.id, room.roomKey);
+  res.json({ room: serializeRoom(room, stats, membership) });
+});
+
+r.post("/rooms/seen", requireAuth, (req, res) => {
+  let room;
+  try {
+    room = resolveRoom(req.body?.roomKey, req.body?.workSlug);
+  } catch (e) {
+    return res.status(400).json({ error: e.message || "Unknown chat room." });
+  }
+
+  const requestedSeenId = Math.max(0, parseInt(req.body?.lastSeenMessageId, 10) || 0);
+  const stats = roomStats(room.roomKey);
+  const seenId = Math.min(requestedSeenId || stats.lastMessageId, stats.lastMessageId || requestedSeenId);
+  markRoomSeen(req.user.id, room, seenId);
+  const membership = loadMembership(req.user.id, room.roomKey);
+  res.json({ room: serializeRoom(room, stats, membership) });
 });
 
 r.get("/stream", requireAuth, (req, res) => {
@@ -244,21 +441,24 @@ r.post("/messages", requireAuth, messageLimit, (req, res) => {
   `).run(room.roomKey, room.workSlug || null, req.user.id, body);
 
   const created = loadMessage(result.lastInsertRowid);
-  const stats = db.prepare(`
-    SELECT COUNT(*) AS message_count, MAX(created_at) AS last_message_at
-    FROM chat_messages
-    WHERE room_key=?
-  `).get(room.roomKey);
-  const payload = {
-    room: serializeRoom(room, {
-      messageCount: Number(stats?.message_count) || 0,
-      lastMessageAt: stats?.last_message_at || null,
-    }),
-    message: serializeMessage(created),
-  };
+  const stats = roomStats(room.roomKey);
+  markRoomSeen(req.user.id, room, created.id);
+  notifyMentionedUsers(created, room, created);
 
-  broadcast("message", payload);
-  res.status(201).json(payload);
+  const publicRoom = serializeRoom(room, stats, null);
+  const senderMembership = loadMembership(req.user.id, room.roomKey);
+  const senderRoom = serializeRoom(room, stats, senderMembership);
+  const serializedMessage = serializeMessage(created);
+
+  broadcast("message", {
+    room: publicRoom,
+    message: serializedMessage,
+  });
+
+  res.status(201).json({
+    room: senderRoom,
+    message: serializedMessage,
+  });
 });
 
 r.delete("/messages/:id", requireAuth, (req, res) => {
@@ -271,25 +471,17 @@ r.delete("/messages/:id", requireAuth, (req, res) => {
   db.prepare("DELETE FROM chat_messages WHERE id=?").run(message.id);
 
   let room = null;
-  let stats = { messageCount: 0, lastMessageAt: null };
+  let stats = { messageCount: 0, lastMessageAt: null, lastMessageId: 0 };
   try {
     room = resolveRoom(message.room_key, message.work_slug);
-    const row = db.prepare(`
-      SELECT COUNT(*) AS message_count, MAX(created_at) AS last_message_at
-      FROM chat_messages
-      WHERE room_key=?
-    `).get(message.room_key);
-    stats = {
-      messageCount: Number(row?.message_count) || 0,
-      lastMessageAt: row?.last_message_at || null,
-    };
+    stats = roomStats(message.room_key);
   } catch {}
 
   broadcast("delete", {
     id: message.id,
     roomKey: message.room_key,
     workSlug: message.work_slug || "",
-    room: room ? serializeRoom(room, stats) : null,
+    room: room ? serializeRoom(room, stats, null) : null,
   });
 
   res.json({ ok: true });

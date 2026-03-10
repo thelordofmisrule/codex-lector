@@ -263,6 +263,20 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_chat_messages_work_created
     ON chat_messages(work_slug, created_at);
 
+  CREATE TABLE IF NOT EXISTS chat_room_memberships (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    room_key TEXT NOT NULL,
+    work_slug TEXT,
+    is_subscribed BOOLEAN DEFAULT 0,
+    last_seen_message_id INTEGER DEFAULT 0,
+    last_seen_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, room_key)
+  );
+  CREATE INDEX IF NOT EXISTS idx_chat_room_memberships_user_subscribed
+    ON chat_room_memberships(user_id, is_subscribed, updated_at);
+
   CREATE TABLE IF NOT EXISTS content_reports (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id),
@@ -370,6 +384,24 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS chat_messages (
 )`); } catch {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_room_created ON chat_messages(room_key, created_at)"); } catch {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_work_created ON chat_messages(work_slug, created_at)"); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS chat_room_memberships (
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  room_key TEXT NOT NULL,
+  work_slug TEXT,
+  is_subscribed BOOLEAN DEFAULT 0,
+  last_seen_message_id INTEGER DEFAULT 0,
+  last_seen_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, room_key)
+)`); } catch {}
+try { db.exec("ALTER TABLE chat_room_memberships ADD COLUMN work_slug TEXT"); } catch {}
+try { db.exec("ALTER TABLE chat_room_memberships ADD COLUMN is_subscribed BOOLEAN DEFAULT 0"); } catch {}
+try { db.exec("ALTER TABLE chat_room_memberships ADD COLUMN last_seen_message_id INTEGER DEFAULT 0"); } catch {}
+try { db.exec("ALTER TABLE chat_room_memberships ADD COLUMN last_seen_at DATETIME"); } catch {}
+try { db.exec("ALTER TABLE chat_room_memberships ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch {}
+try { db.exec("ALTER TABLE chat_room_memberships ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_chat_room_memberships_user_subscribed ON chat_room_memberships(user_id, is_subscribed, updated_at)"); } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS content_reports (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id),
