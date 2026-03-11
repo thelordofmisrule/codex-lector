@@ -39,19 +39,13 @@ function readAttr(attrs, name) {
   return match ? match[1] : "";
 }
 
-function extractPoemLines(xmlString) {
-  const xml = String(xmlString || "");
-  const stanzaMatches = Array.from(xml.matchAll(/<(?:stanza|stanzasmall)\b[^>]*>([\s\S]*?)<\/(?:stanza|stanzasmall)>/gi));
-  if (!stanzaMatches.length) {
-    throw new Error("Could not find stanza-based poem lines.");
-  }
-
+function collectLinesFromGroups(groupMatches, keyPrefixBuilder) {
   const linesByNumber = new Map();
   let runningNumber = 0;
 
-  stanzaMatches.forEach((match, stanzaIndex) => {
-    const stanzaXml = match[1] || "";
-    const lineMatches = Array.from(stanzaXml.matchAll(/<(?:l|line)\b([^>]*)>([\s\S]*?)<\/(?:l|line)>/gi));
+  groupMatches.forEach((match, groupIndex) => {
+    const groupXml = match[1] || "";
+    const lineMatches = Array.from(groupXml.matchAll(/<(?:l|line)\b([^>]*)>([\s\S]*?)<\/(?:l|line)>/gi));
 
     lineMatches.forEach((lineMatch, lineIndex) => {
       const attrs = lineMatch[1] || "";
@@ -66,13 +60,38 @@ function extractPoemLines(xmlString) {
 
       linesByNumber.set(lineNumber, {
         lineNumber,
-        lineKey: rawId || `p-${stanzaIndex}-${lineIndex}`,
+        lineKey: rawId || keyPrefixBuilder(groupIndex, lineIndex),
         text,
       });
     });
   });
 
   return linesByNumber;
+}
+
+function extractPoemLines(xmlString) {
+  const xml = String(xmlString || "");
+
+  const stanzaMatches = Array.from(xml.matchAll(/<(?:stanza|stanzasmall)\b[^>]*>([\s\S]*?)<\/(?:stanza|stanzasmall)>/gi));
+  if (stanzaMatches.length) {
+    return collectLinesFromGroups(stanzaMatches, (groupIndex, lineIndex) => `p-${groupIndex}-${lineIndex}`);
+  }
+
+  const poembodyMatch = xml.match(/<poembody\b[^>]*>([\s\S]*?)<\/poembody>/i);
+  if (poembodyMatch) {
+    const poembodyXml = poembodyMatch[1] || "";
+    const lgMatches = Array.from(poembodyXml.matchAll(/<(?:lg|stanza)\b[^>]*>([\s\S]*?)<\/(?:lg|stanza)>/gi));
+    if (lgMatches.length) {
+      return collectLinesFromGroups(lgMatches, (groupIndex, lineIndex) => `p-${groupIndex}-${lineIndex}`);
+    }
+  }
+
+  const allLineMatches = Array.from(xml.matchAll(/<(?:l|line)\b([^>]*)>([\s\S]*?)<\/(?:l|line)>/gi));
+  if (allLineMatches.length) {
+    return collectLinesFromGroups([{ 1: xml }], (_, lineIndex) => `p-0-${lineIndex}`);
+  }
+
+  throw new Error("Could not resolve poem lines from XML.");
 }
 
 function findWork() {
