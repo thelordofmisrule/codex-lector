@@ -64,14 +64,42 @@ function directChildren(node) {
   return Array.from(node?.children || []);
 }
 
-function extractFrontMatterSection(sectionNode, fallbackTitle) {
-  if (!sectionNode) return null;
+const FRONT_MATTER_BODY_TAGS = new Set(["poembody", "body", "sonnets", "stanza", "stanzasmall", "lg"]);
+const FRONT_MATTER_METADATA_TAGS = new Set([
+  "author",
+  "authors",
+  "meta",
+  "metadata",
+  "imprint",
+  "pubdate",
+  "date",
+  "titlestmt",
+  "filedesc",
+  "publicationstmt",
+  "editionstmt",
+  "availability",
+  "publisher",
+  "email",
+  "name",
+]);
 
-  const titleNode = directChildren(sectionNode).find((child) => {
-    const tag = child?.tagName?.toLowerCase();
-    return tag === "title" || tag === "head" || tag === "dedicationtitle" || tag === "argumenttitle";
-  });
+function inferFrontMatterKind(label) {
+  const text = String(label || "").trim().toLowerCase();
+  if (!text) return "frontmatter";
+  if (text.includes("argument")) return "argument";
+  if (text.includes("dedicat")) return "dedication";
+  if (text.startsWith("to ") || text.includes("right honourable") || text.includes("right honorable")) return "dedication";
+  return "frontmatter";
+}
 
+function normalizeFrontMatterTitle(title, kind) {
+  if (title) return title;
+  if (kind === "dedication") return "Dedication";
+  if (kind === "argument") return "Argument";
+  return "Front Matter";
+}
+
+function extractBlocksFromFrontMatterNode(sectionNode) {
   const looseLines = [];
   const blocks = [];
 
@@ -112,49 +140,135 @@ function extractFrontMatterSection(sectionNode, fallbackTitle) {
   }
 
   if (!blocks.length) {
-    const fallbackText = txt(sectionNode);
-    const titleText = txt(titleNode);
-    const cleaned = fallbackText && fallbackText !== titleText ? fallbackText : "";
+    const cleaned = txt(sectionNode);
     if (cleaned) blocks.push({ type: "paragraph", text: cleaned });
   }
 
+  return blocks;
+}
+
+function extractFrontMatterSection(sectionNode, fallbackTitle) {
+  if (!sectionNode) return null;
+
+  const titleNode = directChildren(sectionNode).find((child) => {
+    const tag = child?.tagName?.toLowerCase();
+    if (tag === "title" && child.getAttribute?.("type")) return false;
+    return tag === "title" || tag === "head" || tag === "dedicationtitle" || tag === "argumenttitle";
+  });
+
+  const blocks = extractBlocksFromFrontMatterNode(sectionNode);
   if (!blocks.length) return null;
 
-  const kind = sectionNode.tagName?.toLowerCase() || "frontmatter";
+  const title = txt(titleNode) || fallbackTitle;
+  const kind = inferFrontMatterKind(sectionNode.tagName?.toLowerCase() || title || fallbackTitle);
   return {
     kind,
-    title: txt(titleNode) || fallbackTitle,
+    title: normalizeFrontMatterTitle(title, kind),
     blocks,
   };
 }
 
-function extractPoemFrontMatter(root) {
+function extractGenericFrontMatter(children) {
   const sections = [];
+  let currentTitle = "";
+  let currentKind = "frontmatter";
+  let currentBlocks = [];
+
+  const flushCurrent = () => {
+    if (!currentBlocks.length) return;
+    sections.push({
+      kind: currentKind,
+      title: normalizeFrontMatterTitle(currentTitle, currentKind),
+      blocks: currentBlocks,
+    });
+    currentTitle = "";
+    currentKind = "frontmatter";
+    currentBlocks = [];
+  };
 
   const addSection = (child, fallbackTitle) => {
+    flushCurrent();
     const section = extractFrontMatterSection(child, fallbackTitle);
     if (section) sections.push(section);
   };
 
-  directChildren(root).forEach((child) => {
+  children.forEach((child) => {
     const tag = child?.tagName?.toLowerCase();
     if (!tag) return;
+
+    if (FRONT_MATTER_METADATA_TAGS.has(tag)) return;
 
     if (tag === "dedication" || tag === "argument") {
       addSection(child, tag === "dedication" ? "Dedication" : "Argument");
       return;
     }
 
-    if (tag === "front") {
-      directChildren(child).forEach((frontChild) => {
-        const frontTag = frontChild?.tagName?.toLowerCase();
-        if (frontTag === "dedication" || frontTag === "argument") {
-          addSection(frontChild, frontTag === "dedication" ? "Dedication" : "Argument");
-        }
-      });
+    if (tag === "front" || tag === "poemintro") {
+      flushCurrent();
+      sections.push(...extractGenericFrontMatter(directChildren(child)));
+      return;
     }
+
+    if (tag === "head" || tag === "subtitle" || (tag === "title" && !child.getAttribute?.("type"))) {
+      const heading = txt(child);
+      if (!heading) return;
+      flushCurrent();
+      currentTitle = heading;
+      currentKind = inferFrontMatterKind(heading);
+      return;
+    }
+
+    if (FRONT_MATTER_BODY_TAGS.has(tag)) {
+      return;
+    }
+
+    const blocks = extractBlocksFromFrontMatterNode(child);
+    if (!blocks.length) return;
+    currentBlocks.push(...blocks);
   });
 
+  flushCurrent();
+  return sections.filter((section) => section.blocks?.length);
+}
+
+function extractPoembodyFrontMatter(root) {
+  const poembody = directChildren(root).find((child) => child?.tagName?.toLowerCase() === "poembody");
+  if (!poembody) return [];
+
+  const children = directChildren(poembody);
+  if (!children.length) return [];
+
+  const hasArgumentLead = children.some((child) => {
+    const tag = child?.tagName?.toLowerCase();
+    if (tag === "subtitle") return /argument/i.test(txt(child));
+    if (tag === "l" || tag === "line") return String(child.getAttribute?.("type") || "").toLowerCase() === "argument";
+    return false;
+  });
+  if (!hasArgumentLead) return [];
+
+  const leadingChildren = [];
+  for (const child of children) {
+    const tag = child?.tagName?.toLowerCase();
+    if (tag === "lg" || tag === "stanza" || tag === "stanzasmall") break;
+    leadingChildren.push(child);
+  }
+
+  return extractGenericFrontMatter(leadingChildren);
+}
+
+function extractPoemFrontMatter(root) {
+  const leadingChildren = [];
+  for (const child of directChildren(root)) {
+    const tag = child?.tagName?.toLowerCase();
+    if (!tag) continue;
+    if (FRONT_MATTER_BODY_TAGS.has(tag)) break;
+    leadingChildren.push(child);
+  }
+
+  const sections = [
+    ...extractGenericFrontMatter(leadingChildren),
+    ...extractPoembodyFrontMatter(root),
+  ];
   if (!sections.length) return [];
 
   return sections;

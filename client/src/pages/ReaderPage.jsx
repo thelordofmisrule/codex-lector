@@ -324,7 +324,7 @@ function PoetryFrontMatter({ frontMatter }) {
   return (
     <div style={{ display: "grid", gap: 16, marginBottom: 28 }}>
       {frontMatter.map((section, index) => (
-        <section
+        <details
           key={`${section.kind}-${index}`}
           style={{
             border: "1px solid var(--border-light)",
@@ -333,13 +333,13 @@ function PoetryFrontMatter({ frontMatter }) {
             padding: "16px 18px",
           }}
         >
-          <div style={{ fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--gold)", fontFamily: "var(--font-display)", marginBottom: 6 }}>
+          <summary className="reader-summary" style={{ fontFamily: "var(--font-display)", fontSize: 13, letterSpacing: 2, cursor: "pointer", color: "var(--text-muted)" }}>
             {section.kind === "dedication" ? "Dedication" : section.kind === "argument" ? "Argument" : "Front Matter"}
-          </div>
-          <div style={{ fontFamily: "var(--font-display)", color: "var(--accent)", fontSize: 18, marginBottom: 10 }}>
-            {section.title || (section.kind === "dedication" ? "Dedication" : "Argument")}
-          </div>
-          <div style={{ display: "grid", gap: 12 }}>
+            <span style={{ marginLeft: 8, color: "var(--accent)", letterSpacing: 0, textTransform: "none" }}>
+              {section.title}
+            </span>
+          </summary>
+          <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
             {section.blocks.map((block, blockIndex) => {
               if (block.type === "lines") {
                 return (
@@ -358,7 +358,7 @@ function PoetryFrontMatter({ frontMatter }) {
               );
             })}
           </div>
-        </section>
+        </details>
       ))}
     </div>
   );
