@@ -60,6 +60,106 @@ function parseLineKey(node, fallback) {
     || fallback;
 }
 
+function directChildren(node) {
+  return Array.from(node?.children || []);
+}
+
+function extractFrontMatterSection(sectionNode, fallbackTitle) {
+  if (!sectionNode) return null;
+
+  const titleNode = directChildren(sectionNode).find((child) => {
+    const tag = child?.tagName?.toLowerCase();
+    return tag === "title" || tag === "head" || tag === "dedicationtitle" || tag === "argumenttitle";
+  });
+
+  const looseLines = [];
+  const blocks = [];
+
+  directChildren(sectionNode).forEach((child) => {
+    const tag = child?.tagName?.toLowerCase();
+    if (!tag || tag === "title" || tag === "head" || tag === "dedicationtitle" || tag === "argumenttitle") return;
+
+    if (tag === "p" || tag === "para" || tag === "salute" || tag === "signed") {
+      const text = txt(child);
+      if (text) blocks.push({ type: "paragraph", text });
+      return;
+    }
+
+    if (tag === "lg" || tag === "stanza" || tag === "stanzasmall") {
+      const lines = directChildren(child)
+        .filter((lineNode) => {
+          const lineTag = lineNode?.tagName?.toLowerCase();
+          return lineTag === "l" || lineTag === "line";
+        })
+        .map((lineNode) => txt(lineNode))
+        .filter(Boolean);
+      if (lines.length) blocks.push({ type: "lines", lines });
+      return;
+    }
+
+    if (tag === "l" || tag === "line") {
+      const text = txt(child);
+      if (text) looseLines.push(text);
+      return;
+    }
+
+    const fallbackText = txt(child);
+    if (fallbackText) blocks.push({ type: "paragraph", text: fallbackText });
+  });
+
+  if (looseLines.length) {
+    blocks.push({ type: "lines", lines: looseLines });
+  }
+
+  if (!blocks.length) {
+    const fallbackText = txt(sectionNode);
+    const titleText = txt(titleNode);
+    const cleaned = fallbackText && fallbackText !== titleText ? fallbackText : "";
+    if (cleaned) blocks.push({ type: "paragraph", text: cleaned });
+  }
+
+  if (!blocks.length) return null;
+
+  const kind = sectionNode.tagName?.toLowerCase() || "frontmatter";
+  return {
+    kind,
+    title: txt(titleNode) || fallbackTitle,
+    blocks,
+  };
+}
+
+function extractPoemFrontMatter(root) {
+  const sections = [];
+
+  const addSection = (child, fallbackTitle) => {
+    const section = extractFrontMatterSection(child, fallbackTitle);
+    if (section) sections.push(section);
+  };
+
+  directChildren(root).forEach((child) => {
+    const tag = child?.tagName?.toLowerCase();
+    if (!tag) return;
+
+    if (tag === "dedication" || tag === "argument") {
+      addSection(child, tag === "dedication" ? "Dedication" : "Argument");
+      return;
+    }
+
+    if (tag === "front") {
+      directChildren(child).forEach((frontChild) => {
+        const frontTag = frontChild?.tagName?.toLowerCase();
+        if (frontTag === "dedication" || frontTag === "argument") {
+          addSection(frontChild, frontTag === "dedication" ? "Dedication" : "Argument");
+        }
+      });
+    }
+  });
+
+  if (!sections.length) return [];
+
+  return sections;
+}
+
 /* ── Extract personae/cast from various formats ── */
 function extractCast(root) {
   const personae = [];
@@ -200,6 +300,7 @@ function parsePlay(root, title) {
 /* ── Parse sonnets ── */
 function parseSonnets(root, title) {
   const sections = [];
+  const frontMatter = extractPoemFrontMatter(root);
 
   root.querySelectorAll("sonnet").forEach((sonnet, sonnetIndex) => {
     const num = sonnet.getAttribute("num") || "";
@@ -219,12 +320,13 @@ function parseSonnets(root, title) {
     }
   });
 
-  return { type: "poetry", title, sections };
+  return { type: "poetry", title, frontMatter, sections };
 }
 
 /* ── Parse poems (Venus and Adonis, Lucrece, Phoenix & Turtle, etc.) ── */
 function parsePoem(root, title) {
   const sections = [];
+  const frontMatter = extractPoemFrontMatter(root);
 
   // Try stanza-based structure
   const stanzas = root.querySelectorAll("stanza, stanzasmall");
@@ -245,7 +347,7 @@ function parsePoem(root, title) {
       });
       if (lines.length) sections.push({ title: heading, heading, sectionType: "stanza", lines });
     });
-    return { type: "poetry", title, sections };
+    return { type: "poetry", title, frontMatter, sections };
   }
 
   // Try lg (line group) based — but NOT nested inside sonnets (those are handled above)
@@ -265,7 +367,7 @@ function parsePoem(root, title) {
       });
       if (lines.length) sections.push({ title: "", heading: "", sectionType: "stanza", lines });
     });
-    return { type: "poetry", title, sections };
+    return { type: "poetry", title, frontMatter, sections };
   }
 
   // Fallback: grab all lines, split on gaps
@@ -292,5 +394,10 @@ function parsePoem(root, title) {
     });
   }
 
-  return { type: "poetry", title, sections: sections.length > 0 ? sections : [{ title: "", heading: "", sectionType: "stanza", lines: [{ text: "No content found.", n: 1 }] }] };
+  return {
+    type: "poetry",
+    title,
+    frontMatter,
+    sections: sections.length > 0 ? sections : [{ title: "", heading: "", sectionType: "stanza", lines: [{ text: "No content found.", n: 1 }] }],
+  };
 }

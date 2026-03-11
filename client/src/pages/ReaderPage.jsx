@@ -8,6 +8,7 @@ import { parsePlayShakespeareXML } from "../lib/textParser";
 import { preservedAnnotationTextStyle, quotedExcerpt, smartenAnnotationText } from "../lib/annotationFormat";
 import { findPlaceAwarenessMatch, warmPlaceAwarenessIndex } from "../lib/placeAwareness";
 import { analyzeProsodyLine, parseProsodyScan } from "../lib/prosody";
+import { YEAR_OF_SHAKESPEARE_ROWS, buildReadingWaypoints, getCalendarRowsForWork } from "../lib/yearOfShakespeare";
 import PlaceAwareness from "../components/PlaceAwareness";
 import ThreadedComments from "../components/ThreadedComments";
 import WordLookup from "../components/WordLookup";
@@ -28,6 +29,7 @@ const PROSODY_MODES = [
 const DEFAULT_READER_VISIBILITY = {
   showGlobal: true,
   showPersonal: true,
+  showWaypoints: true,
   noteTypes: Object.fromEntries(ANNOT_TYPES.map((_, index) => [String(index), true])),
   layers: {},
 };
@@ -38,6 +40,7 @@ function loadReaderVisibility() {
     return {
       showGlobal: raw?.showGlobal !== false,
       showPersonal: raw?.showPersonal !== false,
+      showWaypoints: raw?.showWaypoints !== false,
       noteTypes: {
         ...DEFAULT_READER_VISIBILITY.noteTypes,
         ...(raw?.noteTypes && typeof raw.noteTypes === "object" ? raw.noteTypes : {}),
@@ -89,6 +92,9 @@ function ReaderVisibilityPanel({
   personalCount,
   layerOptions,
   onToggleLayer,
+  waypointCount,
+  showWaypoints,
+  onToggleWaypoints,
   prosodyMode,
   onSetProsodyMode,
   onClose,
@@ -208,6 +214,28 @@ function ReaderVisibilityPanel({
           </section>
         )}
 
+        {waypointCount > 0 && (
+          <section>
+            <div style={{ fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 8 }}>
+              Reading Waypoints
+            </div>
+            <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "8px 10px", border: "1px solid var(--border-light)", borderRadius: 8 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={showWaypoints}
+                  onChange={(event) => onToggleWaypoints(event.target.checked)}
+                />
+                <span>
+                  <span style={{ display: "block", color: "var(--text)" }}>Year of Shakespeare stops</span>
+                  <span style={{ fontSize: 12, color: "var(--text-light)" }}>Show daily pause markers from the shared reading calendar</span>
+                </span>
+              </span>
+              <span style={{ fontSize: 12, color: "var(--text-light)" }}>{waypointCount}</span>
+            </label>
+          </section>
+        )}
+
         {parsedType === "poetry" && (
           <section>
             <div style={{ fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 8 }}>
@@ -274,6 +302,95 @@ function getProsodyDisplay(lineText, override) {
     };
   }
   return analyzeProsodyLine(lineText);
+}
+
+function countRenderableLines(data) {
+  if (!data) return 0;
+  if (data.type === "poetry") {
+    return (data.sections || []).reduce((total, section) => {
+      return total + (section.lines || []).filter((line) => line.type !== "stagedir" && line.text).length;
+    }, 0);
+  }
+
+  return (data.lines || []).reduce((total, item) => {
+    if (item.type !== "speech") return total;
+    return total + (item.lines || []).filter((line) => line.type !== "stagedir" && line.text).length;
+  }, 0);
+}
+
+function PoetryFrontMatter({ frontMatter }) {
+  if (!frontMatter?.length) return null;
+
+  return (
+    <div style={{ display: "grid", gap: 16, marginBottom: 28 }}>
+      {frontMatter.map((section, index) => (
+        <section
+          key={`${section.kind}-${index}`}
+          style={{
+            border: "1px solid var(--border-light)",
+            borderRadius: 12,
+            background: "var(--surface)",
+            padding: "16px 18px",
+          }}
+        >
+          <div style={{ fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--gold)", fontFamily: "var(--font-display)", marginBottom: 6 }}>
+            {section.kind === "dedication" ? "Dedication" : section.kind === "argument" ? "Argument" : "Front Matter"}
+          </div>
+          <div style={{ fontFamily: "var(--font-display)", color: "var(--accent)", fontSize: 18, marginBottom: 10 }}>
+            {section.title || (section.kind === "dedication" ? "Dedication" : "Argument")}
+          </div>
+          <div style={{ display: "grid", gap: 12 }}>
+            {section.blocks.map((block, blockIndex) => {
+              if (block.type === "lines") {
+                return (
+                  <div key={blockIndex} style={{ display: "grid", gap: 2, textAlign: "center", fontFamily: "var(--font-fell)", fontStyle: "italic", lineHeight: 1.7, color: "var(--text)" }}>
+                    {block.lines.map((line, lineIndex) => (
+                      <div key={lineIndex}>{line}</div>
+                    ))}
+                  </div>
+                );
+              }
+
+              return (
+                <div key={blockIndex} style={{ color: "var(--text)", lineHeight: 1.8, ...preservedAnnotationTextStyle }}>
+                  {smartenAnnotationText(block.text)}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function ReadingWaypointMarker({ waypoint }) {
+  if (!waypoint) return null;
+  return (
+    <div style={{ display: "flex", justifyContent: "center", margin: "14px 0 18px" }}>
+      <div
+        style={{
+          maxWidth: 420,
+          width: "100%",
+          border: "1px solid var(--gold-light)",
+          background: "var(--surface)",
+          borderRadius: 999,
+          padding: "10px 16px",
+          textAlign: "center",
+          boxShadow: "0 8px 20px var(--shadow)",
+        }}
+      >
+        <div style={{ fontSize: 12, color: "var(--accent)", fontFamily: "var(--font-display)", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 3 }}>
+          🛑 {waypoint.label}
+        </div>
+        {waypoint.nextLabel && (
+          <div style={{ fontSize: 13, color: "var(--text-light)", fontStyle: "italic", fontFamily: "var(--font-fell)" }}>
+            {waypoint.nextLabel}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /* ─── Margin annotation ─── */
@@ -709,8 +826,9 @@ function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId,
 }
 
 /* ─── Play view ─── */
-function PlayView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, bookmark }) {
+function PlayView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, bookmark, showWaypoints, waypointsByIndex }) {
   let lineNum = 0;
+  let readingIndex = 0;
   return (
     <>
       {data.dramatis && (
@@ -734,9 +852,16 @@ function PlayView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, can
                 const hasXmlN = Number.isFinite(line.n);
                 lineNum = hasXmlN ? line.n : (lineNum + 1);
                 const lineId = `l-${idx}-${li}`;
-                return <AnnotatedLine key={li} lineId={lineId} text={line.text} annots={annots} annotsByLine={annotsByLine}
-                  showAnnots={showAnnots} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot}
-                  lineNum={lineNum} showNum={hasXmlN || lineNum%5===0} isBookmarked={bookmark===lineId} prosodyMode="off" />;
+                readingIndex += 1;
+                const waypoint = showWaypoints ? waypointsByIndex[readingIndex] : null;
+                return (
+                  <div key={lineId}>
+                    <AnnotatedLine lineId={lineId} text={line.text} annots={annots} annotsByLine={annotsByLine}
+                      showAnnots={showAnnots} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot}
+                      lineNum={lineNum} showNum={hasXmlN || lineNum%5===0} isBookmarked={bookmark===lineId} prosodyMode="off" />
+                    {waypoint && <ReadingWaypointMarker waypoint={waypoint} />}
+                  </div>
+                );
               })}
             </div>
           );
@@ -763,8 +888,11 @@ function PoetryView({
   prosodyOverrides,
   onOpenProsodyNote,
   onOpenProsodyEditor,
+  showWaypoints,
+  waypointsByIndex,
 }) {
   let lineNum = 0;
+  let readingIndex = 0;
   return (
     <div style={{ marginBottom:32 }}>
       {data.sections.map((sec, si) => (
@@ -775,16 +903,23 @@ function PoetryView({
             const hasXmlN = Number.isFinite(line.n);
             lineNum = hasXmlN ? line.n : (lineNum + 1);
             const lineId = line.lineKey || `p-${si}-${li}`;
-            return <AnnotatedLine key={li} lineId={lineId} text={line.text} annots={annots} annotsByLine={annotsByLine}
-              showAnnots={showAnnots} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot}
-              lineNum={lineNum}
-              showNum={hasXmlN || lineNum%5===0||lineNum===1}
-              isBookmarked={bookmark===lineId}
-              prosodyMode={prosodyMode}
-              prosodyOverride={prosodyOverrides[lineId]}
-              onOpenProsodyNote={onOpenProsodyNote}
-              onOpenProsodyEditor={onOpenProsodyEditor}
-            />;
+            readingIndex += 1;
+            const waypoint = showWaypoints ? waypointsByIndex[readingIndex] : null;
+            return (
+              <div key={lineId}>
+                <AnnotatedLine lineId={lineId} text={line.text} annots={annots} annotsByLine={annotsByLine}
+                  showAnnots={showAnnots} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot}
+                  lineNum={lineNum}
+                  showNum={hasXmlN || lineNum%5===0||lineNum===1}
+                  isBookmarked={bookmark===lineId}
+                  prosodyMode={prosodyMode}
+                  prosodyOverride={prosodyOverrides[lineId]}
+                  onOpenProsodyNote={onOpenProsodyNote}
+                  onOpenProsodyEditor={onOpenProsodyEditor}
+                />
+                {waypoint && <ReadingWaypointMarker waypoint={waypoint} />}
+              </div>
+            );
           })}
         </div>
       ))}
@@ -1300,6 +1435,9 @@ export default function ReaderPage() {
   });
 
   const showAnnots = filteredAnnots.length > 0;
+  const readingCalendarRows = getCalendarRowsForWork(parsed.title || work.title, YEAR_OF_SHAKESPEARE_ROWS);
+  const readingWaypoints = buildReadingWaypoints(countRenderableLines(parsed), readingCalendarRows);
+  const waypointsByIndex = Object.fromEntries(readingWaypoints.map((waypoint) => [waypoint.lineIndex, waypoint]));
   const dismissReaderHint = () => {
     localStorage.setItem("codex-reader-hint-dismissed", "true");
     setShowReaderHint(false);
@@ -1374,28 +1512,37 @@ export default function ReaderPage() {
       </div>
 
       {showVisibilityPanel && (
-        <ReaderVisibilityPanel
-          user={user}
-          parsedType={parsed.type}
-          visibility={readerVisibility}
-          onToggleGlobal={(checked) => setReaderVisibility((prev) => ({ ...prev, showGlobal: checked }))}
-          onTogglePersonal={(checked) => setReaderVisibility((prev) => ({ ...prev, showPersonal: checked }))}
-          typeCounts={typeCounts}
-          onToggleType={(color, checked) => setReaderVisibility((prev) => ({
-            ...prev,
-            noteTypes: { ...prev.noteTypes, [String(color)]: checked },
-          }))}
-          globalCount={globalCount}
-          personalCount={personalCount}
-          layerOptions={layerOptions}
-          onToggleLayer={(layerId, checked) => setReaderVisibility((prev) => ({
-            ...prev,
-            layers: { ...prev.layers, [String(layerId)]: checked },
-          }))}
-          prosodyMode={prosodyMode}
-          onSetProsodyMode={setProsodyMode}
-          onClose={() => setShowVisibilityPanel(false)}
-        />
+        <>
+          <div
+            onClick={() => setShowVisibilityPanel(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 119 }}
+          />
+          <ReaderVisibilityPanel
+            user={user}
+            parsedType={parsed.type}
+            visibility={readerVisibility}
+            onToggleGlobal={(checked) => setReaderVisibility((prev) => ({ ...prev, showGlobal: checked }))}
+            onTogglePersonal={(checked) => setReaderVisibility((prev) => ({ ...prev, showPersonal: checked }))}
+            typeCounts={typeCounts}
+            onToggleType={(color, checked) => setReaderVisibility((prev) => ({
+              ...prev,
+              noteTypes: { ...prev.noteTypes, [String(color)]: checked },
+            }))}
+            globalCount={globalCount}
+            personalCount={personalCount}
+            layerOptions={layerOptions}
+            onToggleLayer={(layerId, checked) => setReaderVisibility((prev) => ({
+              ...prev,
+              layers: { ...prev.layers, [String(layerId)]: checked },
+            }))}
+            waypointCount={readingWaypoints.length}
+            showWaypoints={readerVisibility.showWaypoints !== false}
+            onToggleWaypoints={(checked) => setReaderVisibility((prev) => ({ ...prev, showWaypoints: checked }))}
+            prosodyMode={prosodyMode}
+            onSetProsodyMode={setProsodyMode}
+            onClose={() => setShowVisibilityPanel(false)}
+          />
+        </>
       )}
 
       {/* Bookmark resume banner */}
@@ -1447,6 +1594,9 @@ export default function ReaderPage() {
         </div>
       )}
       <div style={{ textAlign:"center", color:"var(--border)", fontSize:14, letterSpacing:8, marginBottom:28 }}>☙ ❦ ❧</div>
+      {parsed.type === "poetry" && parsed.frontMatter?.length > 0 && (
+        <PoetryFrontMatter frontMatter={parsed.frontMatter} />
+      )}
 
       {/* Content */}
       {parsed.type === "poetry"
@@ -1465,8 +1615,10 @@ export default function ReaderPage() {
             prosodyOverrides={prosodyOverrides}
             onOpenProsodyNote={openProsodyNote}
             onOpenProsodyEditor={openProsodyEditor}
+            showWaypoints={readerVisibility.showWaypoints !== false}
+            waypointsByIndex={waypointsByIndex}
           />
-        : <PlayView data={parsed} annots={annots} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} />
+        : <PlayView data={parsed} annots={annots} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} />
       }
 
       {tooltip && <AnnotTooltip pos={tooltip} onSave={saveAnnot} onCopyText={copySelectedText} onCancel={()=>{setTooltip(null);window.getSelection()?.removeAllRanges();}} myLayers={myLayers} draftKey={`draft:annot:${slug}`} canPublishGlobal={canPublishGlobal} />}

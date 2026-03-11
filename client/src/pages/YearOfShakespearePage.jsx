@@ -2,179 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { works as worksApi, progress as progressApi } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
-import calendarCsv from "../data/year_of_shakespeare_2026_2027_daily.csv?raw";
-
-function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let value = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
-    const next = text[i + 1];
-
-    if (inQuotes) {
-      if (ch === '"' && next === '"') {
-        value += '"';
-        i += 1;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        value += ch;
-      }
-      continue;
-    }
-
-    if (ch === '"') {
-      inQuotes = true;
-      continue;
-    }
-    if (ch === ",") {
-      row.push(value);
-      value = "";
-      continue;
-    }
-    if (ch === "\n") {
-      row.push(value);
-      rows.push(row);
-      row = [];
-      value = "";
-      continue;
-    }
-    if (ch === "\r") continue;
-    value += ch;
-  }
-
-  row.push(value);
-  if (row.length > 1 || row[0] !== "") rows.push(row);
-  return rows;
-}
-
-function parseCalendarRows(csvText) {
-  const rows = parseCsv(csvText);
-  if (!rows.length) return [];
-
-  const headers = rows[0].map(h => String(h || "").trim().toLowerCase());
-  const idx = (name) => headers.indexOf(name.toLowerCase());
-  const dateIdx = idx("date");
-  const worksIdx = idx("work(s)");
-  const kindIdx = idx("kind");
-  const arcIdx = idx("seasonal arc");
-  const anchorIdx = idx("anchor");
-  const reasonIdx = idx("reason");
-
-  return rows.slice(1).map((r, i) => {
-    const isoDate = String(r[dateIdx] || "").trim();
-    if (!isoDate) return null;
-    const dateObj = new Date(`${isoDate}T00:00:00`);
-    if (Number.isNaN(dateObj.getTime())) return null;
-    return {
-      id: `${isoDate}-${i}`,
-      date: isoDate,
-      dateObj,
-      works: String(r[worksIdx] || "").trim(),
-      kind: String(r[kindIdx] || "").trim(),
-      seasonalArc: String(r[arcIdx] || "").trim(),
-      anchor: String(r[anchorIdx] || "").trim(),
-      reason: String(r[reasonIdx] || "").trim(),
-    };
-  }).filter(Boolean).sort((a, b) => a.date.localeCompare(b.date));
-}
-
-function toMonthKey(dateObj) {
-  const y = dateObj.getFullYear();
-  const m = String(dateObj.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
-}
-
-function monthLabel(monthKey) {
-  const [year, month] = monthKey.split("-").map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
-}
-
-function longDateLabel(dateObj) {
-  return dateObj.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function normalizeTitleKey(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[\u2018\u2019']/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function candidateTitleKeys(value) {
-  const raw = String(value || "").trim();
-  const lower = raw.toLowerCase();
-  const keys = new Set();
-
-  const add = (v) => {
-    const normalized = normalizeTitleKey(v);
-    if (normalized) keys.add(normalized);
-  };
-
-  add(raw);
-  add(raw.replace(/,\s*part\s+(\d+)/i, " Part $1"));
-  add(raw.replace(/\s+part\s+(\d+)/i, ", Part $1"));
-
-  if (lower.startsWith("the ")) add(raw.replace(/^the\s+/i, ""));
-  else add(`The ${raw}`);
-
-  if (lower.startsWith("sonnets")) add("Sonnets");
-
-  return [...keys];
-}
-
-function resolveWorkLinks(workLabel, kind, workLookup) {
-  const candidates = candidateTitleKeys(workLabel);
-  let found = null;
-  for (const key of candidates) {
-    if (workLookup[key]) {
-      found = workLookup[key];
-      break;
-    }
-  }
-
-  if (!found && candidates.length) {
-    const target = candidates[0];
-    let best = null;
-    let bestScore = -1;
-    Object.entries(workLookup).forEach(([key, value]) => {
-      if (!key || (!key.includes(target) && !target.includes(key))) return;
-      const score = Math.min(key.length, target.length);
-      if (score > bestScore) {
-        bestScore = score;
-        best = value;
-      }
-    });
-    found = best;
-  }
-
-  const base = found || { modernSlug: "", firstFolioSlug: "", anySlug: "" };
-  const lowerKind = String(kind || "").toLowerCase();
-  const isPlay = lowerKind.includes("play");
-
-  if (isPlay) {
-    const actions = [];
-    const modernSlug = base.modernSlug || base.anySlug;
-    if (modernSlug) actions.push({ label: "Modern", slug: modernSlug });
-    if (base.firstFolioSlug) actions.push({ label: "First Folio", slug: base.firstFolioSlug });
-    if (!actions.length && base.anySlug) actions.push({ label: "Open Work", slug: base.anySlug });
-    return actions;
-  }
-
-  const poemSlug = base.modernSlug || base.anySlug || base.firstFolioSlug;
-  return poemSlug ? [{ label: "Open Work", slug: poemSlug }] : [];
-}
+import {
+  YEAR_OF_SHAKESPEARE_ROWS,
+  longDateLabel,
+  monthLabel,
+  normalizeTitleKey,
+  resolveWorkLinks,
+  toMonthKey,
+} from "../lib/yearOfShakespeare";
 
 export default function YearOfShakespearePage() {
   const nav = useNavigate();
@@ -186,7 +21,7 @@ export default function YearOfShakespearePage() {
   const [workLookup, setWorkLookup] = useState({});
   const [progressBySlug, setProgressBySlug] = useState({});
 
-  const rows = useMemo(() => parseCalendarRows(calendarCsv), []);
+  const rows = YEAR_OF_SHAKESPEARE_ROWS;
 
   useEffect(() => {
     let cancelled = false;
