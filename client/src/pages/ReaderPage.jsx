@@ -58,6 +58,25 @@ function isLayerVisible(visibility, layerId) {
   return visibility.layers[String(layerId)] !== false;
 }
 
+function useOutsideDismiss(ref, onDismiss, enabled = true) {
+  useEffect(() => {
+    if (!enabled) return undefined;
+
+    const handlePointerDown = (event) => {
+      const node = ref.current;
+      if (!node || node.contains(event.target)) return;
+      onDismiss?.();
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [enabled, onDismiss, ref]);
+}
+
 function ReaderVisibilityPanel({
   user,
   parsedType,
@@ -264,14 +283,23 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
   const [note, setNote] = useState(annot.note);
   const [color, setColor] = useState(annot.color);
   const [isGlobalDraft, setIsGlobalDraft] = useState(!!annot.is_global);
+  const editRef = useRef(null);
   const type = ANNOT_TYPES[annot.color] || ANNOT_TYPES[0];
   const isLong = (annot.note || "").length > 60;
   const borderColors = ["var(--gold-light)","var(--accent)","var(--success)","#7B6FAD"];
   const canModify = isAdmin || annot.user_id === userId;
   const isGlobal = !!annot.is_global;
+  const cancelEdit = useCallback(() => {
+    setEditing(false);
+    setNote(annot.note);
+    setColor(annot.color);
+    setIsGlobalDraft(!!annot.is_global);
+  }, [annot.color, annot.is_global, annot.note]);
+
+  useOutsideDismiss(editRef, cancelEdit, editing);
 
   if (editing) return (
-    <div style={{ padding:10, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:6, marginBottom:4 }}>
+    <div ref={editRef} style={{ padding:10, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:6, marginBottom:4 }}>
       <div style={{ display:"flex", gap:4, marginBottom:6, flexWrap:"wrap" }}>
         {ANNOT_TYPES.map((t,i) => (
           <button key={i} onClick={()=>setColor(i)} style={{
@@ -289,7 +317,7 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
       <textarea className="input" value={note} onChange={e=>setNote(e.target.value)} style={{ minHeight:60, resize:"vertical", fontSize:14 }} />
       <div style={{ display:"flex", gap:4, marginTop:6 }}>
         <button className="btn btn-primary btn-sm" onClick={()=>{onEdit(annot.id,note,color,isGlobalDraft);setEditing(false);}}>Save</button>
-        <button className="btn btn-secondary btn-sm" onClick={()=>{setEditing(false);setNote(annot.note);setColor(annot.color);setIsGlobalDraft(!!annot.is_global);}}>Cancel</button>
+        <button className="btn btn-secondary btn-sm" onClick={cancelEdit}>Cancel</button>
       </div>
     </div>
   );
@@ -338,11 +366,13 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
 }
 
 /* ─── Annotation tooltip ─── */
-function AnnotTooltip({ pos, onSave, onCancel, myLayers, draftKey, canPublishGlobal }) {
+function AnnotTooltip({ pos, onSave, onCancel, onCopyText, myLayers, draftKey, canPublishGlobal }) {
+  const tooltipRef = useRef(null);
   const [note, setNote] = useState(() => draftKey ? (localStorage.getItem(`${draftKey}:note`) || "") : "");
   const [color, setColor] = useState(() => draftKey ? (parseInt(localStorage.getItem(`${draftKey}:color`) || "0", 10) || 0) : 0);
   const [layerId, setLayerId] = useState(() => draftKey ? (localStorage.getItem(`${draftKey}:layer`) || "") : "");
   const [isGlobal, setIsGlobal] = useState(() => draftKey ? (localStorage.getItem(`${draftKey}:global`) === "1") : !!canPublishGlobal);
+  useOutsideDismiss(tooltipRef, onCancel);
   const setNoteDraft = (value) => {
     setNote(value);
     if (draftKey) localStorage.setItem(`${draftKey}:note`, value);
@@ -368,7 +398,7 @@ function AnnotTooltip({ pos, onSave, onCancel, myLayers, draftKey, canPublishGlo
     }
   };
   return (
-      <div className="reader-annot-tooltip" style={{
+      <div ref={tooltipRef} className="reader-annot-tooltip" style={{
         position:"fixed", top:pos.y+8, left:Math.max(12,Math.min(pos.x,window.innerWidth-340)),
         background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:12,
         boxShadow:"0 8px 24px var(--shadow)", width:320, zIndex:200,
@@ -399,8 +429,9 @@ function AnnotTooltip({ pos, onSave, onCancel, myLayers, draftKey, canPublishGlo
           Publish as site-wide note
         </label>
       )}
-      <div style={{ display:"flex", gap:6, marginTop:8 }}>
+      <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
         <button className="btn btn-primary btn-sm" onClick={()=>note.trim()&&onSave(note.trim(),color,layerId||null,isGlobal)}>Save</button>
+        <button className="btn btn-secondary btn-sm" onClick={() => onCopyText?.(pos.text)}>Copy Text</button>
         <button className="btn btn-secondary btn-sm" onClick={onCancel}>Cancel</button>
       </div>
     </div>
@@ -426,10 +457,13 @@ function ProsodyLineText({ text, mode, override }) {
 }
 
 function ProsodyNoteTooltip({ note, onClose, onEdit }) {
+  const tooltipRef = useRef(null);
+  useOutsideDismiss(tooltipRef, onClose, !!note);
   if (!note) return null;
   const override = note.override || {};
   return (
     <div
+      ref={tooltipRef}
       style={{
         position: "fixed",
         top: note.position.y + 8,
@@ -473,6 +507,7 @@ function ProsodyNoteTooltip({ note, onClose, onEdit }) {
 }
 
 function ProsodyEditor({ draft, onClose, onSave, onDelete }) {
+  const editorRef = useRef(null);
   const display = getProsodyDisplay(draft.lineText, draft.override);
   const [scanText, setScanText] = useState(display.scanText);
   const [stressPattern, setStressPattern] = useState(display.stressPattern);
@@ -481,6 +516,7 @@ function ProsodyEditor({ draft, onClose, onSave, onDelete }) {
   const [error, setError] = useState("");
   const segments = parseProsodyScan(scanText, stressPattern);
   const normalizedPattern = normalizeStressPattern(stressPattern, segments.length);
+  useOutsideDismiss(editorRef, onClose, !!draft);
 
   const toggleStress = (index) => {
     const next = normalizeStressPattern(stressPattern, segments.length).split("");
@@ -513,6 +549,7 @@ function ProsodyEditor({ draft, onClose, onSave, onDelete }) {
 
   return (
     <div
+      ref={editorRef}
       style={{
         position: "fixed",
         top: Math.max(24, Math.min(draft.position.y + 12, window.innerHeight - 520)),
@@ -1049,6 +1086,16 @@ export default function ReaderPage() {
     setTooltip(null);
     window.getSelection()?.removeAllRanges();
   };
+  const copySelectedText = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast?.success("Selected text copied.");
+      setTooltip(null);
+      window.getSelection()?.removeAllRanges();
+    } catch {
+      toast?.error("Could not copy selected text.");
+    }
+  };
   const editAnnot = async (id, note, color, isGlobal) => {
     try {
       const u = await annotsApi.update(id,{note,color,isGlobal});
@@ -1422,7 +1469,7 @@ export default function ReaderPage() {
         : <PlayView data={parsed} annots={annots} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} />
       }
 
-      {tooltip && <AnnotTooltip pos={tooltip} onSave={saveAnnot} onCancel={()=>{setTooltip(null);window.getSelection()?.removeAllRanges();}} myLayers={myLayers} draftKey={`draft:annot:${slug}`} canPublishGlobal={canPublishGlobal} />}
+      {tooltip && <AnnotTooltip pos={tooltip} onSave={saveAnnot} onCopyText={copySelectedText} onCancel={()=>{setTooltip(null);window.getSelection()?.removeAllRanges();}} myLayers={myLayers} draftKey={`draft:annot:${slug}`} canPublishGlobal={canPublishGlobal} />}
       {wordLookup && (
         <WordLookup
           word={wordLookup.word}
