@@ -54,6 +54,12 @@ function parseLineN(node) {
   return Number.isFinite(n) ? n : null;
 }
 
+function parseLineKey(node, fallback) {
+  return node?.getAttribute?.("id")
+    || node?.getAttribute?.("xml:id")
+    || fallback;
+}
+
 /* ── Extract personae/cast from various formats ── */
 function extractCast(root) {
   const personae = [];
@@ -195,13 +201,17 @@ function parsePlay(root, title) {
 function parseSonnets(root, title) {
   const sections = [];
 
-  root.querySelectorAll("sonnet").forEach(sonnet => {
+  root.querySelectorAll("sonnet").forEach((sonnet, sonnetIndex) => {
     const num = sonnet.getAttribute("num") || "";
     const lines = [];
 
-    sonnet.querySelectorAll("l, line").forEach(l => {
+    sonnet.querySelectorAll("l, line").forEach((l, lineIndex) => {
       const n = l.getAttribute("n") || "";
-      lines.push({ text: txt(l), n: parseInt(n, 10) || (lines.length + 1) });
+      lines.push({
+        text: txt(l),
+        n: parseInt(n, 10) || (lines.length + 1),
+        lineKey: parseLineKey(l, `p-${sonnetIndex}-${lineIndex}`),
+      });
     });
 
     if (lines.length > 0) {
@@ -224,10 +234,14 @@ function parsePoem(root, title) {
       const heading = num ? txt(num) : "";
       const lines = [];
       let localN = 0;
-      st.querySelectorAll("l, line").forEach(l => {
+      st.querySelectorAll("l, line").forEach((l, lineIndex) => {
         localN++;
         const n = l.getAttribute("n");
-        lines.push({ text: txt(l), n: parseInt(n, 10) || localN });
+        lines.push({
+          text: txt(l),
+          n: parseInt(n, 10) || localN,
+          lineKey: parseLineKey(l, `p-${idx}-${lineIndex}`),
+        });
       });
       if (lines.length) sections.push({ title: heading, heading, sectionType: "stanza", lines });
     });
@@ -240,10 +254,14 @@ function parsePoem(root, title) {
     lgs.forEach((lg, idx) => {
       const lines = [];
       let localN = 0;
-      lg.querySelectorAll("l, line").forEach(l => {
+      lg.querySelectorAll("l, line").forEach((l, lineIndex) => {
         localN++;
         const n = l.getAttribute("n");
-        lines.push({ text: txt(l), n: parseInt(n, 10) || localN });
+        lines.push({
+          text: txt(l),
+          n: parseInt(n, 10) || localN,
+          lineKey: parseLineKey(l, `p-${idx}-${lineIndex}`),
+        });
       });
       if (lines.length) sections.push({ title: "", heading: "", sectionType: "stanza", lines });
     });
@@ -252,9 +270,13 @@ function parsePoem(root, title) {
 
   // Fallback: grab all lines, split on gaps
   const allLines = [];
-  root.querySelectorAll("l, line").forEach(l => {
+  root.querySelectorAll("l, line").forEach((l, lineIndex) => {
     const n = l.getAttribute("n");
-    allLines.push({ text: txt(l), n: parseInt(n, 10) || (allLines.length + 1) });
+    allLines.push({
+      text: txt(l),
+      n: parseInt(n, 10) || (allLines.length + 1),
+      lineKey: parseLineKey(l, `p-0-${lineIndex}`),
+    });
   });
   if (allLines.length > 0) {
     const chunk = [];

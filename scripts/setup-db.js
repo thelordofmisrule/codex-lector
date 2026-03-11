@@ -300,6 +300,24 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS prosody_overrides (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+    line_key TEXT NOT NULL,
+    line_text TEXT DEFAULT '',
+    scan_text TEXT NOT NULL,
+    stress_pattern TEXT NOT NULL,
+    note_title TEXT DEFAULT '',
+    note_body TEXT DEFAULT '',
+    created_by INTEGER REFERENCES users(id),
+    updated_by INTEGER REFERENCES users(id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(work_id, line_key)
+  );
+  CREATE INDEX IF NOT EXISTS idx_prosody_overrides_work_line
+    ON prosody_overrides(work_id, line_key);
+
   CREATE TABLE IF NOT EXISTS places (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     slug TEXT UNIQUE NOT NULL,
@@ -423,6 +441,29 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS analytics_events (
   meta_json TEXT DEFAULT '',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS prosody_overrides (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+  line_key TEXT NOT NULL,
+  line_text TEXT DEFAULT '',
+  scan_text TEXT NOT NULL,
+  stress_pattern TEXT NOT NULL,
+  note_title TEXT DEFAULT '',
+  note_body TEXT DEFAULT '',
+  created_by INTEGER REFERENCES users(id),
+  updated_by INTEGER REFERENCES users(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(work_id, line_key)
+)`); } catch {}
+try { db.exec("ALTER TABLE prosody_overrides ADD COLUMN line_text TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE prosody_overrides ADD COLUMN note_title TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE prosody_overrides ADD COLUMN note_body TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE prosody_overrides ADD COLUMN created_by INTEGER REFERENCES users(id)"); } catch {}
+try { db.exec("ALTER TABLE prosody_overrides ADD COLUMN updated_by INTEGER REFERENCES users(id)"); } catch {}
+try { db.exec("ALTER TABLE prosody_overrides ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch {}
+try { db.exec("ALTER TABLE prosody_overrides ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_prosody_overrides_work_line ON prosody_overrides(work_id, line_key)"); } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS place_edit_suggestions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   place_id INTEGER NOT NULL REFERENCES places(id) ON DELETE CASCADE,

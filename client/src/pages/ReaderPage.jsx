@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
-import { works as worksApi, annotations as annotsApi, discussions as discApi, bookmarks as bmApi, progress as progApi, layers as layersApi, analytics as analyticsApi } from "../lib/api";
+import { works as worksApi, annotations as annotsApi, discussions as discApi, bookmarks as bmApi, progress as progApi, layers as layersApi, analytics as analyticsApi, prosody as prosodyApi } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import { parsePlayShakespeareXML } from "../lib/textParser";
 import { preservedAnnotationTextStyle, quotedExcerpt, smartenAnnotationText } from "../lib/annotationFormat";
 import { findPlaceAwarenessMatch, warmPlaceAwarenessIndex } from "../lib/placeAwareness";
+import { analyzeProsodyLine, parseProsodyScan } from "../lib/prosody";
 import PlaceAwareness from "../components/PlaceAwareness";
 import ThreadedComments from "../components/ThreadedComments";
 import WordLookup from "../components/WordLookup";
@@ -17,6 +18,244 @@ const ANNOT_TYPES = [
   { label:"Exegesis", desc:"Interpretation or analysis", cls:"hl-2", icon:"🔍" },
   { label:"History", desc:"Historical context", cls:"hl-3", icon:"🏛" },
 ];
+
+const PROSODY_MODES = [
+  { id: "off", label: "Off" },
+  { id: "marks", label: "Marks" },
+  { id: "highlight", label: "Highlight" },
+];
+
+const DEFAULT_READER_VISIBILITY = {
+  showGlobal: true,
+  showPersonal: true,
+  noteTypes: Object.fromEntries(ANNOT_TYPES.map((_, index) => [String(index), true])),
+  layers: {},
+};
+
+function loadReaderVisibility() {
+  try {
+    const raw = JSON.parse(localStorage.getItem("codex-reader-visibility") || "{}");
+    return {
+      showGlobal: raw?.showGlobal !== false,
+      showPersonal: raw?.showPersonal !== false,
+      noteTypes: {
+        ...DEFAULT_READER_VISIBILITY.noteTypes,
+        ...(raw?.noteTypes && typeof raw.noteTypes === "object" ? raw.noteTypes : {}),
+      },
+      layers: raw?.layers && typeof raw.layers === "object" ? raw.layers : {},
+    };
+  } catch {
+    return DEFAULT_READER_VISIBILITY;
+  }
+}
+
+function isNoteTypeVisible(visibility, color) {
+  return visibility.noteTypes[String(color ?? 0)] !== false;
+}
+
+function isLayerVisible(visibility, layerId) {
+  if (!layerId) return false;
+  return visibility.layers[String(layerId)] !== false;
+}
+
+function ReaderVisibilityPanel({
+  user,
+  parsedType,
+  visibility,
+  onToggleGlobal,
+  onTogglePersonal,
+  typeCounts,
+  onToggleType,
+  globalCount,
+  personalCount,
+  layerOptions,
+  onToggleLayer,
+  prosodyMode,
+  onSetProsodyMode,
+  onClose,
+}) {
+  return (
+    <div
+      className="reader-visibility-panel"
+      style={{
+        position: "fixed",
+        left: "50%",
+        bottom: 62,
+        transform: "translateX(-50%)",
+        width: "min(680px, calc(100vw - 24px))",
+        maxHeight: "min(72vh, 620px)",
+        overflowY: "auto",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 14,
+        boxShadow: "0 18px 40px var(--shadow)",
+        padding: 16,
+        zIndex: 120,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--gold)", fontFamily: "var(--font-display)", marginBottom: 2 }}>
+            Reader Controls
+          </div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 18, color: "var(--accent)" }}>
+            Layers & Overlays
+          </div>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ color: "var(--text-light)" }}>Close</button>
+      </div>
+
+      <div style={{ display: "grid", gap: 14 }}>
+        <section>
+          <div style={{ fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 8 }}>
+            Annotation Sources
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "8px 10px", border: "1px solid var(--border-light)", borderRadius: 8 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input type="checkbox" checked={visibility.showGlobal} onChange={(event) => onToggleGlobal(event.target.checked)} />
+                <span>
+                  <span style={{ display: "block", color: "var(--text)" }}>Site-wide notes</span>
+                  <span style={{ fontSize: 12, color: "var(--text-light)" }}>Canonical annotations visible to everyone</span>
+                </span>
+              </span>
+              <span style={{ fontSize: 12, color: "var(--text-light)" }}>{globalCount}</span>
+            </label>
+
+            {user && (
+              <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "8px 10px", border: "1px solid var(--border-light)", borderRadius: 8 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <input type="checkbox" checked={visibility.showPersonal} onChange={(event) => onTogglePersonal(event.target.checked)} />
+                  <span>
+                    <span style={{ display: "block", color: "var(--text)" }}>Personal notes</span>
+                    <span style={{ fontSize: 12, color: "var(--text-light)" }}>Your unlayered private annotations</span>
+                  </span>
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-light)" }}>{personalCount}</span>
+              </label>
+            )}
+          </div>
+        </section>
+
+        <section>
+          <div style={{ fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 8 }}>
+            Note Types
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8 }}>
+            {ANNOT_TYPES.map((type, index) => (
+              <label key={type.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 10px", border: "1px solid var(--border-light)", borderRadius: 8 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={isNoteTypeVisible(visibility, index)}
+                    onChange={(event) => onToggleType(index, event.target.checked)}
+                  />
+                  <span>
+                    <span style={{ display: "block", color: "var(--text)" }}>{type.icon} {type.label}</span>
+                    <span style={{ fontSize: 12, color: "var(--text-light)" }}>{type.desc}</span>
+                  </span>
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-light)" }}>{typeCounts[index] || 0}</span>
+              </label>
+            ))}
+          </div>
+        </section>
+
+        {layerOptions.length > 0 && (
+          <section>
+            <div style={{ fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 8 }}>
+              Layers In This Work
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {layerOptions.map((layer) => (
+                <label key={layer.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "8px 10px", border: "1px solid var(--border-light)", borderRadius: 8 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={isLayerVisible(visibility, layer.id)}
+                      onChange={(event) => onToggleLayer(layer.id, event.target.checked)}
+                    />
+                    <span>
+                      <span style={{ display: "block", color: "var(--text)" }}>{layer.name}</span>
+                      <span style={{ fontSize: 12, color: "var(--text-light)" }}>
+                        {layer.isOwner ? "Your layer" : layer.isSubscribed ? "Subscribed layer" : "Layer notes"}{layer.displayName ? ` · ${layer.displayName}` : ""}
+                      </span>
+                    </span>
+                  </span>
+                  <span style={{ fontSize: 12, color: "var(--text-light)" }}>{layer.count}</span>
+                </label>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {parsedType === "poetry" && (
+          <section>
+            <div style={{ fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 8 }}>
+              Prosody Overlay
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {PROSODY_MODES.map((mode) => (
+                <button
+                  key={mode.id}
+                  className="btn btn-sm"
+                  onClick={() => onSetProsodyMode(mode.id)}
+                  style={{
+                    background: prosodyMode === mode.id ? "var(--gold)" : "var(--surface)",
+                    color: prosodyMode === mode.id ? "var(--gold-contrast)" : "var(--text-muted)",
+                    border: "1px solid var(--border-light)",
+                    fontFamily: "var(--font-display)",
+                    letterSpacing: 1,
+                  }}
+                >
+                  ≈ {mode.label}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-light)", marginTop: 8 }}>
+              Heuristic by default, with per-line overrides and prosody-only notes where you have corrected the meter.
+            </div>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function defaultStressPattern(length) {
+  let pattern = "";
+  for (let index = 0; index < length; index += 1) {
+    const trailingWeak = length % 2 === 1 && length > 1 && index === length - 1;
+    pattern += trailingWeak ? "w" : (index % 2 === 0 ? "w" : "s");
+  }
+  return pattern;
+}
+
+function normalizeStressPattern(pattern, segmentCount) {
+  const base = String(pattern || "").replace(/[^ws]/gi, "").toLowerCase();
+  if (segmentCount <= 0) return "";
+  let next = base.slice(0, segmentCount);
+  const fallback = defaultStressPattern(segmentCount);
+  while (next.length < segmentCount) {
+    next += fallback[next.length] || "w";
+  }
+  return next;
+}
+
+function getProsodyDisplay(lineText, override) {
+  if (override?.scanText) {
+    const segments = parseProsodyScan(override.scanText, override.stressPattern);
+    return {
+      text: lineText,
+      scanText: override.scanText,
+      stressPattern: normalizeStressPattern(override.stressPattern, segments.length),
+      segments,
+      syllableCount: segments.length,
+      meterLabel: segments.length ? `Stored scan · ${segments.length} syllable${segments.length === 1 ? "" : "s"}` : "Stored scan",
+    };
+  }
+  return analyzeProsodyLine(lineText);
+}
 
 /* ─── Margin annotation ─── */
 function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelete, compact }) {
@@ -169,23 +408,259 @@ function AnnotTooltip({ pos, onSave, onCancel, myLayers, draftKey, canPublishGlo
 }
 
 /* ─── Annotated line with margin notes ─── */
-function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, lineNum, showNum, isBookmarked, onBookmark }) {
+function ProsodyLineText({ text, mode, override }) {
+  const display = getProsodyDisplay(text, override);
+  return (
+    <span className={`reader-prosody reader-prosody--${mode}`}>
+      {display.segments.map((segment, index) => (
+        <span
+          key={`${index}-${segment.text}`}
+          className={`reader-prosody-syllable reader-prosody-syllable--${segment.stress === "s" ? "stress" : "weak"}`}
+          data-meter={segment.mark}
+        >
+          {segment.text}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function ProsodyNoteTooltip({ note, onClose, onEdit }) {
+  if (!note) return null;
+  const override = note.override || {};
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: note.position.y + 8,
+        left: Math.max(12, Math.min(note.position.x - 150, window.innerWidth - 320)),
+        width: 300,
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 10,
+        boxShadow: "0 10px 28px var(--shadow)",
+        padding: 14,
+        zIndex: 220,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start", marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--gold)", fontFamily: "var(--font-display)", marginBottom: 4 }}>
+            Prosody Note
+          </div>
+          <div style={{ fontFamily: "var(--font-display)", color: "var(--accent)", fontSize: 16 }}>
+            {override.noteTitle || "Meter note"}
+          </div>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ color: "var(--text-light)" }}>✕</button>
+      </div>
+      <div style={{ fontSize: 12, color: "var(--text-light)", marginBottom: 8 }}>
+        Line {note.lineNumber}
+      </div>
+      <div style={{ color: "var(--text-muted)", fontStyle: "italic", marginBottom: 10, lineHeight: 1.5 }}>
+        {note.lineText}
+      </div>
+      <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, color: "var(--text)" }}>
+        {override.noteBody}
+      </div>
+      {onEdit && (
+        <div style={{ marginTop: 10 }}>
+          <button className="btn btn-secondary btn-sm" onClick={onEdit}>Edit Prosody</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProsodyEditor({ draft, onClose, onSave, onDelete }) {
+  const display = getProsodyDisplay(draft.lineText, draft.override);
+  const [scanText, setScanText] = useState(display.scanText);
+  const [stressPattern, setStressPattern] = useState(display.stressPattern);
+  const [noteTitle, setNoteTitle] = useState(draft.override?.noteTitle || "");
+  const [noteBody, setNoteBody] = useState(draft.override?.noteBody || "");
+  const [error, setError] = useState("");
+  const segments = parseProsodyScan(scanText, stressPattern);
+  const normalizedPattern = normalizeStressPattern(stressPattern, segments.length);
+
+  const toggleStress = (index) => {
+    const next = normalizeStressPattern(stressPattern, segments.length).split("");
+    next[index] = next[index] === "s" ? "w" : "s";
+    setStressPattern(next.join(""));
+  };
+
+  const resetToHeuristic = () => {
+    const heuristic = analyzeProsodyLine(draft.lineText);
+    setScanText(heuristic.scanText);
+    setStressPattern(heuristic.stressPattern);
+    setError("");
+  };
+
+  const submit = () => {
+    if (!segments.length) {
+      setError("Insert at least one syllable boundary with | markers.");
+      return;
+    }
+    setError("");
+    onSave({
+      lineKey: draft.lineKey,
+      lineText: draft.lineText,
+      scanText,
+      stressPattern: normalizedPattern,
+      noteTitle,
+      noteBody,
+    });
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: Math.max(24, Math.min(draft.position.y + 12, window.innerHeight - 520)),
+        left: Math.max(12, Math.min(draft.position.x - 190, window.innerWidth - 400)),
+        width: 380,
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 12,
+        boxShadow: "0 16px 36px var(--shadow)",
+        padding: 16,
+        zIndex: 230,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start", marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--gold)", fontFamily: "var(--font-display)", marginBottom: 4 }}>
+            Prosody Editor
+          </div>
+          <div style={{ fontFamily: "var(--font-display)", color: "var(--accent)", fontSize: 16 }}>
+            Line {draft.lineNumber}
+          </div>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ color: "var(--text-light)" }}>✕</button>
+      </div>
+
+      <div style={{ color: "var(--text-muted)", fontStyle: "italic", marginBottom: 10, lineHeight: 1.5 }}>
+        {draft.lineText}
+      </div>
+
+      <div style={{ fontSize: 11, letterSpacing: 1.2, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 6 }}>
+        Segmented Scan
+      </div>
+      <textarea
+        className="input"
+        value={scanText}
+        onChange={(event) => {
+          const nextScan = event.target.value;
+          const nextCount = parseProsodyScan(nextScan, normalizedPattern).length;
+          setScanText(nextScan);
+          setStressPattern(normalizeStressPattern(stressPattern, nextCount));
+        }}
+        rows={3}
+        style={{ resize: "vertical", marginBottom: 6, lineHeight: 1.55 }}
+      />
+      <div style={{ fontSize: 12, color: "var(--text-light)", marginBottom: 10 }}>
+        Insert <code style={{ background: "var(--code-bg)", padding: "1px 4px", borderRadius: 4 }}>|</code> between every syllable.
+      </div>
+
+      <div style={{ fontSize: 11, letterSpacing: 1.2, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 6 }}>
+        Stress Pattern
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+        {segments.map((segment, index) => {
+          const stress = normalizedPattern[index] || "w";
+          return (
+            <button
+              key={`${index}-${segment.text}`}
+              className={`btn btn-sm ${stress === "s" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => toggleStress(index)}
+              style={{ textTransform: "none", letterSpacing: 0, padding: "4px 8px" }}
+            >
+              {stress === "s" ? "¯" : "˘"} {segment.text.trim() || segment.text}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "grid", gap: 8, marginBottom: 10 }}>
+        <input
+          className="input"
+          value={noteTitle}
+          onChange={(event) => setNoteTitle(event.target.value)}
+          placeholder="Prosody note title (optional)"
+          maxLength={120}
+        />
+        <textarea
+          className="input"
+          value={noteBody}
+          onChange={(event) => setNoteBody(event.target.value)}
+          placeholder="Prosody-only note or explanation…"
+          rows={3}
+          maxLength={600}
+          style={{ resize: "vertical", lineHeight: 1.55 }}
+        />
+      </div>
+
+      {error && (
+        <div style={{ marginBottom: 8, color: "var(--danger)", fontSize: 12 }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn btn-primary btn-sm" onClick={submit}>Save Scan</button>
+          <button className="btn btn-secondary btn-sm" onClick={resetToHeuristic}>Reset to Heuristic</button>
+          {draft.override && (
+            <button className="btn btn-ghost btn-sm" onClick={() => onDelete(draft.lineKey)} style={{ color: "var(--danger)" }}>
+              Clear Override
+            </button>
+          )}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--text-light)" }}>
+          {segments.length} syllable{segments.length === 1 ? "" : "s"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, lineNum, showNum, isBookmarked, prosodyMode, prosodyOverride, onOpenProsodyNote, onOpenProsodyEditor }) {
   const lineAnnots = showAnnots ? (annotsByLine[lineId] || []) : [];
+  const hasProsodyNote = !!(prosodyOverride?.noteBody || prosodyOverride?.noteTitle);
+  const showProsodyTools = prosodyMode && prosodyMode !== "off";
   return (
     <div data-lineid={lineId} id={lineId} style={{ display:"flex", gap:12, alignItems:"flex-start", position:"relative" }}>
-      <div style={{ width:40, textAlign:"right", flexShrink:0, fontSize:"0.75em", color:"var(--text-light)", fontFamily:"var(--font-mono)", userSelect:"none", paddingTop:2, position:"relative" }}>
-        {showNum && lineNum}
-        {isBookmarked && <span style={{ position:"absolute", right:-4, top:0, fontSize:14 }} title="Bookmark">🔖</span>}
+      <div style={{ width:40, textAlign:"right", flexShrink:0, fontSize:"0.75em", color:"var(--text-light)", fontFamily:"var(--font-mono)", userSelect:"none", paddingTop:2, position:"relative", display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4 }}>
+        <div style={{ position:"relative", width:"100%" }}>
+          {showNum && lineNum}
+          {isBookmarked && <span style={{ position:"absolute", right:-4, top:0, fontSize:14 }} title="Bookmark">🔖</span>}
+        </div>
+        {showProsodyTools && hasProsodyNote && (
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={(event) => onOpenProsodyNote?.(event, lineId, text, lineNum)}
+            style={{ padding:0, fontSize:11, color:"var(--gold)", lineHeight:1 }}
+            title={prosodyOverride.noteTitle || "Prosody note"}
+          >
+            ◈
+          </button>
+        )}
+        {showProsodyTools && isAdmin && (
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={(event) => onOpenProsodyEditor?.(event, lineId, text, lineNum)}
+            style={{ padding:0, fontSize:11, color:"var(--accent)", lineHeight:1 }}
+            title="Edit prosody for this line"
+          >
+            ≈
+          </button>
+        )}
       </div>
       <div style={{ flex:1 }}>
-        <div
-          className="reader-line-text"
-          dangerouslySetInnerHTML={{ __html:text }}
-          style={{
-            fontFamily:"var(--font-fell)",
-            whiteSpace:"normal",
-          }}
-        />
+        <div className="reader-line-text" style={{ fontFamily:"var(--font-fell)", whiteSpace:"normal" }}>
+          {showProsodyTools
+            ? <ProsodyLineText text={text} mode={prosodyMode} override={prosodyOverride} />
+            : text}
+        </div>
       </div>
       {lineAnnots.length > 0 && (
         <div className="annot-margin" style={{ width:260, flexShrink:0, display:"flex", flexDirection:"column", gap:4 }}>
@@ -224,7 +699,7 @@ function PlayView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, can
                 const lineId = `l-${idx}-${li}`;
                 return <AnnotatedLine key={li} lineId={lineId} text={line.text} annots={annots} annotsByLine={annotsByLine}
                   showAnnots={showAnnots} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot}
-                  lineNum={lineNum} showNum={hasXmlN || lineNum%5===0} isBookmarked={bookmark===lineId} />;
+                  lineNum={lineNum} showNum={hasXmlN || lineNum%5===0} isBookmarked={bookmark===lineId} prosodyMode="off" />;
               })}
             </div>
           );
@@ -236,7 +711,22 @@ function PlayView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, can
 }
 
 /* ─── Poetry view ─── */
-function PoetryView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, bookmark }) {
+function PoetryView({
+  data,
+  annots,
+  showAnnots,
+  annotsByLine,
+  userId,
+  isAdmin,
+  canPublishGlobal,
+  editAnnot,
+  deleteAnnot,
+  bookmark,
+  prosodyMode,
+  prosodyOverrides,
+  onOpenProsodyNote,
+  onOpenProsodyEditor,
+}) {
   let lineNum = 0;
   return (
     <div style={{ marginBottom:32 }}>
@@ -247,10 +737,17 @@ function PoetryView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, c
             if (line.type==="stagedir") return <div key={li} className="reader-stage-direction" style={{ textAlign:"center", fontStyle:"italic", color:"var(--text-muted)", margin:"4px 0", fontSize:"0.85em" }}>[{line.text}]</div>;
             const hasXmlN = Number.isFinite(line.n);
             lineNum = hasXmlN ? line.n : (lineNum + 1);
-            const lineId = `p-${si}-${li}`;
+            const lineId = line.lineKey || `p-${si}-${li}`;
             return <AnnotatedLine key={li} lineId={lineId} text={line.text} annots={annots} annotsByLine={annotsByLine}
               showAnnots={showAnnots} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot}
-              lineNum={lineNum} showNum={hasXmlN || lineNum%5===0||lineNum===1} isBookmarked={bookmark===lineId} />;
+              lineNum={lineNum}
+              showNum={hasXmlN || lineNum%5===0||lineNum===1}
+              isBookmarked={bookmark===lineId}
+              prosodyMode={prosodyMode}
+              prosodyOverride={prosodyOverrides[lineId]}
+              onOpenProsodyNote={onOpenProsodyNote}
+              onOpenProsodyEditor={onOpenProsodyEditor}
+            />;
           })}
         </div>
       ))}
@@ -278,15 +775,21 @@ export default function ReaderPage() {
     const raw = parseInt(localStorage.getItem("codex-font-size") || "20", 10);
     return Number.isFinite(raw) ? Math.min(28, Math.max(14, raw)) : 20;
   });
-  const [annotMode, setAnnotMode] = useState(() => {
-    const raw = localStorage.getItem("codex-annot-mode");
-    return raw === "mine" || raw === "off" ? raw : "all";
-  });
   const [bookmark, setBookmark] = useState(null);
   const [wordLookup, setWordLookup] = useState(null); // { word, position:{x,y} }
   const [placeAwareness, setPlaceAwareness] = useState(null); // { placeSlug, initialPlace, matchedTerm, selectionText, lineId, position }
+  const [layerCatalog, setLayerCatalog] = useState([]);
   const [myLayers, setMyLayers] = useState([]);
   const [showReaderHint, setShowReaderHint] = useState(() => localStorage.getItem("codex-reader-hint-dismissed") !== "true");
+  const [readerVisibility, setReaderVisibility] = useState(loadReaderVisibility);
+  const [showVisibilityPanel, setShowVisibilityPanel] = useState(false);
+  const [prosodyMode, setProsodyMode] = useState(() => {
+    const raw = localStorage.getItem("codex-prosody-mode");
+    return raw === "marks" || raw === "highlight" ? raw : "off";
+  });
+  const [prosodyOverrides, setProsodyOverrides] = useState({});
+  const [prosodyNote, setProsodyNote] = useState(null);
+  const [prosodyEditor, setProsodyEditor] = useState(null);
   const progressRef = useRef({ maxLine:0, total:0, slug:null });
   const trackedSlugRef = useRef("");
   const selectionLookupRef = useRef(0);
@@ -300,19 +803,17 @@ export default function ReaderPage() {
     }
   };
 
-  const showAnnots = annotMode !== "off";
-
   useEffect(() => {
     localStorage.setItem("codex-font-size", String(fontSize));
   }, [fontSize]);
 
   useEffect(() => {
-    localStorage.setItem("codex-annot-mode", annotMode);
-  }, [annotMode]);
+    localStorage.setItem("codex-prosody-mode", prosodyMode);
+  }, [prosodyMode]);
 
   useEffect(() => {
-    if (!user && annotMode === "mine") setAnnotMode("all");
-  }, [user, annotMode]);
+    localStorage.setItem("codex-reader-visibility", JSON.stringify(readerVisibility));
+  }, [readerVisibility]);
 
   const getCurrentViewportLineNumber = useCallback(() => {
     const lines = document.querySelectorAll("[data-lineid]");
@@ -366,40 +867,49 @@ export default function ReaderPage() {
         e.preventDefault();
         setBookmarkHere();
       } else if (e.key === "Escape") {
-        if (wordLookup || tooltip || placeAwareness) {
+        if (wordLookup || tooltip || placeAwareness || prosodyNote || prosodyEditor || showVisibilityPanel) {
           e.preventDefault();
           setWordLookup(null);
           setTooltip(null);
           setPlaceAwareness(null);
+          setProsodyNote(null);
+          setProsodyEditor(null);
+          setShowVisibilityPanel(false);
           window.getSelection()?.removeAllRanges();
         }
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigate, user, wordLookup, tooltip, placeAwareness, slug, getCurrentViewportLineNumber]);
+  }, [navigate, user, wordLookup, tooltip, placeAwareness, prosodyNote, prosodyEditor, showVisibilityPanel, slug, getCurrentViewportLineNumber]);
+
+  useEffect(() => {
+    setShowVisibilityPanel(false);
+  }, [slug]);
 
   useEffect(() => {
     setLoading(true);
-    const filter = annotMode === "off" ? null : annotMode;
     Promise.all([
       worksApi.get(slug),
-      filter ? annotsApi.forWork(slug, filter).catch(()=>[]) : Promise.resolve([]),
+      annotsApi.forWork(slug, "all").catch(()=>[]),
       discApi.forWork(slug).catch(()=>[]),
       user ? bmApi.forWork(slug).catch(()=>null) : Promise.resolve(null),
       user ? layersApi.list().catch(()=>[]) : Promise.resolve([]),
+      prosodyApi.forWork(slug).catch(()=>({ overrides: [] })),
     ])
-      .then(([w,a,d,bm,layers]) => {
+      .then(([w,a,d,bm,layers,prosodyData]) => {
         setWork(w); setAnnots(a); setDisc(d);
         if(bm) setBookmark(bm.line_id);
+        setLayerCatalog(layers || []);
         setMyLayers((layers||[]).filter(l => l.isOwner));
+        setProsodyOverrides(Object.fromEntries((prosodyData?.overrides || []).map((item) => [item.lineKey, item])));
       })
       .catch(e => {
         console.error(e);
         if (e?.status !== 404) toast?.error("Could not load this work. Please refresh.");
       })
       .finally(() => setLoading(false));
-  }, [slug, annotMode, user, toast]);
+  }, [slug, user, toast]);
 
   // Track reading progress on scroll
   useEffect(() => {
@@ -516,10 +1026,17 @@ export default function ReaderPage() {
   const saveAnnot = async (note, color, layerId, isGlobal) => {
     try {
       const a = await annotsApi.create({ workId:work.id, lineId:tooltip.lineId, note, color, selectedText:tooltip.text, isGlobal });
+      let nextAnnot = a;
       if (layerId) {
         await layersApi.addAnnotation(layerId, a.id).catch(()=>{});
+        const layerMeta = myLayers.find((layer) => String(layer.id) === String(layerId));
+        nextAnnot = {
+          ...a,
+          layer_id: Number(layerId),
+          layer_name: layerMeta?.name || a.layer_name || "",
+        };
       }
-      setAnnots(prev => [...prev, a]);
+      setAnnots(prev => [...prev, nextAnnot]);
       localStorage.removeItem(`draft:annot:${slug}:note`);
       localStorage.removeItem(`draft:annot:${slug}:color`);
       localStorage.removeItem(`draft:annot:${slug}:layer`);
@@ -557,6 +1074,68 @@ export default function ReaderPage() {
     } catch(e) {
       console.error(e);
       toast?.error(e.message || "Could not delete annotation.");
+    }
+  };
+
+  const openProsodyNote = (event, lineKey, lineText, lineNumber) => {
+    event.stopPropagation();
+    const override = prosodyOverrides[lineKey];
+    if (!override || (!override.noteBody && !override.noteTitle)) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    setProsodyEditor(null);
+    setProsodyNote({
+      override,
+      lineKey,
+      lineText,
+      lineNumber,
+      position: { x: rect.left + (rect.width / 2), y: rect.bottom },
+    });
+  };
+
+  const openProsodyEditor = (event, lineKey, lineText, lineNumber) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setProsodyNote(null);
+    setProsodyEditor({
+      override: prosodyOverrides[lineKey] || null,
+      lineKey,
+      lineText,
+      lineNumber,
+      position: { x: rect.left + (rect.width / 2), y: rect.bottom },
+    });
+  };
+
+  const saveProsodyOverride = async (payload) => {
+    try {
+      const data = await prosodyApi.upsert(slug, payload.lineKey, payload);
+      setProsodyOverrides((prev) => ({ ...prev, [data.override.lineKey]: data.override }));
+      setProsodyEditor(null);
+      toast?.success("Prosody override saved.");
+    } catch (e) {
+      toast?.error(e.message || "Could not save prosody override.");
+    }
+  };
+
+  const deleteProsodyOverride = async (lineKey) => {
+    const ok = await confirm({
+      title: "Clear Prosody Override",
+      message: "Remove the stored prosody override for this line?",
+      confirmText: "Clear",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await prosodyApi.delete(slug, lineKey);
+      setProsodyOverrides((prev) => {
+        const next = { ...prev };
+        delete next[lineKey];
+        return next;
+      });
+      setProsodyEditor(null);
+      setProsodyNote(null);
+      toast?.success("Prosody override cleared.");
+    } catch (e) {
+      toast?.error(e.message || "Could not clear prosody override.");
     }
   };
 
@@ -618,11 +1197,62 @@ export default function ReaderPage() {
       : work.variant === "ps-apocrypha"
         ? "Apocrypha"
         : work.variant || "Edition";
-  const annotsByLine = {};
-  annots.forEach(a => { (annotsByLine[a.line_id] ??= []).push(a); });
+  const layerCatalogById = Object.fromEntries((layerCatalog || []).map((layer) => [String(layer.id), layer]));
+  const typeCounts = {};
+  const layerCounts = {};
+  let globalCount = 0;
+  let personalCount = 0;
 
-  const modeLabels = { all:"All", mine:"Mine", off:"Off" };
-  const modeOrder = user ? ["all","mine","off"] : ["all","off"];
+  annots.forEach((annot) => {
+    typeCounts[annot.color] = (typeCounts[annot.color] || 0) + 1;
+
+    if (annot.is_global) {
+      globalCount += 1;
+      return;
+    }
+
+    if (annot.layer_id) {
+      const key = String(annot.layer_id);
+      if (!layerCounts[key]) {
+        const layerMeta = layerCatalogById[key];
+        layerCounts[key] = {
+          id: annot.layer_id,
+          name: annot.layer_name || layerMeta?.name || `Layer ${annot.layer_id}`,
+          displayName: layerMeta?.displayName || layerMeta?.display_name || "",
+          isOwner: !!layerMeta?.isOwner,
+          isSubscribed: !!layerMeta?.isSubscribed,
+          count: 0,
+        };
+      }
+      layerCounts[key].count += 1;
+      return;
+    }
+
+    if (userId && annot.user_id === userId) {
+      personalCount += 1;
+    }
+  });
+
+  const layerOptions = Object.values(layerCounts).sort((a, b) => {
+    if (a.isOwner !== b.isOwner) return a.isOwner ? -1 : 1;
+    if (a.isSubscribed !== b.isSubscribed) return a.isSubscribed ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const filteredAnnots = annots.filter((annot) => {
+    if (!isNoteTypeVisible(readerVisibility, annot.color)) return false;
+    if (annot.is_global) return readerVisibility.showGlobal;
+    if (annot.layer_id) return isLayerVisible(readerVisibility, annot.layer_id);
+    if (userId && annot.user_id === userId) return readerVisibility.showPersonal;
+    return false;
+  });
+
+  const annotsByLine = {};
+  filteredAnnots.forEach((annot) => {
+    (annotsByLine[annot.line_id] ??= []).push(annot);
+  });
+
+  const showAnnots = filteredAnnots.length > 0;
   const dismissReaderHint = () => {
     localStorage.setItem("codex-reader-hint-dismissed", "true");
     setShowReaderHint(false);
@@ -630,7 +1260,7 @@ export default function ReaderPage() {
 
   return (
     <div className="animate-in reader-page" onMouseUp={handleSelect}
-      style={{ maxWidth: showAnnots && annots.length > 0 ? 1020 : 740, margin:"0 auto", padding:"40px 24px 100px", fontSize, lineHeight:1.85, transition:"max-width 0.3s" }}>
+      style={{ maxWidth: showAnnots ? 1020 : 740, margin:"0 auto", padding:"40px 24px 100px", fontSize, lineHeight:1.85, transition:"max-width 0.3s" }}>
 
       {showReaderHint && (
         <div style={{ marginBottom:18, padding:"14px 16px", background:"var(--surface)", border:"1px solid var(--border-light)", borderRadius:10 }}>
@@ -645,7 +1275,7 @@ export default function ReaderPage() {
             <div>Click a single word for lookup, then choose to annotate if you want.</div>
             <div>Select a place name to open Place Awareness.</div>
             <div>Press <strong>b</strong> to bookmark your place.</div>
-            <div>Switch annotation layers or open the discussion below the text.</div>
+            <div>Use Layers & Overlays to mix site-wide notes, note types, prosody, and layer subscriptions.</div>
           </div>
         </div>
       )}
@@ -663,17 +1293,13 @@ export default function ReaderPage() {
 
           <span style={{ width:1, height:20, background:"var(--border)" }} />
 
-          {/* Annotation mode toggle */}
-          <div style={{ display:"flex", borderRadius:6, overflow:"hidden", border:"1px solid var(--border-light)" }}>
-            {modeOrder.map(m => (
-              <button key={m} className="btn btn-sm" onClick={()=>setAnnotMode(m)} style={{
-                borderRadius:0, fontSize:12, padding:"4px 10px",
-                background: annotMode===m ? "var(--accent)" : "var(--surface)",
-                color: annotMode===m ? "var(--accent-contrast)" : "var(--text-muted)",
-                border:"none", fontFamily:"var(--font-display)", letterSpacing:1,
-              }}>✎ {modeLabels[m]}</button>
-            ))}
-          </div>
+          <button
+            className={`btn btn-sm ${showVisibilityPanel ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setShowVisibilityPanel((value) => !value)}
+            style={{ fontFamily:"var(--font-display)", letterSpacing:1 }}
+          >
+            Layers & Overlays
+          </button>
 
           {/* Bookmark controls */}
           {user && (
@@ -699,6 +1325,31 @@ export default function ReaderPage() {
           <span className="reader-note" style={{ fontSize:11, color:"var(--text-light)", fontFamily:"var(--font-fell)", fontStyle:"italic" }}>Click a word to look it up</span>
         </div>
       </div>
+
+      {showVisibilityPanel && (
+        <ReaderVisibilityPanel
+          user={user}
+          parsedType={parsed.type}
+          visibility={readerVisibility}
+          onToggleGlobal={(checked) => setReaderVisibility((prev) => ({ ...prev, showGlobal: checked }))}
+          onTogglePersonal={(checked) => setReaderVisibility((prev) => ({ ...prev, showPersonal: checked }))}
+          typeCounts={typeCounts}
+          onToggleType={(color, checked) => setReaderVisibility((prev) => ({
+            ...prev,
+            noteTypes: { ...prev.noteTypes, [String(color)]: checked },
+          }))}
+          globalCount={globalCount}
+          personalCount={personalCount}
+          layerOptions={layerOptions}
+          onToggleLayer={(layerId, checked) => setReaderVisibility((prev) => ({
+            ...prev,
+            layers: { ...prev.layers, [String(layerId)]: checked },
+          }))}
+          prosodyMode={prosodyMode}
+          onSetProsodyMode={setProsodyMode}
+          onClose={() => setShowVisibilityPanel(false)}
+        />
+      )}
 
       {/* Bookmark resume banner */}
       {bookmark && (
@@ -743,11 +1394,31 @@ export default function ReaderPage() {
       <div style={{ textAlign:"center", fontSize:11, color:"var(--text-light)", letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>
         {editionLabel} · {slug}
       </div>
+      {parsed.type === "poetry" && prosodyMode !== "off" && (
+        <div style={{ textAlign:"center", fontSize:12, color:"var(--text-light)", marginBottom:8 }}>
+          Prosody overlay is heuristic unless a line has a stored override.
+        </div>
+      )}
       <div style={{ textAlign:"center", color:"var(--border)", fontSize:14, letterSpacing:8, marginBottom:28 }}>☙ ❦ ❧</div>
 
       {/* Content */}
       {parsed.type === "poetry"
-        ? <PoetryView data={parsed} annots={annots} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} />
+        ? <PoetryView
+            data={parsed}
+            annots={annots}
+            showAnnots={showAnnots}
+            annotsByLine={annotsByLine}
+            userId={userId}
+            isAdmin={isAdmin}
+            canPublishGlobal={canPublishGlobal}
+            editAnnot={editAnnot}
+            deleteAnnot={deleteAnnot}
+            bookmark={bookmark}
+            prosodyMode={prosodyMode}
+            prosodyOverrides={prosodyOverrides}
+            onOpenProsodyNote={openProsodyNote}
+            onOpenProsodyEditor={openProsodyEditor}
+          />
         : <PlayView data={parsed} annots={annots} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} />
       }
 
@@ -786,6 +1457,30 @@ export default function ReaderPage() {
             });
             setPlaceAwareness(null);
           } : undefined}
+        />
+      )}
+      {prosodyNote && (
+        <ProsodyNoteTooltip
+          note={prosodyNote}
+          onClose={() => setProsodyNote(null)}
+          onEdit={isAdmin ? () => {
+            setProsodyEditor({
+              override: prosodyNote.override,
+              lineKey: prosodyNote.lineKey,
+              lineText: prosodyNote.lineText,
+              lineNumber: prosodyNote.lineNumber,
+              position: prosodyNote.position,
+            });
+            setProsodyNote(null);
+          } : undefined}
+        />
+      )}
+      {prosodyEditor && (
+        <ProsodyEditor
+          draft={prosodyEditor}
+          onClose={() => setProsodyEditor(null)}
+          onSave={saveProsodyOverride}
+          onDelete={deleteProsodyOverride}
         />
       )}
       <ThreadedComments comments={disc} onPost={postComment} onEdit={editComment} onDelete={deleteComment} label="Discussion" draftKey={`work:${slug}:discussion`} />

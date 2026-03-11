@@ -115,6 +115,11 @@ export const places = {
   restoreCitationExclusion:(slug, id)=>req(`/places/${encodeURIComponent(slug)}/citation-exclusions/${id}`,{method:"DELETE"}),
   uploadImage:(fileName,mimeType,dataUrl)=>req("/places/upload-image",{method:"POST",body:JSON.stringify({fileName,mimeType,dataUrl})}),
 };
+export const prosody = {
+  forWork:slug=>req(`/prosody/${encodeURIComponent(slug)}`),
+  upsert:(slug, lineKey, data)=>req(`/prosody/${encodeURIComponent(slug)}/${encodeURIComponent(lineKey)}`,{method:"PUT",body:JSON.stringify(data)}),
+  delete:(slug, lineKey)=>req(`/prosody/${encodeURIComponent(slug)}/${encodeURIComponent(lineKey)}`,{method:"DELETE"}),
+};
 export const chat = {
   summary:()=>req("/chat/summary"),
   rooms:()=>req("/chat/rooms"),
