@@ -18,6 +18,7 @@
     "import": "node scripts/import-texts.js",
     "import-places": "node scripts/import-places-json.js",
     "import-places-enrichment": "node scripts/import-places-enrichment.js",
+    "import-lucrece-notes": "node scripts/import-lucrece-annotations.js",
     "validate-places-enrichment": "node scripts/validate-places-enrichment.js",
     "build-words": "node scripts/build-word-index.js",
     "build-search": "node scripts/rebuild-search-index.js"
