@@ -41,7 +41,7 @@ function readAttr(attrs, name) {
 
 function collectLinesFromGroups(groupMatches, keyPrefixBuilder) {
   const linesByNumber = new Map();
-  let runningNumber = 0;
+  let absoluteNumber = 0;
 
   groupMatches.forEach((match, groupIndex) => {
     const groupXml = match[1] || "";
@@ -53,13 +53,10 @@ function collectLinesFromGroups(groupMatches, keyPrefixBuilder) {
       if (!text) return;
 
       const rawId = readAttr(attrs, "xml:id") || readAttr(attrs, "id");
-      const rawN = readAttr(attrs, "gn") || readAttr(attrs, "n");
-      const parsedN = parseInt(rawN, 10);
-      const lineNumber = Number.isFinite(parsedN) ? parsedN : (runningNumber + 1);
-      runningNumber = lineNumber;
+      absoluteNumber += 1;
 
-      linesByNumber.set(lineNumber, {
-        lineNumber,
+      linesByNumber.set(absoluteNumber, {
+        lineNumber: absoluteNumber,
         lineKey: rawId || keyPrefixBuilder(groupIndex, lineIndex),
         text,
       });
