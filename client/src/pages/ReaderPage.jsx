@@ -26,6 +26,44 @@ const PROSODY_MODES = [
   { id: "highlight", label: "Highlight" },
 ];
 
+const WORK_PRINT_DOWNLOADS = {
+  "the rape of lucrece": [
+    {
+      label: "Folger PDF",
+      href: "https://folger-main-site-assets.s3.amazonaws.com/uploads/2022/11/lucrece_PDF_FolgerShakespeare.pdf",
+    },
+    {
+      label: "Shakespeare Candle PDF",
+      href: "https://www.shakespearecandle.com/therapeoflucrece.pdf",
+    },
+  ],
+};
+
+function normalizeWorkDownloadKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function getWorkPrintDownloads(title, slug) {
+  const keys = [
+    normalizeWorkDownloadKey(title),
+    normalizeWorkDownloadKey(slug),
+  ].filter(Boolean);
+
+  for (const key of keys) {
+    if (WORK_PRINT_DOWNLOADS[key]) return WORK_PRINT_DOWNLOADS[key];
+  }
+
+  if (keys.some((key) => key.includes("lucrece"))) {
+    return WORK_PRINT_DOWNLOADS["the rape of lucrece"] || [];
+  }
+
+  return [];
+}
+
 const DEFAULT_READER_VISIBILITY = {
   showGlobal: true,
   showPersonal: true,
@@ -1438,6 +1476,7 @@ export default function ReaderPage() {
   const readingCalendarRows = getCalendarRowsForWork(parsed.title || work.title, YEAR_OF_SHAKESPEARE_ROWS);
   const readingWaypoints = buildReadingWaypoints(countRenderableLines(parsed), readingCalendarRows);
   const waypointsByIndex = Object.fromEntries(readingWaypoints.map((waypoint) => [waypoint.lineIndex, waypoint]));
+  const printDownloads = getWorkPrintDownloads(parsed.title || work.title, slug);
   const dismissReaderHint = () => {
     localStorage.setItem("codex-reader-hint-dismissed", "true");
     setShowReaderHint(false);
@@ -1588,6 +1627,27 @@ export default function ReaderPage() {
       <div style={{ textAlign:"center", fontSize:11, color:"var(--text-light)", letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>
         {editionLabel} · {slug}
       </div>
+      {printDownloads.length > 0 && (
+        <div style={{ textAlign:"center", marginBottom:12 }}>
+          <div style={{ fontSize:11, letterSpacing:1.6, textTransform:"uppercase", color:"var(--gold)", fontFamily:"var(--font-display)", marginBottom:6 }}>
+            Print Downloads
+          </div>
+          <div style={{ display:"flex", justifyContent:"center", gap:8, flexWrap:"wrap" }}>
+            {printDownloads.map((download) => (
+              <a
+                key={download.href}
+                className="btn btn-secondary btn-sm"
+                href={download.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontFamily:"var(--font-display)", letterSpacing:1 }}
+              >
+                {download.label}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
       {parsed.type === "poetry" && prosodyMode !== "off" && (
         <div style={{ textAlign:"center", fontSize:12, color:"var(--text-light)", marginBottom:8 }}>
           Prosody overlay is heuristic unless a line has a stored override.
