@@ -1477,6 +1477,7 @@ export default function ReaderPage() {
   const readingWaypoints = buildReadingWaypoints(countRenderableLines(parsed), readingCalendarRows);
   const waypointsByIndex = Object.fromEntries(readingWaypoints.map((waypoint) => [waypoint.lineIndex, waypoint]));
   const printDownloads = getWorkPrintDownloads(parsed.title || work.title, slug);
+  const isLucrece = slug === "rape-of-lucrece";
   const dismissReaderHint = () => {
     localStorage.setItem("codex-reader-hint-dismissed", "true");
     setShowReaderHint(false);
@@ -1611,6 +1612,15 @@ export default function ReaderPage() {
           >
             Live Chat
           </button>
+          {isLucrece && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => navigate("/sources/lucrece")}
+              style={{ color:"var(--text-light)", fontSize:12, fontFamily:"var(--font-display)", letterSpacing:1 }}
+            >
+              Sources of Lucrece
+            </button>
+          )}
           {parsed.type === "play" && (
             <button
               className="btn btn-ghost btn-sm"

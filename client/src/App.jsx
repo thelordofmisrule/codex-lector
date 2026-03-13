@@ -25,6 +25,7 @@ const PlacesPage = lazy(() => import("./pages/PlacesPage"));
 const PeoplePage = lazy(() => import("./pages/PeoplePage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const YearOfShakespearePage = lazy(() => import("./pages/YearOfShakespearePage"));
+const LucreceSourcesPage = lazy(() => import("./pages/LucreceSourcesPage"));
 
 function RouteFallback() {
   return <div style={{ padding:60, textAlign:"center" }}><div className="spinner" /></div>;
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="/people" element={<PeoplePage />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/year-of-shakespeare" element={<YearOfShakespearePage />} />
+            <Route path="/sources/lucrece" element={<LucreceSourcesPage />} />
             <Route path="/layers/:id" element={<LayerDetailPage />} />
             <Route path="/annotation/:id" element={<AnnotationDetailPage />} />
             <Route path="/admin-login" element={<AdminLoginPage />} />

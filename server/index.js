@@ -203,6 +203,7 @@ app.get("/sitemap.xml", (req, res) => {
     `<url><loc>${SITE_URL}/chat</loc><priority>0.7</priority></url>`,
     `<url><loc>${SITE_URL}/people</loc><priority>0.7</priority></url>`,
     `<url><loc>${SITE_URL}/places</loc><priority>0.7</priority></url>`,
+    `<url><loc>${SITE_URL}/sources/lucrece</loc><priority>0.6</priority></url>`,
     ...works.map(w => `<url><loc>${SITE_URL}/read/${w.slug}</loc><priority>0.9</priority></url>`),
     ...posts.map(p => `<url><loc>${SITE_URL}/blog/${p.id}</loc>${xmlDate(p.created_at) ? `<lastmod>${xmlDate(p.created_at)}</lastmod>` : ""}<priority>0.6</priority></url>`),
     ...threads.map(t => `<url><loc>${SITE_URL}/forum/${t.id}</loc><priority>0.5</priority></url>`),
@@ -491,6 +492,26 @@ if (process.env.NODE_ENV === "production") {
     <meta name="twitter:title" content="Live Chat" />
     <meta name="twitter:description" content="${esc(desc)}" />
     <title>Live Chat — ${SITE_NAME}</title>`;
+    res.send(renderHtml(meta));
+  });
+
+  app.get("/sources/lucrece", (req, res) => {
+    const url = `${SITE_URL}/sources/lucrece`;
+    const desc = "Primary and later source texts for Shakespeare's The Rape of Lucrece, including Ovid, Livy, Chaucer, and Painter.";
+    const imageUrl = socialImageUrl("", "Sources of Lucrece", desc);
+    const meta = `
+    <meta name="description" content="${esc(desc)}" />
+    <link rel="canonical" href="${url}" />
+    ${verificationMeta()}
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Sources of Lucrece — ${SITE_NAME}" />
+    <meta property="og:description" content="${esc(desc)}" />
+    <meta property="og:url" content="${url}" />
+    <meta property="og:site_name" content="${SITE_NAME}" />
+    ${socialImageMeta(imageUrl, `Sources of Lucrece on ${SITE_NAME}`)}
+    <meta name="twitter:title" content="Sources of Lucrece" />
+    <meta name="twitter:description" content="${esc(desc)}" />
+    <title>Sources of Lucrece — ${SITE_NAME}</title>`;
     res.send(renderHtml(meta));
   });
 
