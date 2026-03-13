@@ -6,7 +6,7 @@ const sourceCards = [
     subtitle: "c. 8 AD · Frazer translation",
     note: "The Lucretia section begins at [685].",
     image: {
-      src: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Giovanni_Battista_Tiepolo_090.jpg/900px-Giovanni_Battista_Tiepolo_090.jpg",
+      src: "https://upload.wikimedia.org/wikipedia/commons/3/34/Giovanni_Battista_Tiepolo_090.jpg",
       href: "https://upload.wikimedia.org/wikipedia/commons/3/34/Giovanni_Battista_Tiepolo_090.jpg",
       alt: "Giovanni Battista Tiepolo painting used for the Ovid source card",
     },
@@ -20,7 +20,7 @@ const sourceCards = [
     title: "Livy, History of Rome Book I",
     subtitle: "c. 27-9 BC",
     image: {
-      src: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Titus-Livius-Austrian-Parliament-Building.jpg/720px-Titus-Livius-Austrian-Parliament-Building.jpg",
+      src: "https://upload.wikimedia.org/wikipedia/commons/d/d6/Titus-Livius-Austrian-Parliament-Building.jpg",
       href: "https://upload.wikimedia.org/wikipedia/commons/d/d6/Titus-Livius-Austrian-Parliament-Building.jpg",
       alt: "Bust of Livy at the Austrian Parliament Building",
     },
@@ -50,8 +50,8 @@ const sourceCards = [
   {
     title: "Painter, The Palace of Pleasure (1566)",
     image: {
-      src: "https://archive.org/download/bim_early-english-books-1475-1640_the-palace-of-pleasure-_painter-william_1575/page/n1.jpg",
-      href: "https://archive.org/download/bim_early-english-books-1475-1640_the-palace-of-pleasure-_painter-william_1575/page/n1.jpg",
+      src: "https://www.gutenberg.org/cache/epub/20241/images/jacobstitle.png",
+      href: "https://www.gutenberg.org/cache/epub/20241/images/jacobstitle.png",
       alt: "Opening page scan of Painter's Palace of Pleasure",
     },
     description: "The likely book on Shakespeare's desk. Painter's Palace is an English prose anthology drawn from classical sources, and he translated the Lucretia story directly from Livy into Tudor English prose. It was enormously popular and widely read in Shakespeare's time, and it served as one of the chief intermediaries through which classical stories reached English readers who could not read Latin. Shakespeare probably read both Painter and the Latin originals; Painter's version helps explain details in the poem that follow Livy's phrasing closely, suggesting Shakespeare had both open at once.",
