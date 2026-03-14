@@ -714,11 +714,12 @@ a:hover { text-decoration:underline; }
 }
 
 @media (max-width: 640px) {
-  .site-header .eva-brand-subword {
-    display: none !important;
-  }
   .site-header .eva-brand-word {
     font-size: 18px !important;
+  }
+  .site-header .eva-brand-subword {
+    font-size: 10px !important;
+    letter-spacing: 0.22em !important;
   }
   .year-stats-grid {
     grid-template-columns: minmax(0, 1fr) !important;
