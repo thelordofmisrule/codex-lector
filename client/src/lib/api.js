@@ -154,6 +154,15 @@ export const progress = {
   update:(slug,d)=>req(`/progress/${slug}`,{method:"POST",body:JSON.stringify(d)}),
 };
 export const words = {
-  lookup:w=>req(`/words/${encodeURIComponent(w)}`),
+  lookup:(w, opts={})=>{
+    const params = new URLSearchParams();
+    if (opts.workSlug) params.set("work", opts.workSlug);
+    if (opts.lineId && opts.lineId !== "u") params.set("lineId", opts.lineId);
+    return req(`/words/${encodeURIComponent(w)}${params.toString() ? `?${params.toString()}` : ""}`);
+  },
   autocomplete:prefix=>req(`/words?prefix=${encodeURIComponent(prefix)}`),
+};
+export const glossary = {
+  save:data=>req("/glossary",{method:"PUT",body:JSON.stringify(data)}),
+  remove:data=>req("/glossary",{method:"DELETE",body:JSON.stringify(data)}),
 };

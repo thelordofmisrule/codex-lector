@@ -7,6 +7,8 @@ const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
 const { rebuildSearchIndex } = require("../server/lib/workSearchIndex");
+const { GLOSSARY_SEED, GLOSSARY_OVERRIDE_SEED } = require("../server/data/glossarySeed");
+const { normalizeGlossaryTerm } = require("../server/lib/glossary");
 
 const dir = path.join(__dirname, "..", "data");
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -318,6 +320,42 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_prosody_overrides_work_line
     ON prosody_overrides(work_id, line_key);
 
+  CREATE TABLE IF NOT EXISTS glossary_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    headword TEXT UNIQUE NOT NULL,
+    definition TEXT NOT NULL,
+    source_label TEXT DEFAULT '',
+    created_by INTEGER REFERENCES users(id),
+    updated_by INTEGER REFERENCES users(id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS glossary_variants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id INTEGER NOT NULL REFERENCES glossary_entries(id) ON DELETE CASCADE,
+    variant TEXT UNIQUE NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_glossary_variants_entry
+    ON glossary_variants(entry_id);
+
+  CREATE TABLE IF NOT EXISTS glossary_overrides (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+    line_id TEXT NOT NULL DEFAULT '',
+    normalized_word TEXT NOT NULL,
+    definition TEXT NOT NULL,
+    source_label TEXT DEFAULT '',
+    created_by INTEGER REFERENCES users(id),
+    updated_by INTEGER REFERENCES users(id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(work_id, line_id, normalized_word)
+  );
+  CREATE INDEX IF NOT EXISTS idx_glossary_overrides_scope
+    ON glossary_overrides(work_id, line_id, normalized_word);
+
   CREATE TABLE IF NOT EXISTS places (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     slug TEXT UNIQUE NOT NULL,
@@ -464,6 +502,49 @@ try { db.exec("ALTER TABLE prosody_overrides ADD COLUMN updated_by INTEGER REFER
 try { db.exec("ALTER TABLE prosody_overrides ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch {}
 try { db.exec("ALTER TABLE prosody_overrides ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_prosody_overrides_work_line ON prosody_overrides(work_id, line_key)"); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS glossary_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  headword TEXT UNIQUE NOT NULL,
+  definition TEXT NOT NULL,
+  source_label TEXT DEFAULT '',
+  created_by INTEGER REFERENCES users(id),
+  updated_by INTEGER REFERENCES users(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`); } catch {}
+try { db.exec("ALTER TABLE glossary_entries ADD COLUMN source_label TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE glossary_entries ADD COLUMN created_by INTEGER REFERENCES users(id)"); } catch {}
+try { db.exec("ALTER TABLE glossary_entries ADD COLUMN updated_by INTEGER REFERENCES users(id)"); } catch {}
+try { db.exec("ALTER TABLE glossary_entries ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch {}
+try { db.exec("ALTER TABLE glossary_entries ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS glossary_variants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  entry_id INTEGER NOT NULL REFERENCES glossary_entries(id) ON DELETE CASCADE,
+  variant TEXT UNIQUE NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`); } catch {}
+try { db.exec("ALTER TABLE glossary_variants ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_glossary_variants_entry ON glossary_variants(entry_id)"); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS glossary_overrides (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+  line_id TEXT NOT NULL DEFAULT '',
+  normalized_word TEXT NOT NULL,
+  definition TEXT NOT NULL,
+  source_label TEXT DEFAULT '',
+  created_by INTEGER REFERENCES users(id),
+  updated_by INTEGER REFERENCES users(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(work_id, line_id, normalized_word)
+)`); } catch {}
+try { db.exec("ALTER TABLE glossary_overrides ADD COLUMN line_id TEXT NOT NULL DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE glossary_overrides ADD COLUMN source_label TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE glossary_overrides ADD COLUMN created_by INTEGER REFERENCES users(id)"); } catch {}
+try { db.exec("ALTER TABLE glossary_overrides ADD COLUMN updated_by INTEGER REFERENCES users(id)"); } catch {}
+try { db.exec("ALTER TABLE glossary_overrides ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch {}
+try { db.exec("ALTER TABLE glossary_overrides ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_glossary_overrides_scope ON glossary_overrides(work_id, line_id, normalized_word)"); } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS place_edit_suggestions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   place_id INTEGER NOT NULL REFERENCES places(id) ON DELETE CASCADE,
@@ -561,6 +642,58 @@ try {
   }
 } catch (e) {
   console.warn("places schema migration skipped:", e.message);
+}
+
+// Seed glossary entries and contextual overrides without overwriting editorial edits.
+const findGlossaryEntry = db.prepare("SELECT id FROM glossary_entries WHERE headword=?");
+const insertGlossaryEntry = db.prepare(`
+  INSERT INTO glossary_entries (headword, definition, source_label)
+  VALUES (?, ?, ?)
+`);
+const insertGlossaryVariant = db.prepare(`
+  INSERT OR IGNORE INTO glossary_variants (entry_id, variant)
+  VALUES (?, ?)
+`);
+for (const seed of GLOSSARY_SEED) {
+  const headword = normalizeGlossaryTerm(seed.headword);
+  if (!headword) continue;
+  const existing = findGlossaryEntry.get(headword);
+  if (existing) continue;
+  const result = insertGlossaryEntry.run(headword, String(seed.definition || "").trim(), String(seed.sourceLabel || "").trim());
+  const entryId = Number(result.lastInsertRowid);
+  for (const variant of seed.variants || []) {
+    const normalizedVariant = normalizeGlossaryTerm(variant);
+    if (!normalizedVariant || normalizedVariant === headword) continue;
+    insertGlossaryVariant.run(entryId, normalizedVariant);
+  }
+}
+
+const findGlossaryOverride = db.prepare(`
+  SELECT id
+  FROM glossary_overrides
+  WHERE work_id=? AND line_id=? AND normalized_word=?
+`);
+const insertGlossaryOverride = db.prepare(`
+  INSERT INTO glossary_overrides (work_id, line_id, normalized_word, definition, source_label)
+  VALUES (?, ?, ?, ?, ?)
+`);
+const findWorkIdBySlug = db.prepare("SELECT id FROM works WHERE slug=?");
+for (const seed of GLOSSARY_OVERRIDE_SEED) {
+  const normalizedWord = normalizeGlossaryTerm(seed.lookupTerm);
+  if (!normalizedWord) continue;
+  const work = findWorkIdBySlug.get(seed.workSlug);
+  if (!work) continue;
+  const lineId = seed.scope === "line" ? String(seed.lineId || "").trim() : "";
+  if (seed.scope === "line" && !lineId) continue;
+  const existing = findGlossaryOverride.get(work.id, lineId, normalizedWord);
+  if (existing) continue;
+  insertGlossaryOverride.run(
+    work.id,
+    lineId,
+    normalizedWord,
+    String(seed.definition || "").trim(),
+    String(seed.sourceLabel || "").trim()
+  );
 }
 
 // Seed forum tags

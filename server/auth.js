@@ -50,5 +50,13 @@ function requireAdmin(req, res, next) {
     next();
   });
 }
+function requireEditorial(req, res, next) {
+  requireAuth(req, res, () => {
+    if (!req.user.canPublishGlobal && !req.user.isAdmin) {
+      return res.status(403).json({ error:"Editorial only." });
+    }
+    next();
+  });
+}
 
-module.exports = { createToken, optionalAuth, requireAuth, requireAdmin };
+module.exports = { createToken, optionalAuth, requireAuth, requireAdmin, requireEditorial };

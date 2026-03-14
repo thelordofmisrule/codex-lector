@@ -1827,6 +1827,8 @@ export default function ReaderPage() {
         <WordLookup
           word={wordLookup.word}
           label={wordLookup.selectedText || wordLookup.word}
+          workSlug={slug}
+          lineId={wordLookup.lineId || ""}
           position={wordLookup.position}
           mobileSheet={isMobileViewport}
           searchHref={`/search?${new URLSearchParams({ q: wordLookup.word, work: slug }).toString()}`}
