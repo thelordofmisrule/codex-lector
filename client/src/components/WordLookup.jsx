@@ -95,6 +95,19 @@ export default function WordLookup({ word, label, position, onClose, onAnnotate,
               </div>
             )}
 
+            {/* Example contexts */}
+            {data.examples.length > 0 && (
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:11, fontFamily:"var(--font-display)", letterSpacing:1, color:"var(--text-light)", textTransform:"uppercase", marginBottom:4 }}>In Context</div>
+                {data.examples.map((ex, i) => (
+                  <div key={i} style={{ fontSize:13, fontFamily:"var(--font-fell)", color:"var(--text-muted)", lineHeight:1.5, marginBottom:4, paddingLeft:8, borderLeft:"2px solid var(--border-light)" }}>
+                    <span dangerouslySetInnerHTML={{ __html: ex.snippet.replace(new RegExp(`\\b(${word})\\b`, "gi"), '<strong style="color:var(--accent)">$1</strong>') }} />
+                    <Link to={`/read/${ex.slug}`} onClick={onClose} style={{ fontSize:11, color:"var(--text-light)", marginLeft:6 }}>— {ex.work}</Link>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Stats */}
             <div style={{ display:"flex", gap:12, marginBottom:10 }}>
               <div style={{ flex:1, padding:"6px 10px", background:"var(--bg)", borderRadius:6, textAlign:"center" }}>
@@ -129,19 +142,6 @@ export default function WordLookup({ word, label, position, onClose, onAnnotate,
                 {data.frequency.length > 8 && (
                   <div style={{ fontSize:11, color:"var(--text-light)", fontStyle:"italic", marginTop:2 }}>…and {data.frequency.length - 8} more works</div>
                 )}
-              </div>
-            )}
-
-            {/* Example contexts */}
-            {data.examples.length > 0 && (
-              <div>
-                <div style={{ fontSize:11, fontFamily:"var(--font-display)", letterSpacing:1, color:"var(--text-light)", textTransform:"uppercase", marginBottom:4 }}>In Context</div>
-                {data.examples.map((ex, i) => (
-                  <div key={i} style={{ fontSize:13, fontFamily:"var(--font-fell)", color:"var(--text-muted)", lineHeight:1.5, marginBottom:4, paddingLeft:8, borderLeft:"2px solid var(--border-light)" }}>
-                    <span dangerouslySetInnerHTML={{ __html: ex.snippet.replace(new RegExp(`\\b(${word})\\b`, "gi"), '<strong style="color:var(--accent)">$1</strong>') }} />
-                    <Link to={`/read/${ex.slug}`} onClick={onClose} style={{ fontSize:11, color:"var(--text-light)", marginLeft:6 }}>— {ex.work}</Link>
-                  </div>
-                ))}
               </div>
             )}
           </>
