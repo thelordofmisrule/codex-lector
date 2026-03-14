@@ -1,4 +1,8 @@
-const GLOSSARY = {
+// Imported fallback glossary data comes from the public-domain Project Gutenberg
+// edition of Walter W. Skeat and A. L. Mayhew, _A Glossary of Tudor and Stuart Words_ (1914).
+const importedGlossary = require("../data/publicDomainTudorGlossary.json");
+
+const CURATED_GLOSSARY = {
   "thee":"You (singular, objective case — used for familiarity or to address inferiors).",
   "thou":"You (singular, subjective case — intimate or informal).",
   "thy":"Your (singular possessive).",
@@ -74,11 +78,30 @@ const GLOSSARY = {
   "tarry":"To wait; to delay.",
 };
 
+function isUsableGlossEntry(value) {
+  const text = String(value || "").trim();
+  if (text.length < 6) return false;
+  if (/^\(?\?\)?[.!?]?$/.test(text)) return false;
+  if (/^(?:For|See|Milton|Spenser|Shak(?:espeare)?|Ben Jonson)\b/i.test(text)) return false;
+  return true;
+}
+
+const IMPORTED_GLOSSARY = Object.fromEntries(
+  Object.entries(importedGlossary || {}).filter(([, value]) => isUsableGlossEntry(value))
+);
+
+const GLOSSARY = {
+  ...IMPORTED_GLOSSARY,
+  ...CURATED_GLOSSARY,
+};
+
 function getGlossEntry(word) {
   return GLOSSARY[String(word || "").toLowerCase()] || null;
 }
 
 module.exports = {
   GLOSSARY,
+  CURATED_GLOSSARY,
+  IMPORTED_GLOSSARY,
   getGlossEntry,
 };
