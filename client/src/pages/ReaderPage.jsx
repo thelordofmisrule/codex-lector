@@ -26,6 +26,8 @@ const PROSODY_MODES = [
   { id: "highlight", label: "Highlight" },
 ];
 
+const MOBILE_READER_BREAKPOINT = 860;
+
 const WORK_PRINT_DOWNLOADS = {
   "the rape of lucrece": [
     {
@@ -116,6 +118,80 @@ function useOutsideDismiss(ref, onDismiss, enabled = true) {
       document.removeEventListener("touchstart", handlePointerDown);
     };
   }, [enabled, onDismiss, ref]);
+}
+
+function sanitizeLookupWord(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z']/g, "");
+}
+
+function extractWordAtOffset(text, offset) {
+  const raw = String(text || "");
+  if (!raw) return "";
+
+  const isWordChar = (char) => /[A-Za-z']/i.test(char || "");
+  let index = Math.max(0, Math.min(offset, raw.length - 1));
+
+  if (!isWordChar(raw[index])) {
+    if (index > 0 && isWordChar(raw[index - 1])) index -= 1;
+    else if (index + 1 < raw.length && isWordChar(raw[index + 1])) index += 1;
+    else return "";
+  }
+
+  let start = index;
+  let end = index + 1;
+  while (start > 0 && isWordChar(raw[start - 1])) start -= 1;
+  while (end < raw.length && isWordChar(raw[end])) end += 1;
+
+  return raw.slice(start, end).replace(/^'+|'+$/g, "");
+}
+
+function findLookupWordFromTap(container, clientX, clientY) {
+  if (!container) return "";
+
+  const doc = container.ownerDocument || document;
+  let targetNode = null;
+  let targetOffset = 0;
+
+  if (typeof doc.caretPositionFromPoint === "function") {
+    const point = doc.caretPositionFromPoint(clientX, clientY);
+    targetNode = point?.offsetNode || null;
+    targetOffset = point?.offset || 0;
+  } else if (typeof doc.caretRangeFromPoint === "function") {
+    const range = doc.caretRangeFromPoint(clientX, clientY);
+    targetNode = range?.startContainer || null;
+    targetOffset = range?.startOffset || 0;
+  }
+
+  if (!targetNode) return "";
+
+  const walker = doc.createTreeWalker(container, window.NodeFilter?.SHOW_TEXT || 4);
+  const textNodes = [];
+  let current = walker.nextNode();
+  while (current) {
+    textNodes.push(current);
+    current = walker.nextNode();
+  }
+  if (!textNodes.length) return "";
+
+  if (targetNode.nodeType !== Node.TEXT_NODE) {
+    const firstDescendantIndex = textNodes.findIndex((node) => targetNode.contains?.(node));
+    if (firstDescendantIndex === -1) return "";
+    targetNode = textNodes[firstDescendantIndex];
+    targetOffset = 0;
+  }
+
+  let combinedText = "";
+  let globalOffset = -1;
+  textNodes.forEach((node) => {
+    const value = node.textContent || "";
+    if (node === targetNode) {
+      globalOffset = combinedText.length + Math.min(targetOffset, value.length);
+    }
+    combinedText += value;
+  });
+
+  if (globalOffset < 0) return "";
+  return extractWordAtOffset(combinedText, globalOffset);
 }
 
 function ReaderVisibilityPanel({
@@ -817,7 +893,7 @@ function ProsodyEditor({ draft, onClose, onSave, onDelete }) {
   );
 }
 
-function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, lineNum, showNum, isBookmarked, prosodyMode, prosodyOverride, onOpenProsodyNote, onOpenProsodyEditor }) {
+function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, lineNum, showNum, isBookmarked, prosodyMode, prosodyOverride, onOpenProsodyNote, onOpenProsodyEditor, onLookupTap }) {
   const lineAnnots = showAnnots ? (annotsByLine[lineId] || []) : [];
   const hasProsodyNote = !!(prosodyOverride?.noteBody || prosodyOverride?.noteTitle);
   const showProsodyTools = prosodyMode && prosodyMode !== "off";
@@ -850,7 +926,7 @@ function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId,
         )}
       </div>
       <div style={{ flex:1 }}>
-        <div className="reader-line-text" style={{ fontFamily:"var(--font-fell)", whiteSpace:"normal" }}>
+        <div className="reader-line-text" onClick={onLookupTap} style={{ fontFamily:"var(--font-fell)", whiteSpace:"normal" }}>
           {showProsodyTools
             ? <ProsodyLineText text={text} mode={prosodyMode} override={prosodyOverride} />
             : text}
@@ -866,7 +942,7 @@ function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId,
 }
 
 /* ─── Play view ─── */
-function PlayView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, bookmark, showWaypoints, waypointsByIndex }) {
+function PlayView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, bookmark, showWaypoints, waypointsByIndex, onLookupTap }) {
   let lineNum = 0;
   let readingIndex = 0;
   return (
@@ -898,7 +974,7 @@ function PlayView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, can
                   <div key={lineId}>
                     <AnnotatedLine lineId={lineId} text={line.text} annots={annots} annotsByLine={annotsByLine}
                       showAnnots={showAnnots} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot}
-                      lineNum={lineNum} showNum={hasXmlN || lineNum%5===0} isBookmarked={bookmark===lineId} prosodyMode="off" />
+                      lineNum={lineNum} showNum={hasXmlN || lineNum%5===0} isBookmarked={bookmark===lineId} prosodyMode="off" onLookupTap={(event) => onLookupTap?.(event, lineId)} />
                     {waypoint && <ReadingWaypointMarker waypoint={waypoint} />}
                   </div>
                 );
@@ -930,6 +1006,7 @@ function PoetryView({
   onOpenProsodyEditor,
   showWaypoints,
   waypointsByIndex,
+  onLookupTap,
 }) {
   let lineNum = 0;
   let readingIndex = 0;
@@ -956,6 +1033,7 @@ function PoetryView({
                   prosodyOverride={prosodyOverrides[lineId]}
                   onOpenProsodyNote={onOpenProsodyNote}
                   onOpenProsodyEditor={onOpenProsodyEditor}
+                  onLookupTap={(event) => onLookupTap?.(event, lineId)}
                 />
                 {waypoint && <ReadingWaypointMarker waypoint={waypoint} />}
               </div>
@@ -995,6 +1073,7 @@ export default function ReaderPage() {
   const [showReaderHint, setShowReaderHint] = useState(() => localStorage.getItem("codex-reader-hint-dismissed") !== "true");
   const [readerVisibility, setReaderVisibility] = useState(loadReaderVisibility);
   const [showVisibilityPanel, setShowVisibilityPanel] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== "undefined" ? window.innerWidth < MOBILE_READER_BREAKPOINT : false);
   const [prosodyMode, setProsodyMode] = useState(() => {
     const raw = localStorage.getItem("codex-prosody-mode");
     return raw === "marks" || raw === "highlight" ? raw : "off";
@@ -1026,6 +1105,12 @@ export default function ReaderPage() {
   useEffect(() => {
     localStorage.setItem("codex-reader-visibility", JSON.stringify(readerVisibility));
   }, [readerVisibility]);
+
+  useEffect(() => {
+    const updateViewport = () => setIsMobileViewport(window.innerWidth < MOBILE_READER_BREAKPOINT);
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
 
   const getCurrentViewportLineNumber = useCallback(() => {
     const lines = document.querySelectorAll("[data-lineid]");
@@ -1234,6 +1319,49 @@ export default function ReaderPage() {
     setWordLookup(null);
     setTooltip({ x:rect.left+rect.width/2-160, y:rect.bottom, text, lineId });
   }, [user]);
+
+  const handleMobileLookupTap = useCallback(async (event, lineId) => {
+    if (!isMobileViewport) return;
+    if (event.target.closest("button, a, input, textarea, select, summary")) return;
+
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed && selection.toString().trim()) return;
+
+    const tappedText = findLookupWordFromTap(event.currentTarget, event.clientX, event.clientY);
+    const normalizedWord = sanitizeLookupWord(tappedText);
+    if (!normalizedWord || normalizedWord.length < 2) return;
+
+    const position = { x: event.clientX, y: event.currentTarget.getBoundingClientRect().bottom };
+    const lookupToken = ++selectionLookupRef.current;
+
+    try {
+      const match = await findPlaceAwarenessMatch(tappedText);
+      if (selectionLookupRef.current !== lookupToken) return;
+      if (match) {
+        setTooltip(null);
+        setWordLookup(null);
+        setPlaceAwareness({
+          placeSlug: match.slug,
+          initialPlace: match.place,
+          matchedTerm: match.matchedTerm,
+          selectionText: tappedText,
+          lineId,
+          position,
+        });
+        return;
+      }
+    } catch {
+      // Ignore place lookup failures and fall back to standard word lookup.
+    }
+
+    setPlaceAwareness(null);
+    setWordLookup({
+      word: normalizedWord,
+      selectedText: tappedText,
+      lineId,
+      position,
+    });
+  }, [isMobileViewport]);
 
   const saveAnnot = async (note, color, layerId, isGlobal) => {
     try {
@@ -1499,7 +1627,7 @@ export default function ReaderPage() {
           </div>
           <div style={{ display:"grid", gap:4, fontSize:14, color:"var(--text-muted)", lineHeight:1.6 }}>
             <div>Select a phrase to annotate it.</div>
-            <div>Click a single word for lookup, then choose to annotate if you want.</div>
+            <div>Tap or click a single word for lookup, then choose to annotate if you want.</div>
             <div>Select a place name to open Place Awareness.</div>
             <div>Press <strong>b</strong> to bookmark your place.</div>
             <div>Use Layers & Overlays to mix site-wide notes, note types, prosody, and layer subscriptions.</div>
@@ -1549,7 +1677,7 @@ export default function ReaderPage() {
           </button>
 
           <span className="reader-toolbar-divider" style={{ width:1, height:20, background:"var(--border)" }} />
-          <span className="reader-note" style={{ fontSize:11, color:"var(--text-light)", fontFamily:"var(--font-fell)", fontStyle:"italic" }}>Click a word to look it up</span>
+          <span className="reader-note" style={{ fontSize:11, color:"var(--text-light)", fontFamily:"var(--font-fell)", fontStyle:"italic" }}>Tap or click a word to look it up</span>
         </div>
       </div>
 
@@ -1687,17 +1815,21 @@ export default function ReaderPage() {
             prosodyOverrides={prosodyOverrides}
             onOpenProsodyNote={openProsodyNote}
             onOpenProsodyEditor={openProsodyEditor}
+            onLookupTap={handleMobileLookupTap}
             showWaypoints={readerVisibility.showWaypoints !== false}
             waypointsByIndex={waypointsByIndex}
           />
-        : <PlayView data={parsed} annots={annots} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} />
+        : <PlayView data={parsed} annots={annots} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} />
       }
 
       {tooltip && <AnnotTooltip pos={tooltip} onSave={saveAnnot} onCopyText={copySelectedText} onCancel={()=>{setTooltip(null);window.getSelection()?.removeAllRanges();}} myLayers={myLayers} draftKey={`draft:annot:${slug}`} canPublishGlobal={canPublishGlobal} />}
       {wordLookup && (
         <WordLookup
           word={wordLookup.word}
+          label={wordLookup.selectedText || wordLookup.word}
           position={wordLookup.position}
+          mobileSheet={isMobileViewport}
+          searchHref={`/search?${new URLSearchParams({ q: wordLookup.word, work: slug }).toString()}`}
           onClose={()=>{setWordLookup(null);window.getSelection()?.removeAllRanges();}}
           onAnnotate={user ? () => {
             setTooltip({
@@ -1718,6 +1850,7 @@ export default function ReaderPage() {
           selectionText={placeAwareness.selectionText}
           workSlug={slug}
           position={placeAwareness.position}
+          mobileSheet={isMobileViewport}
           onClose={()=>{setPlaceAwareness(null);window.getSelection()?.removeAllRanges();}}
           onAnnotate={user ? () => {
             setTooltip({

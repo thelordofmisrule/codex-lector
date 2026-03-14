@@ -7,7 +7,7 @@ function metadataBits(place) {
   return [place.placeType, place.modernCountry].filter(Boolean).join(" · ");
 }
 
-export default function PlaceAwareness({ placeSlug, workSlug, initialPlace, matchedTerm, selectionText, position, onClose, onAnnotate }) {
+export default function PlaceAwareness({ placeSlug, workSlug, initialPlace, matchedTerm, selectionText, position, onClose, onAnnotate, mobileSheet = false }) {
   const toast = useToast();
   const [data, setData] = useState(() => initialPlace ? { place: initialPlace, citations: [] } : null);
   const [loading, setLoading] = useState(true);
@@ -44,17 +44,47 @@ export default function PlaceAwareness({ placeSlug, workSlug, initialPlace, matc
   const top = position.y + 12;
   const mentionCount = citations.length;
   const label = metadataBits(place || {});
+  const panelStyle = mobileSheet
+    ? {
+        position: "fixed",
+        left: 12,
+        right: 12,
+        bottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
+        zIndex: 200,
+        maxHeight: "min(74vh, 620px)",
+        overflowY: "auto",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 18,
+        boxShadow: "0 -10px 36px var(--shadow)",
+        padding: "12px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
+        fontSize: 14,
+      }
+    : {
+        position: "fixed",
+        top,
+        left,
+        zIndex: 200,
+        width: "min(380px, calc(100vw - 24px))",
+        maxHeight: 460,
+        overflowY: "auto",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 10,
+        boxShadow: "0 12px 40px var(--shadow)",
+        padding: 16,
+        fontSize: 14,
+      };
 
   return (
     <>
       <div aria-hidden="true" onClick={onClose} style={{ position:"fixed", inset:0, zIndex:199 }} />
-      <div style={{
-        position:"fixed", top, left, zIndex:200,
-        width:380, maxHeight:460, overflowY:"auto",
-        background:"var(--surface)", border:"1px solid var(--border)",
-        borderRadius:10, boxShadow:"0 12px 40px var(--shadow)",
-        padding:16, fontSize:14,
-      }}>
+      <div style={panelStyle}>
+        {mobileSheet && (
+          <div style={{ display:"flex", justifyContent:"center", marginBottom:10 }}>
+            <div style={{ width:42, height:4, borderRadius:999, background:"var(--border)" }} />
+          </div>
+        )}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <div>
             <div style={{ fontSize:11, fontFamily:"var(--font-display)", letterSpacing:1.6, color:"var(--gold)", textTransform:"uppercase", marginBottom:4 }}>
