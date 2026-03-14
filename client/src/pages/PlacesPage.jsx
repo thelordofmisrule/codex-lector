@@ -612,7 +612,7 @@ export default function PlacesPage() {
   };
 
   return (
-    <div className="animate-in" style={{ maxWidth: 1240, margin: "0 auto", padding: "40px 24px 56px" }}>
+    <div className="animate-in places-page" style={{ maxWidth: 1240, margin: "0 auto", padding: "40px 24px 56px" }}>
       <div style={{ marginBottom: 28 }}>
         <div style={{ fontSize: 13, fontFamily: "var(--font-display)", color: "var(--gold)", letterSpacing: 4, textTransform: "uppercase", marginBottom: 8 }}>
           Shakespearean Geography
@@ -626,7 +626,7 @@ export default function PlacesPage() {
         </p>
       </div>
 
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+      <div className="places-filter-bar" style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
         <select className="input" value={workFilter} onChange={e => setWorkFilter(e.target.value)} style={{ minWidth: 240 }}>
           <option value="">All Works</option>
           {[...works].sort((a, b) => a.title.localeCompare(b.title)).map(work => (
@@ -678,7 +678,7 @@ export default function PlacesPage() {
       {loading ? (
         <div style={{ textAlign: "center", padding: 60 }}><div className="spinner" /></div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 20, alignItems: "start" }}>
+        <div className="places-main-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 20, alignItems: "start" }}>
           <div style={{ border: "1px solid var(--border)", borderRadius: 18, background: "linear-gradient(180deg, rgba(201,168,76,0.06), rgba(122,30,46,0.03))", padding: 16, boxShadow: "0 12px 30px rgba(0,0,0,0.06)" }}>
             <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
               <div>

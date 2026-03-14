@@ -31,12 +31,12 @@ export default function HomePage() {
   };
 
   return (
-    <div className="animate-in" style={{ maxWidth:920, margin:"0 auto", padding:"48px 24px" }}>
+    <div className="animate-in home-page" style={{ maxWidth:920, margin:"0 auto", padding:"48px 24px" }}>
       {/* Hero */}
-      <div style={{ textAlign:"center", marginBottom:48 }}>
+      <div className="home-hero" style={{ textAlign:"center", marginBottom:48 }}>
         <div className="eva-readout-meta" style={{ fontSize:13, fontFamily:"var(--font-display)", color:"var(--gold)", letterSpacing:4, textTransform:"uppercase", marginBottom:8 }}>The Works of</div>
         <div className="eva-readout-frame" style={{ marginBottom:12, maxWidth:"100%" }}>
-          <h1 className="eva-readout" data-readout="William Shakespeare" style={{ fontFamily:"var(--font-display)", fontSize:44, fontWeight:400, color:"var(--accent)", letterSpacing:3, marginBottom:0 }}>
+          <h1 className="eva-readout home-title" data-readout="William Shakespeare" style={{ fontFamily:"var(--font-display)", fontSize:44, fontWeight:400, color:"var(--accent)", letterSpacing:3, marginBottom:0 }}>
             William Shakespeare
             <span className="eva-readout-cursor" aria-hidden="true" />
           </h1>
@@ -45,7 +45,7 @@ export default function HomePage() {
           Annotated and presented for the studious reader.<br/>
           <span style={{ fontSize:14, color:"var(--text-light)" }}>Texts from PlayShakespeare.com · GFDL Licensed</span>
         </p>
-        <div style={{ display:"flex", justifyContent:"center", gap:10, marginTop:18, flexWrap:"wrap" }}>
+        <div className="home-hero-actions" style={{ display:"flex", justifyContent:"center", gap:10, marginTop:18, flexWrap:"wrap" }}>
           <button className="btn btn-primary" onClick={() => nav("/how-to")}>How It Works</button>
           <button className="btn btn-secondary" onClick={() => nav("/places")}>Explore Places</button>
           <button className="btn btn-secondary" onClick={() => nav("/year-of-shakespeare")}>Year Calendar</button>
@@ -57,10 +57,10 @@ export default function HomePage() {
       </div>
 
       {/* Search row */}
-      <div style={{ display:"flex", gap:12, maxWidth:520, margin:"0 auto 40px", alignItems:"center" }}>
+      <div className="home-search-row" style={{ display:"flex", gap:12, maxWidth:520, margin:"0 auto 40px", alignItems:"center" }}>
         <input className="input" placeholder="Search the titles…" value={search} onChange={e=>setSearch(e.target.value)}
           style={{ flex:1, textAlign:"center", fontFamily:"var(--font-fell)", fontStyle:"italic" }} />
-        <button className="btn btn-secondary" onClick={()=>nav("/search")} title="Search within texts"
+        <button className="btn btn-secondary home-search-button" onClick={()=>nav("/search")} title="Search within texts"
           style={{ whiteSpace:"nowrap", fontFamily:"var(--font-display)", fontSize:12, letterSpacing:1 }}>
           🔍 Text Search
         </button>

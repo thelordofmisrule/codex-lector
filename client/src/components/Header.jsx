@@ -187,12 +187,12 @@ export default function Header() {
 
   return (
     <>
-      <header style={{
+      <header className="site-header" style={{
         position:"sticky", top:0, zIndex:100,
         background: headerBackground,
         backdropFilter:"blur(12px)", borderBottom:"1px solid var(--border)", padding:"0 24px",
       }}>
-        <div style={{ maxWidth:1100, margin:"0 auto", display:"flex", alignItems:"center", justifyContent:"space-between", height:58 }}>
+        <div className="site-header-inner" style={{ maxWidth:1100, margin:"0 auto", display:"flex", alignItems:"center", justifyContent:"space-between", height:58 }}>
           <div style={{ display:"flex", alignItems:"center", gap:14 }}>
             {loc.pathname!=="/" && <button className="btn btn-ghost" aria-label="Go back" onClick={()=>nav(-1)} style={{fontSize:18}}>←</button>}
             <div
@@ -252,7 +252,7 @@ export default function Header() {
                 </button>
                 {showNotifs && <div onClick={()=>setShowNotifs(false)} style={{ position:"fixed", inset:0, zIndex:199 }} />}
                 {showNotifs && (
-                  <div style={{ position:"absolute", top:42, right:0, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, boxShadow:"0 8px 24px var(--shadow)", width:320, maxHeight:400, overflowY:"auto", zIndex:200 }}>
+                  <div style={{ position:"absolute", top:42, right:0, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, boxShadow:"0 8px 24px var(--shadow)", width:"min(320px, calc(100vw - 24px))", maxHeight:400, overflowY:"auto", zIndex:200 }}>
                     <div style={{ padding:"10px 14px", borderBottom:"1px solid var(--border-light)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                       <span style={{ fontFamily:"var(--font-display)", fontSize:13, letterSpacing:1, color:"var(--accent)" }}>NOTIFICATIONS</span>
                       {unread > 0 && <button className="btn btn-ghost" onClick={markAllRead} style={{ fontSize:11, color:"var(--text-light)" }}>Mark all read</button>}

@@ -556,7 +556,7 @@ function AnnotTooltip({ pos, onSave, onCancel, onCopyText, myLayers, draftKey, c
       <div ref={tooltipRef} className="reader-annot-tooltip" style={{
         position:"fixed", top:pos.y+8, left:Math.max(12,Math.min(pos.x,window.innerWidth-340)),
         background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:12,
-        boxShadow:"0 8px 24px var(--shadow)", width:320, zIndex:200,
+        boxShadow:"0 8px 24px var(--shadow)", width:"min(320px, calc(100vw - 24px))", zIndex:200,
     }}>
       <div style={{ fontSize:12, color:"var(--text-light)", marginBottom:6, fontStyle:"italic" }}>"{pos.text.slice(0,60)}{pos.text.length>60?"…":""}"</div>
       <div style={{ display:"flex", gap:4, marginBottom:6, flexWrap:"wrap" }}>
@@ -619,11 +619,12 @@ function ProsodyNoteTooltip({ note, onClose, onEdit }) {
   return (
     <div
       ref={tooltipRef}
+      className="reader-prosody-note-tooltip"
       style={{
         position: "fixed",
         top: note.position.y + 8,
         left: Math.max(12, Math.min(note.position.x - 150, window.innerWidth - 320)),
-        width: 300,
+        width: "min(300px, calc(100vw - 24px))",
         background: "var(--surface)",
         border: "1px solid var(--border)",
         borderRadius: 10,
@@ -705,11 +706,12 @@ function ProsodyEditor({ draft, onClose, onSave, onDelete }) {
   return (
     <div
       ref={editorRef}
+      className="reader-prosody-editor"
       style={{
         position: "fixed",
         top: Math.max(24, Math.min(draft.position.y + 12, window.innerHeight - 520)),
         left: Math.max(12, Math.min(draft.position.x - 190, window.innerWidth - 400)),
-        width: 380,
+        width: "min(380px, calc(100vw - 24px))",
         background: "var(--surface)",
         border: "1px solid var(--border)",
         borderRadius: 12,
@@ -820,8 +822,8 @@ function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId,
   const hasProsodyNote = !!(prosodyOverride?.noteBody || prosodyOverride?.noteTitle);
   const showProsodyTools = prosodyMode && prosodyMode !== "off";
   return (
-    <div data-lineid={lineId} id={lineId} style={{ display:"flex", gap:12, alignItems:"flex-start", position:"relative" }}>
-      <div style={{ width:40, textAlign:"right", flexShrink:0, fontSize:"0.75em", color:"var(--text-light)", fontFamily:"var(--font-mono)", userSelect:"none", paddingTop:2, position:"relative", display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4 }}>
+    <div className="reader-annotated-line" data-lineid={lineId} id={lineId} style={{ display:"flex", gap:12, alignItems:"flex-start", position:"relative" }}>
+      <div className="reader-line-meta" style={{ width:40, textAlign:"right", flexShrink:0, fontSize:"0.75em", color:"var(--text-light)", fontFamily:"var(--font-mono)", userSelect:"none", paddingTop:2, position:"relative", display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4 }}>
         <div style={{ position:"relative", width:"100%" }}>
           {showNum && lineNum}
           {isBookmarked && <span style={{ position:"absolute", right:-4, top:0, fontSize:14 }} title="Bookmark">🔖</span>}
@@ -855,7 +857,7 @@ function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId,
         </div>
       </div>
       {lineAnnots.length > 0 && (
-        <div className="annot-margin" style={{ width:260, flexShrink:0, display:"flex", flexDirection:"column", gap:4 }}>
+        <div className="annot-margin reader-annot-margin" style={{ width:260, flexShrink:0, display:"flex", flexDirection:"column", gap:4 }}>
           {lineAnnots.map(a => <MarginAnnot key={a.id} annot={a} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} onEdit={editAnnot} onDelete={deleteAnnot} compact={lineAnnots.length>1} />)}
         </div>
       )}
@@ -886,7 +888,7 @@ function PlayView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, can
                 <div className="reader-speaker" style={{ fontFamily:"var(--font-display)", fontWeight:600, fontSize:13, letterSpacing:2, color:"var(--accent)", marginBottom:2, paddingLeft:48, textTransform:"uppercase" }}>{item.speaker}</div>
               )}
               {item.lines.map((line, li) => {
-                if (line.type==="stagedir") return <div key={li} className="reader-stage-direction" style={{ fontStyle:"italic", color:"var(--text-muted)", paddingLeft:48, fontSize:"0.85em", fontFamily:"var(--font-fell)", margin:"4px 0" }}>[{line.text}]</div>;
+                if (line.type==="stagedir") return <div key={li} className="reader-stage-direction reader-stage-direction-inline" style={{ fontStyle:"italic", color:"var(--text-muted)", paddingLeft:48, fontSize:"0.85em", fontFamily:"var(--font-fell)", margin:"4px 0" }}>[{line.text}]</div>;
                 const hasXmlN = Number.isFinite(line.n);
                 lineNum = hasXmlN ? line.n : (lineNum + 1);
                 const lineId = `l-${idx}-${li}`;
@@ -1506,17 +1508,17 @@ export default function ReaderPage() {
       )}
 
       {/* Sticky bottom toolbar */}
-      <div style={{
+      <div className="reader-toolbar" style={{
         position:"fixed", bottom:0, left:0, right:0, zIndex:90,
         background: "var(--bg)", borderTop:"1px solid var(--border)",
         padding:"8px 16px", backdropFilter:"blur(12px)",
       }}>
-        <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:10, flexWrap:"wrap", maxWidth:800, margin:"0 auto" }}>
+        <div className="reader-toolbar-inner" style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:10, flexWrap:"wrap", maxWidth:800, margin:"0 auto" }}>
           <button className="btn btn-sm btn-secondary" onClick={()=>setFontSize(s=>Math.max(14,s-1))} style={{minWidth:32}}>A−</button>
           <span style={{ fontSize:12, color:"var(--text-light)", fontFamily:"var(--font-mono)", minWidth:20, textAlign:"center" }}>{fontSize}</span>
           <button className="btn btn-sm btn-secondary" onClick={()=>setFontSize(s=>Math.min(28,s+1))} style={{minWidth:32}}>A+</button>
 
-          <span style={{ width:1, height:20, background:"var(--border)" }} />
+          <span className="reader-toolbar-divider" style={{ width:1, height:20, background:"var(--border)" }} />
 
           <button
             className={`btn btn-sm ${showVisibilityPanel ? "btn-primary" : "btn-secondary"}`}
@@ -1529,7 +1531,7 @@ export default function ReaderPage() {
           {/* Bookmark controls */}
           {user && (
             <>
-              <span style={{ width:1, height:20, background:"var(--border)" }} />
+              <span className="reader-toolbar-divider" style={{ width:1, height:20, background:"var(--border)" }} />
               <button className="btn btn-sm btn-secondary" aria-label="Bookmark current position" onClick={setBookmarkHere} title="Bookmark current position" style={{ fontSize:14, padding:"4px 8px" }}>
                 🔖
               </button>
@@ -1541,12 +1543,12 @@ export default function ReaderPage() {
             </>
           )}
 
-          <span style={{ width:1, height:20, background:"var(--border)" }} />
+          <span className="reader-toolbar-divider" style={{ width:1, height:20, background:"var(--border)" }} />
           <button className="btn btn-sm btn-ghost" aria-label="Copy link to this page" onClick={copyPageLink} title="Copy link" style={{ fontSize:11, color:"var(--text-light)", padding:"4px 6px" }}>
             Copy Link
           </button>
 
-          <span style={{ width:1, height:20, background:"var(--border)" }} />
+          <span className="reader-toolbar-divider" style={{ width:1, height:20, background:"var(--border)" }} />
           <span className="reader-note" style={{ fontSize:11, color:"var(--text-light)", fontFamily:"var(--font-fell)", fontStyle:"italic" }}>Click a word to look it up</span>
         </div>
       </div>
@@ -1597,7 +1599,7 @@ export default function ReaderPage() {
 
       {/* Title */}
       <div style={{ textAlign:"center", marginBottom:10 }}>
-        <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+        <div className="reader-work-actions" style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:8, flexWrap:"wrap" }}>
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => navigate(`/search?work=${encodeURIComponent(slug)}&returnLine=${getCurrentViewportLineNumber()}`)}

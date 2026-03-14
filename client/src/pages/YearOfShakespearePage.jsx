@@ -121,12 +121,12 @@ export default function YearOfShakespearePage() {
   };
 
   return (
-    <div className="animate-in" style={{ maxWidth: 1160, margin: "0 auto", padding: "40px 24px 56px" }}>
+    <div className="animate-in year-page" style={{ maxWidth: 1160, margin: "0 auto", padding: "40px 24px 56px" }}>
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 4, textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
           Reading Program
         </div>
-        <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 34, color: "var(--accent)", letterSpacing: 1 }}>
+        <h1 className="year-title" style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 34, color: "var(--accent)", letterSpacing: 1 }}>
           Year of Shakespeare (2026-2027)
         </h1>
         <p style={{ marginTop: 12, marginBottom: 0, color: "var(--text-muted)", lineHeight: 1.75, maxWidth: 860 }}>
@@ -134,7 +134,7 @@ export default function YearOfShakespearePage() {
         </p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 18 }}>
+      <div className="year-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 18 }}>
         <div style={{ border: "1px solid var(--border-light)", borderRadius: 10, background: "var(--surface)", padding: "10px 12px" }}>
           <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "var(--text-light)" }}>Days</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: "var(--accent)" }}>{rows.length}</div>
@@ -151,7 +151,7 @@ export default function YearOfShakespearePage() {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
+      <div className="year-filters" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
         <input
           className="input"
           value={query}
@@ -203,13 +203,13 @@ export default function YearOfShakespearePage() {
                     .filter((action, idx, arr) => action?.slug && arr.findIndex(a => a.slug === action.slug) === idx);
                   const isToday = row.date === todayIso;
                   return (
-                    <div key={row.id} style={{
+                    <div key={row.id} className="year-row" style={{
                       padding: "12px 14px",
                       borderBottom: "1px solid var(--border-light)",
                       background: isToday ? "rgba(122,30,46,0.08)" : "transparent",
                     }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-                        <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                      <div className="year-row-header" style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+                        <div className="year-row-date" style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
                           <span style={{ fontFamily: "var(--font-display)", color: "var(--accent)", fontWeight: 700 }}>
                             {longDateLabel(row.dateObj)}
                           </span>
@@ -219,7 +219,7 @@ export default function YearOfShakespearePage() {
                             </span>
                           )}
                         </div>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <div className="year-row-pills" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                           {row.kind && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--border-light)", color: "var(--text-light)" }}>{row.kind}</span>}
                           {row.seasonalArc && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--border-light)", color: "var(--text-light)" }}>{row.seasonalArc}</span>}
                         </div>
@@ -238,7 +238,7 @@ export default function YearOfShakespearePage() {
                         </div>
                       )}
                       {actions.length > 0 && (
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <div className="year-row-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                           {actions.map((action) => {
                             const resumeLine = parseInt(progressBySlug[action.slug], 10) || 0;
                             return (
