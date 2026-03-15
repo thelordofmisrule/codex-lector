@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { places as placesApi } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
+import { useFloatingCardPosition } from "../lib/floatingCard";
 
 function metadataBits(place) {
   return [place.placeType, place.modernCountry].filter(Boolean).join(" · ");
@@ -11,6 +12,7 @@ export default function PlaceAwareness({ placeSlug, workSlug, initialPlace, matc
   const toast = useToast();
   const [data, setData] = useState(() => initialPlace ? { place: initialPlace, citations: [] } : null);
   const [loading, setLoading] = useState(true);
+  const cardRef = useRef(null);
 
   useEffect(() => {
     if (!placeSlug) return;
@@ -40,8 +42,13 @@ export default function PlaceAwareness({ placeSlug, workSlug, initialPlace, matc
 
   const place = data?.place || initialPlace;
   const citations = data?.citations || [];
-  const left = Math.max(12, Math.min(position.x - 190, window.innerWidth - 400));
-  const top = position.y + 12;
+  const floatingStyle = useFloatingCardPosition(
+    cardRef,
+    { x: position.x, y: position.y },
+    380,
+    [loading, !!place, citations.length, matchedTerm, selectionText],
+    12
+  );
   const mentionCount = citations.length;
   const label = metadataBits(place || {});
   const panelStyle = mobileSheet
@@ -62,11 +69,11 @@ export default function PlaceAwareness({ placeSlug, workSlug, initialPlace, matc
       }
     : {
         position: "fixed",
-        top,
-        left,
+        top: floatingStyle.top,
+        left: floatingStyle.left,
         zIndex: 200,
         width: "min(380px, calc(100vw - 24px))",
-        maxHeight: 460,
+        maxHeight: floatingStyle.maxHeight,
         overflowY: "auto",
         background: "var(--surface)",
         border: "1px solid var(--border)",
@@ -79,7 +86,7 @@ export default function PlaceAwareness({ placeSlug, workSlug, initialPlace, matc
   return (
     <>
       <div aria-hidden="true" onClick={onClose} style={{ position:"fixed", inset:0, zIndex:199 }} />
-      <div style={panelStyle}>
+      <div ref={cardRef} style={panelStyle}>
         {mobileSheet && (
           <div style={{ display:"flex", justifyContent:"center", marginBottom:10 }}>
             <div style={{ width:42, height:4, borderRadius:999, background:"var(--border)" }} />

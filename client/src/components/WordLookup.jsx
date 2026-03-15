@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { words as wordsApi, glossary as glossaryApi } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
 import { useAuth } from "../lib/AuthContext";
 import { useConfirm } from "../lib/ConfirmContext";
+import { useFloatingCardPosition } from "../lib/floatingCard";
 
 const GLOSS_SCOPE_LABELS = {
   global: "Headword",
@@ -87,6 +88,7 @@ export default function WordLookup({
     line: { overrideId: null, lookupTerm: sanitizeTerm(word), definition: "", sourceLabel: "" },
   }));
   const [saving, setSaving] = useState(false);
+  const cardRef = useRef(null);
 
   useEffect(() => {
     if (!word) return undefined;
@@ -120,8 +122,13 @@ export default function WordLookup({
   if (!word) return null;
 
   const displayWord = label || word;
-  const left = Math.max(12, Math.min(position.x - 180, window.innerWidth - 380));
-  const top = position.y + 12;
+  const floatingStyle = useFloatingCardPosition(
+    cardRef,
+    { x: position.x, y: position.y },
+    360,
+    [loading, !!data?.gloss, data?.examples?.length || 0, data?.frequency?.length || 0, editorOpen, activeScope, saving],
+    12
+  );
   const panelStyle = mobileSheet
     ? {
         position: "fixed",
@@ -140,11 +147,11 @@ export default function WordLookup({
       }
     : {
         position: "fixed",
-        top,
-        left,
+        top: floatingStyle.top,
+        left: floatingStyle.left,
         zIndex: 200,
         width: "min(360px, calc(100vw - 24px))",
-        maxHeight: 420,
+        maxHeight: floatingStyle.maxHeight,
         overflowY: "auto",
         background: "var(--surface)",
         border: "1px solid var(--border)",
@@ -253,7 +260,7 @@ export default function WordLookup({
   return (
     <>
       <div aria-hidden="true" onClick={onClose} style={{ position:"fixed", inset:0, zIndex:199 }} />
-      <div style={panelStyle}>
+      <div ref={cardRef} style={panelStyle}>
         {mobileSheet && (
           <div style={{ display:"flex", justifyContent:"center", marginBottom:10 }}>
             <div style={{ width:42, height:4, borderRadius:999, background:"var(--border)" }} />

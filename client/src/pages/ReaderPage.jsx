@@ -9,6 +9,7 @@ import { preservedAnnotationTextStyle, quotedExcerpt, smartenAnnotationText } fr
 import { findPlaceAwarenessMatch, warmPlaceAwarenessIndex } from "../lib/placeAwareness";
 import { analyzeProsodyLine, parseProsodyScan } from "../lib/prosody";
 import { YEAR_OF_SHAKESPEARE_ROWS, buildReadingWaypoints, getCalendarRowsForWork } from "../lib/yearOfShakespeare";
+import { useFloatingCardPosition } from "../lib/floatingCard";
 import PlaceAwareness from "../components/PlaceAwareness";
 import ThreadedComments from "../components/ThreadedComments";
 import WordLookup from "../components/WordLookup";
@@ -603,6 +604,7 @@ function AnnotTooltip({ pos, onSave, onCancel, onCopyText, myLayers, draftKey, c
   const [color, setColor] = useState(() => draftKey ? (parseInt(localStorage.getItem(`${draftKey}:color`) || "0", 10) || 0) : 0);
   const [layerId, setLayerId] = useState(() => draftKey ? (localStorage.getItem(`${draftKey}:layer`) || "") : "");
   const [isGlobal, setIsGlobal] = useState(() => draftKey ? (localStorage.getItem(`${draftKey}:global`) === "1") : !!canPublishGlobal);
+  const floatingStyle = useFloatingCardPosition(tooltipRef, { x: pos.x, y: pos.y }, 320, [note, color, layerId, isGlobal, myLayers?.length || 0], 8);
   useOutsideDismiss(tooltipRef, onCancel);
   const setNoteDraft = (value) => {
     setNote(value);
@@ -630,9 +632,9 @@ function AnnotTooltip({ pos, onSave, onCancel, onCopyText, myLayers, draftKey, c
   };
   return (
       <div ref={tooltipRef} className="reader-annot-tooltip" style={{
-        position:"fixed", top:pos.y+8, left:Math.max(12,Math.min(pos.x,window.innerWidth-340)),
+        position:"fixed", top:floatingStyle.top, left:floatingStyle.left,
         background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:12,
-        boxShadow:"0 8px 24px var(--shadow)", width:"min(320px, calc(100vw - 24px))", zIndex:200,
+        boxShadow:"0 8px 24px var(--shadow)", width:"min(320px, calc(100vw - 24px))", maxHeight:floatingStyle.maxHeight, overflowY:"auto", zIndex:200,
     }}>
       <div style={{ fontSize:12, color:"var(--text-light)", marginBottom:6, fontStyle:"italic" }}>"{pos.text.slice(0,60)}{pos.text.length>60?"…":""}"</div>
       <div style={{ display:"flex", gap:4, marginBottom:6, flexWrap:"wrap" }}>
@@ -1317,7 +1319,7 @@ export default function ReaderPage() {
     // Multi-word selection → annotation (requires sign-in)
     if (!user) return;
     setWordLookup(null);
-    setTooltip({ x:rect.left+rect.width/2-160, y:rect.bottom, text, lineId });
+    setTooltip({ x:rect.left+rect.width/2, y:rect.bottom, text, lineId });
   }, [user]);
 
   const handleMobileLookupTap = useCallback(async (event, lineId) => {
@@ -1835,7 +1837,7 @@ export default function ReaderPage() {
           onClose={()=>{setWordLookup(null);window.getSelection()?.removeAllRanges();}}
           onAnnotate={user ? () => {
             setTooltip({
-              x:wordLookup.position.x - 160,
+              x:wordLookup.position.x,
               y:wordLookup.position.y,
               text:wordLookup.selectedText || wordLookup.word,
               lineId:wordLookup.lineId || "u",
@@ -1856,7 +1858,7 @@ export default function ReaderPage() {
           onClose={()=>{setPlaceAwareness(null);window.getSelection()?.removeAllRanges();}}
           onAnnotate={user ? () => {
             setTooltip({
-              x:placeAwareness.position.x - 160,
+              x:placeAwareness.position.x,
               y:placeAwareness.position.y,
               text:placeAwareness.selectionText,
               lineId:placeAwareness.lineId || "u",
