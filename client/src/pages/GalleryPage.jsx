@@ -154,6 +154,7 @@ export default function GalleryPage() {
   const [editor, setEditor] = useState(() => emptyEditor());
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [lightboxItem, setLightboxItem] = useState(null);
   const editorRef = useRef(null);
 
   useEffect(() => {
@@ -206,6 +207,20 @@ export default function GalleryPage() {
     });
     return () => cancelAnimationFrame(id);
   }, [showEditor, editor.id]);
+
+  useEffect(() => {
+    if (!lightboxItem) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setLightboxItem(null);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [lightboxItem]);
 
   const visibleTags = useMemo(
     () => tags.slice(0, 18),
@@ -548,23 +563,52 @@ export default function GalleryPage() {
                 boxShadow: "0 16px 34px rgba(0,0,0,0.05)",
               }}
             >
-              <img
-                src={item.imageUrl}
-                alt={item.title}
-                loading="lazy"
+              <button
+                type="button"
+                onClick={() => setLightboxItem(item)}
                 style={{
-                  width: "100%",
-                  aspectRatio: "4 / 3",
-                  objectFit: "cover",
-                  objectPosition: objectPositionStyle(item.thumbX, item.thumbY),
                   display: "block",
+                  width: "100%",
+                  padding: 0,
+                  border: 0,
+                  background: "transparent",
+                  cursor: "zoom-in",
                 }}
-              />
+                aria-label={`View larger image: ${item.title}`}
+              >
+                <img
+                  src={item.imageUrl}
+                  alt={item.title}
+                  loading="lazy"
+                  style={{
+                    width: "100%",
+                    aspectRatio: "4 / 3",
+                    objectFit: "cover",
+                    objectPosition: objectPositionStyle(item.thumbX, item.thumbY),
+                    display: "block",
+                  }}
+                />
+              </button>
               <div style={{ padding: 14, display: "grid", gap: 8 }}>
                 <div>
-                  <div style={{ fontFamily: "var(--font-display)", fontSize: 15, color: "var(--accent)", lineHeight: 1.35, marginBottom: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setLightboxItem(item)}
+                    style={{
+                      padding: 0,
+                      border: 0,
+                      background: "transparent",
+                      textAlign: "left",
+                      fontFamily: "var(--font-display)",
+                      fontSize: 15,
+                      color: "var(--accent)",
+                      lineHeight: 1.35,
+                      marginBottom: 6,
+                      cursor: "zoom-in",
+                    }}
+                  >
                     {item.title}
-                  </div>
+                  </button>
                   <div style={{ fontSize: 12, color: "var(--text-light)", textTransform: "uppercase", letterSpacing: 1.1 }}>
                     {(item.works || []).slice(0, 2).map((work) => work.title).join(" · ")}
                     {(item.works || []).length > 2 ? ` +${item.works.length - 2}` : ""}
@@ -615,6 +659,85 @@ export default function GalleryPage() {
               </div>
             </article>
           ))}
+        </div>
+      )}
+
+      {lightboxItem && (
+        <div
+          onClick={() => setLightboxItem(null)}
+          role="button"
+          tabIndex={-1}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1200,
+            background: "rgba(12, 12, 16, 0.84)",
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={lightboxItem.title || "Gallery image"}
+            style={{
+              width: "min(1100px, 100%)",
+              maxHeight: "min(92vh, 1000px)",
+              background: "var(--surface)",
+              borderRadius: 20,
+              border: "1px solid var(--border-light)",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.35)",
+              overflow: "hidden",
+              display: "grid",
+              gridTemplateRows: "auto minmax(0, 1fr)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, padding: "16px 18px 12px", borderBottom: "1px solid var(--border-light)" }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 18, color: "var(--accent)", lineHeight: 1.3 }}>
+                  {lightboxItem.title}
+                </div>
+                {!!lightboxItem.works?.length && (
+                  <div style={{ fontSize: 12, color: "var(--text-light)", textTransform: "uppercase", letterSpacing: 1.1, marginTop: 4 }}>
+                    {lightboxItem.works.map((work) => work.title).join(" · ")}
+                  </div>
+                )}
+              </div>
+              <button className="btn btn-secondary btn-sm" onClick={() => setLightboxItem(null)}>
+                Close
+              </button>
+            </div>
+
+            <div style={{ overflow: "auto", padding: 18, display: "grid", gap: 14 }}>
+              <img
+                src={lightboxItem.localMediaUrl || lightboxItem.originalImageUrl || lightboxItem.imageUrl}
+                alt={lightboxItem.title}
+                style={{
+                  width: "100%",
+                  maxHeight: "70vh",
+                  objectFit: "contain",
+                  display: "block",
+                  background: "var(--bg)",
+                  borderRadius: 14,
+                }}
+              />
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {lightboxItem.primaryWorkSlug && (
+                  <Link className="btn btn-ghost btn-sm" to={`/read/${lightboxItem.primaryWorkSlug}`} onClick={() => setLightboxItem(null)}>
+                    Open Work
+                  </Link>
+                )}
+                {lightboxItem.pageUrl && (
+                  <a className="btn btn-secondary btn-sm" href={lightboxItem.pageUrl} target="_blank" rel="noopener noreferrer">
+                    Source
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
