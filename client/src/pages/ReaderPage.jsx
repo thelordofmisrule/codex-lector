@@ -11,6 +11,7 @@ import { analyzeProsodyLine, parseProsodyScan } from "../lib/prosody";
 import { YEAR_OF_SHAKESPEARE_ROWS, buildReadingWaypoints, getCalendarRowsForWork } from "../lib/yearOfShakespeare";
 import { useFloatingCardPosition } from "../lib/floatingCard";
 import PlaceAwareness from "../components/PlaceAwareness";
+import QuoteCaptureModal from "../components/QuoteCaptureModal";
 import ThreadedComments from "../components/ThreadedComments";
 import WordLookup from "../components/WordLookup";
 
@@ -123,6 +124,87 @@ function useOutsideDismiss(ref, onDismiss, enabled = true) {
 
 function sanitizeLookupWord(value) {
   return String(value || "").toLowerCase().replace(/[^a-z']/g, "");
+}
+
+function findClosestLineId(node) {
+  let current = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+  while (current && !current.dataset?.lineid) current = current.parentElement;
+  return current?.dataset?.lineid || "";
+}
+
+function buildLineMetaIndex(data) {
+  const index = {};
+  if (!data) return index;
+
+  if (data.type === "play") {
+    let lineNum = 0;
+    let actNum = 0;
+    let sceneNum = 0;
+
+    data.lines.forEach((item, idx) => {
+      if (item.type === "act") {
+        actNum += 1;
+        sceneNum = 0;
+        return;
+      }
+      if (item.type === "scene") {
+        sceneNum += 1;
+        return;
+      }
+      if (item.type !== "speech") return;
+
+      item.lines.forEach((line, li) => {
+        if (line.type === "stagedir") return;
+        const hasXmlN = Number.isFinite(line.n);
+        lineNum = hasXmlN ? line.n : (lineNum + 1);
+        const lineId = `l-${idx}-${li}`;
+        index[lineId] = {
+          lineNum,
+          actNum,
+          sceneNum,
+          text: line.text,
+          speaker: item.speaker || "",
+        };
+      });
+    });
+    return index;
+  }
+
+  if (data.type === "poetry") {
+    let lineNum = 0;
+    data.sections.forEach((section, sectionIndex) => {
+      section.lines.forEach((line, lineIndex) => {
+        if (line.type === "stagedir") return;
+        const hasXmlN = Number.isFinite(line.n);
+        lineNum = hasXmlN ? line.n : (lineNum + 1);
+        const lineId = line.lineKey || `p-${sectionIndex}-${lineIndex}`;
+        index[lineId] = {
+          lineNum,
+          text: line.text,
+          sectionTitle: section.title || section.heading || "",
+        };
+      });
+    });
+  }
+
+  return index;
+}
+
+function buildSelectionCitation(data, lineMetaIndex, startLineId, endLineId) {
+  const start = lineMetaIndex[startLineId];
+  const end = lineMetaIndex[endLineId] || start;
+  if (!start) return "";
+
+  if (data?.type === "play" && start.actNum && start.sceneNum) {
+    if (start.actNum === end.actNum && start.sceneNum === end.sceneNum) {
+      if (start.lineNum === end.lineNum) return `${start.actNum}.${start.sceneNum}.${start.lineNum}`;
+      return `${start.actNum}.${start.sceneNum}.${start.lineNum}-${end.lineNum}`;
+    }
+    return `${start.actNum}.${start.sceneNum}.${start.lineNum}-${end.actNum}.${end.sceneNum}.${end.lineNum}`;
+  }
+
+  if (start.lineNum === end.lineNum) return `line ${start.lineNum}`;
+  return `lines ${start.lineNum}-${end.lineNum}`;
 }
 
 function extractWordAtOffset(text, offset) {
@@ -598,7 +680,7 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
 }
 
 /* ─── Annotation tooltip ─── */
-function AnnotTooltip({ pos, onSave, onCancel, onCopyText, myLayers, draftKey, canPublishGlobal }) {
+function AnnotTooltip({ pos, onSave, onCancel, onCopyText, onOpenQuoteCapture, myLayers, draftKey, canPublishGlobal, canSave }) {
   const tooltipRef = useRef(null);
   const [note, setNote] = useState(() => draftKey ? (localStorage.getItem(`${draftKey}:note`) || "") : "");
   const [color, setColor] = useState(() => draftKey ? (parseInt(localStorage.getItem(`${draftKey}:color`) || "0", 10) || 0) : 0);
@@ -637,35 +719,44 @@ function AnnotTooltip({ pos, onSave, onCancel, onCopyText, myLayers, draftKey, c
         boxShadow:"0 8px 24px var(--shadow)", width:"min(320px, calc(100vw - 24px))", maxHeight:floatingStyle.maxHeight, overflowY:"auto", zIndex:200,
     }}>
       <div style={{ fontSize:12, color:"var(--text-light)", marginBottom:6, fontStyle:"italic" }}>"{pos.text.slice(0,60)}{pos.text.length>60?"…":""}"</div>
-      <div style={{ display:"flex", gap:4, marginBottom:6, flexWrap:"wrap" }}>
-        {ANNOT_TYPES.map((t,i) => (
-          <button key={i} onClick={()=>setColorDraft(i)} className="btn btn-sm" style={{
-            fontSize:11, border: i===color ? "2px solid var(--accent)" : "2px solid transparent",
-            background: i===color ? "var(--accent-faint)" : "var(--bg)",
-            color: i===color ? "var(--text)" : "var(--text-muted)",
-          }}>{t.icon} {t.label}</button>
-        ))}
-      </div>
-      <textarea className="input" value={note} onChange={e=>setNoteDraft(e.target.value)} placeholder="Your annotation…"
-        autoFocus style={{ minHeight:60, resize:"vertical", fontSize:14, lineHeight:1.6 }} />
-      {myLayers && myLayers.length > 0 && (
-        <div style={{ marginTop:6 }}>
-          <select className="input" value={layerId} onChange={e=>setLayerDraft(e.target.value)} style={{ fontSize:13, padding:"4px 8px" }}>
-            <option value="">No layer (private)</option>
-            {myLayers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
+      {canSave ? (
+        <>
+          <div style={{ display:"flex", gap:4, marginBottom:6, flexWrap:"wrap" }}>
+            {ANNOT_TYPES.map((t,i) => (
+              <button key={i} onClick={()=>setColorDraft(i)} className="btn btn-sm" style={{
+                fontSize:11, border: i===color ? "2px solid var(--accent)" : "2px solid transparent",
+                background: i===color ? "var(--accent-faint)" : "var(--bg)",
+                color: i===color ? "var(--text)" : "var(--text-muted)",
+              }}>{t.icon} {t.label}</button>
+            ))}
+          </div>
+          <textarea className="input" value={note} onChange={e=>setNoteDraft(e.target.value)} placeholder="Your annotation…"
+            autoFocus style={{ minHeight:60, resize:"vertical", fontSize:14, lineHeight:1.6 }} />
+          {myLayers && myLayers.length > 0 && (
+            <div style={{ marginTop:6 }}>
+              <select className="input" value={layerId} onChange={e=>setLayerDraft(e.target.value)} style={{ fontSize:13, padding:"4px 8px" }}>
+                <option value="">No layer (private)</option>
+                {myLayers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+          )}
+          {canPublishGlobal && (
+            <label style={{ display:"flex", alignItems:"center", gap:8, marginTop:8, fontSize:12, color:"var(--text-light)" }}>
+              <input type="checkbox" checked={isGlobal} onChange={e=>setGlobalDraft(e.target.checked)} />
+              Publish as site-wide note
+            </label>
+          )}
+        </>
+      ) : (
+        <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.6, marginBottom:8 }}>
+          You can still copy this passage or export it as a quote card. Sign in if you want to annotate it.
         </div>
       )}
-      {canPublishGlobal && (
-        <label style={{ display:"flex", alignItems:"center", gap:8, marginTop:8, fontSize:12, color:"var(--text-light)" }}>
-          <input type="checkbox" checked={isGlobal} onChange={e=>setGlobalDraft(e.target.checked)} />
-          Publish as site-wide note
-        </label>
-      )}
       <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
-        <button className="btn btn-primary btn-sm" onClick={()=>note.trim()&&onSave(note.trim(),color,layerId||null,isGlobal)}>Save</button>
+        {canSave && <button className="btn btn-primary btn-sm" onClick={()=>note.trim()&&onSave(note.trim(),color,layerId||null,isGlobal)}>Save</button>}
+        <button className="btn btn-secondary btn-sm" onClick={() => onOpenQuoteCapture?.(pos)}>Quote Card</button>
         <button className="btn btn-secondary btn-sm" onClick={() => onCopyText?.(pos.text)}>Copy Text</button>
-        <button className="btn btn-secondary btn-sm" onClick={onCancel}>Cancel</button>
+        <button className="btn btn-secondary btn-sm" onClick={onCancel}>{canSave ? "Cancel" : "Close"}</button>
       </div>
     </div>
   );
@@ -1070,6 +1161,7 @@ export default function ReaderPage() {
   const [bookmark, setBookmark] = useState(null);
   const [wordLookup, setWordLookup] = useState(null); // { word, position:{x,y} }
   const [placeAwareness, setPlaceAwareness] = useState(null); // { placeSlug, initialPlace, matchedTerm, selectionText, lineId, position }
+  const [quoteCapture, setQuoteCapture] = useState(null);
   const [layerCatalog, setLayerCatalog] = useState([]);
   const [myLayers, setMyLayers] = useState([]);
   const [showReaderHint, setShowReaderHint] = useState(() => localStorage.getItem("codex-reader-hint-dismissed") !== "true");
@@ -1086,6 +1178,8 @@ export default function ReaderPage() {
   const progressRef = useRef({ maxLine:0, total:0, slug:null });
   const trackedSlugRef = useRef("");
   const selectionLookupRef = useRef(0);
+  const parsed = work?.content ? parsePlayShakespeareXML(work.content, work.title, work.category) : null;
+  const lineMetaIndex = parsed ? buildLineMetaIndex(parsed) : {};
   const resumeLine = Math.max(0, parseInt(new URLSearchParams(location.search).get("line") || "0", 10) || 0);
   const copyPageLink = async () => {
     try {
@@ -1166,11 +1260,12 @@ export default function ReaderPage() {
         e.preventDefault();
         setBookmarkHere();
       } else if (e.key === "Escape") {
-        if (wordLookup || tooltip || placeAwareness || prosodyNote || prosodyEditor || showVisibilityPanel) {
+        if (wordLookup || tooltip || placeAwareness || quoteCapture || prosodyNote || prosodyEditor || showVisibilityPanel) {
           e.preventDefault();
           setWordLookup(null);
           setTooltip(null);
           setPlaceAwareness(null);
+          setQuoteCapture(null);
           setProsodyNote(null);
           setProsodyEditor(null);
           setShowVisibilityPanel(false);
@@ -1180,7 +1275,7 @@ export default function ReaderPage() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigate, user, wordLookup, tooltip, placeAwareness, prosodyNote, prosodyEditor, showVisibilityPanel, slug, getCurrentViewportLineNumber]);
+  }, [navigate, user, wordLookup, tooltip, placeAwareness, quoteCapture, prosodyNote, prosodyEditor, showVisibilityPanel, slug, getCurrentViewportLineNumber]);
 
   useEffect(() => {
     setShowVisibilityPanel(false);
@@ -1274,10 +1369,10 @@ export default function ReaderPage() {
     const text = sel.toString().trim();
     if (text.length < 2) return;
     const lookupToken = ++selectionLookupRef.current;
-    const rect = sel.getRangeAt(0).getBoundingClientRect();
-    let node = sel.getRangeAt(0).startContainer;
-    while (node && !node.dataset?.lineid) node = node.parentElement;
-    const lineId = node?.dataset?.lineid || "u";
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const lineId = findClosestLineId(range.startContainer) || "u";
+    const endLineId = findClosestLineId(range.endContainer) || lineId;
     const position = { x:rect.left+rect.width/2, y:rect.bottom };
     const tokenCount = text.split(/\s+/).filter(Boolean).length;
 
@@ -1294,6 +1389,7 @@ export default function ReaderPage() {
             matchedTerm: match.matchedTerm,
             selectionText: text,
             lineId,
+            endLineId,
             position,
           });
           return;
@@ -1316,11 +1412,9 @@ export default function ReaderPage() {
       return;
     }
 
-    // Multi-word selection → annotation (requires sign-in)
-    if (!user) return;
     setWordLookup(null);
-    setTooltip({ x:rect.left+rect.width/2, y:rect.bottom, text, lineId });
-  }, [user]);
+    setTooltip({ x:rect.left+rect.width/2, y:rect.bottom, text, lineId, endLineId });
+  }, []);
 
   const handleMobileLookupTap = useCallback(async (event, lineId) => {
     if (!isMobileViewport) return;
@@ -1364,6 +1458,20 @@ export default function ReaderPage() {
       position,
     });
   }, [isMobileViewport]);
+
+  const openQuoteCapture = useCallback((selection) => {
+    const startLineId = selection?.lineId || "";
+    const endLineId = selection?.endLineId || startLineId;
+    const citation = buildSelectionCitation(parsed, lineMetaIndex, startLineId, endLineId);
+    setQuoteCapture({
+      text: selection?.text || "",
+      title: parsed.title || work.title,
+      author: "William Shakespeare",
+      citation,
+    });
+    setTooltip(null);
+    window.getSelection()?.removeAllRanges();
+  }, [lineMetaIndex, parsed, work?.title]);
 
   const saveAnnot = async (note, color, layerId, isGlobal) => {
     try {
@@ -1541,7 +1649,6 @@ export default function ReaderPage() {
     </div>
   );
 
-  const parsed = parsePlayShakespeareXML(work.content, work.title, work.category);
   const editionLabel = work.variant === "first-folio"
     ? "First Folio"
     : work.variant === "ps"
@@ -1824,7 +1931,19 @@ export default function ReaderPage() {
         : <PlayView data={parsed} annots={annots} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} />
       }
 
-      {tooltip && <AnnotTooltip pos={tooltip} onSave={saveAnnot} onCopyText={copySelectedText} onCancel={()=>{setTooltip(null);window.getSelection()?.removeAllRanges();}} myLayers={myLayers} draftKey={`draft:annot:${slug}`} canPublishGlobal={canPublishGlobal} />}
+      {tooltip && (
+        <AnnotTooltip
+          pos={tooltip}
+          onSave={saveAnnot}
+          onCopyText={copySelectedText}
+          onOpenQuoteCapture={openQuoteCapture}
+          onCancel={()=>{setTooltip(null);window.getSelection()?.removeAllRanges();}}
+          myLayers={myLayers}
+          draftKey={`draft:annot:${slug}`}
+          canPublishGlobal={canPublishGlobal}
+          canSave={!!user}
+        />
+      )}
       {wordLookup && (
         <WordLookup
           word={wordLookup.word}
@@ -1865,6 +1984,12 @@ export default function ReaderPage() {
             });
             setPlaceAwareness(null);
           } : undefined}
+        />
+      )}
+      {quoteCapture && (
+        <QuoteCaptureModal
+          quote={quoteCapture}
+          onClose={() => setQuoteCapture(null)}
         />
       )}
       {prosodyNote && (
