@@ -800,13 +800,27 @@ const bcrypt = require("bcryptjs");
 const petruch10 = db.prepare("SELECT id FROM users WHERE username='petruch10'").get();
 if (petruch10) {
   const legacyAdmin = db.prepare("SELECT id FROM users WHERE username='admin'").get();
-  db.prepare("UPDATE users SET is_admin=1, can_publish_global=1 WHERE id=?").run(petruch10.id);
-  db.prepare("UPDATE users SET can_publish_global=0 WHERE username='admin'").run();
+  const promotePetruch10 = db.prepare(`
+    UPDATE users
+    SET is_admin=1, can_publish_global=1
+    WHERE id=?
+      AND (COALESCE(is_admin, 0) <> 1 OR COALESCE(can_publish_global, 0) <> 1)
+  `).run(petruch10.id);
+  const demoteLegacyAdmin = db.prepare(`
+    UPDATE users
+    SET can_publish_global=0
+    WHERE username='admin'
+      AND COALESCE(can_publish_global, 0) <> 0
+  `).run();
   if (legacyAdmin && legacyAdmin.id !== petruch10.id) {
-    db.prepare("UPDATE annotations SET user_id=? WHERE is_global=1 AND user_id=?").run(petruch10.id, legacyAdmin.id);
-    console.log("Migrated legacy site-wide annotations from admin to @petruch10.");
+    const migratedAnnotations = db.prepare("UPDATE annotations SET user_id=? WHERE is_global=1 AND user_id=?").run(petruch10.id, legacyAdmin.id);
+    if (migratedAnnotations.changes > 0) {
+      console.log("Migrated legacy site-wide annotations from admin to @petruch10.");
+    }
   }
-  console.log("Synced editorial role to @petruch10.");
+  if (promotePetruch10.changes > 0 || demoteLegacyAdmin.changes > 0) {
+    console.log("Synced editorial role to @petruch10.");
+  }
 }
 
 // Optional bootstrap admin user for fresh installs. Set ADMIN_BOOTSTRAP_PASSWORD in .env to enable.

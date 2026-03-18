@@ -13,7 +13,6 @@ const FALLBACK_SPECIAL_ROOMS = [
     label: "Lobby",
     kind: "global",
     description: "General conversation across Codex Lector.",
-    context: "General conversation across the site. Ask what people are reading, point to a passage, or pull someone in with @mentions.",
     workSlug: "",
     messageCount: 0,
     lastMessageAt: null,
@@ -23,7 +22,6 @@ const FALLBACK_SPECIAL_ROOMS = [
     label: "Year of Shakespeare",
     kind: "program",
     description: "Shared reading room for March 11, 2026 through March 10, 2027.",
-    context: "Use this room for daily reading check-ins, pacing, and reflections tied to the Year of Shakespeare calendar.",
     workSlug: "",
     messageCount: 0,
     lastMessageAt: null,
@@ -989,25 +987,6 @@ export default function ChatPage() {
                     )}
                   </div>
                 </div>
-
-                {roomInfo.context && (
-                  <div
-                    style={{
-                      marginBottom: 12,
-                      padding: "10px 12px",
-                      border: "1px solid var(--border-light)",
-                      borderRadius: 12,
-                      background: "rgba(255,255,255,0.46)",
-                    }}
-                  >
-                    <div style={{ fontSize: 11, fontFamily: "var(--font-display)", letterSpacing: 1.4, textTransform: "uppercase", color: "var(--gold)", marginBottom: 4 }}>
-                      Room Context
-                    </div>
-                    <div style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
-                      {roomInfo.context}
-                    </div>
-                  </div>
-                )}
 
                 {error && (
                   <div style={{ marginBottom: 14, padding: "12px 14px", borderRadius: 10, background: "rgba(139,31,31,0.08)", border: "1px solid rgba(139,31,31,0.22)", color: "var(--danger)" }}>
