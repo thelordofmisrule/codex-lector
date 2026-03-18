@@ -173,6 +173,16 @@ export const glossary = {
   save:data=>req("/glossary",{method:"PUT",body:JSON.stringify(data)}),
   remove:data=>req("/glossary",{method:"DELETE",body:JSON.stringify(data)}),
 };
+export const gallery = {
+  list:(opts={})=>{
+    const params = new URLSearchParams();
+    if (opts.workSlug) params.set("work", opts.workSlug);
+    if (opts.tag) params.set("tag", opts.tag);
+    if (opts.q) params.set("q", opts.q);
+    if (opts.limit) params.set("limit", String(opts.limit));
+    return req(`/gallery${params.toString() ? `?${params.toString()}` : ""}`);
+  },
+};
 export const quoteImages = {
   forWork:slug=>req(`/quote-images/${encodeURIComponent(slug)}`),
 };

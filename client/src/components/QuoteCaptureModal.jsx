@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useToast } from "../lib/ToastContext";
 import { quoteImages as quoteImagesApi } from "../lib/api";
 import {
@@ -231,10 +232,19 @@ export default function QuoteCaptureModal({ quote, workSlug, onClose }) {
                   Add open-source art related to this work behind the quote card.
                 </div>
               </div>
-              {artCollection.categoryUrl && (
-                <a className="btn btn-ghost btn-sm" href={artCollection.categoryUrl} target="_blank" rel="noopener noreferrer">
-                  Commons Category
-                </a>
+              {(artCollection.categoryUrl || workSlug) && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {workSlug && (
+                    <Link className="btn btn-ghost btn-sm" to={`/gallery?work=${encodeURIComponent(workSlug)}`}>
+                      Browse Gallery
+                    </Link>
+                  )}
+                  {artCollection.categoryUrl && (
+                    <a className="btn btn-ghost btn-sm" href={artCollection.categoryUrl} target="_blank" rel="noopener noreferrer">
+                      Commons Category
+                    </a>
+                  )}
+                </div>
               )}
             </div>
 

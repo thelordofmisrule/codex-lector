@@ -81,6 +81,7 @@ app.use("/api/places", require("./routes/places"));
 app.use("/api/prosody", require("./routes/prosody"));
 app.use("/api/glossary", require("./routes/glossary"));
 app.use("/api/chat", require("./routes/chat"));
+app.use("/api/gallery", require("./routes/gallery"));
 app.use("/api/quote-images", require("./routes/quoteImages"));
 app.get("/api/health", (req,res) => res.json({ status:"ok" }));
 app.use("/media", express.static(path.join(__dirname, "..", "data", "media"), {
@@ -205,6 +206,7 @@ app.get("/sitemap.xml", (req, res) => {
     `<url><loc>${SITE_URL}/chat</loc><priority>0.7</priority></url>`,
     `<url><loc>${SITE_URL}/people</loc><priority>0.7</priority></url>`,
     `<url><loc>${SITE_URL}/places</loc><priority>0.7</priority></url>`,
+    `<url><loc>${SITE_URL}/gallery</loc><priority>0.7</priority></url>`,
     `<url><loc>${SITE_URL}/sources/lucrece</loc><priority>0.6</priority></url>`,
     ...works.map(w => `<url><loc>${SITE_URL}/read/${w.slug}</loc><priority>0.9</priority></url>`),
     ...posts.map(p => `<url><loc>${SITE_URL}/blog/${p.id}</loc>${xmlDate(p.created_at) ? `<lastmod>${xmlDate(p.created_at)}</lastmod>` : ""}<priority>0.6</priority></url>`),
@@ -494,6 +496,26 @@ if (process.env.NODE_ENV === "production") {
     <meta name="twitter:title" content="Live Chat" />
     <meta name="twitter:description" content="${esc(desc)}" />
     <title>Live Chat — ${SITE_NAME}</title>`;
+    res.send(renderHtml(meta));
+  });
+
+  app.get("/gallery", (req, res) => {
+    const url = `${SITE_URL}/gallery`;
+    const desc = "Browse open-source Shakespeare artwork organized by work, with reusable tags for gallery, quote cards, and future sitewide image features.";
+    const imageUrl = socialImageUrl("", "Shakespeare Art Gallery", desc);
+    const meta = `
+    <meta name="description" content="${esc(desc)}" />
+    <link rel="canonical" href="${url}" />
+    ${verificationMeta()}
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Shakespeare Art Gallery — ${SITE_NAME}" />
+    <meta property="og:description" content="${esc(desc)}" />
+    <meta property="og:url" content="${url}" />
+    <meta property="og:site_name" content="${SITE_NAME}" />
+    ${socialImageMeta(imageUrl, `Shakespeare Art Gallery on ${SITE_NAME}`)}
+    <meta name="twitter:title" content="Shakespeare Art Gallery" />
+    <meta name="twitter:description" content="${esc(desc)}" />
+    <title>Shakespeare Art Gallery — ${SITE_NAME}</title>`;
     res.send(renderHtml(meta));
   });
 

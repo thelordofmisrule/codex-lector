@@ -9,7 +9,7 @@ const fs = require("fs");
 const { rebuildSearchIndex } = require("../server/lib/workSearchIndex");
 const { GLOSSARY_SEED, GLOSSARY_OVERRIDE_SEED } = require("../server/data/glossarySeed");
 const { normalizeGlossaryTerm } = require("../server/lib/glossary");
-const { quoteImageSeedCollections } = require("../server/lib/quoteImageCollections");
+const { quoteImageSeedCollections, normalizeQuoteImageWorkKey } = require("../server/lib/quoteImageCollections");
 
 const dir = path.join(__dirname, "..", "data");
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -379,8 +379,10 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     work_key TEXT UNIQUE NOT NULL,
     work_title TEXT NOT NULL,
+    work_slug TEXT DEFAULT '',
     category_url TEXT DEFAULT '',
     notes TEXT DEFAULT '',
+    tags_json TEXT DEFAULT '[]',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -388,9 +390,14 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS quote_images (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     collection_id INTEGER NOT NULL REFERENCES quote_image_collections(id) ON DELETE CASCADE,
+    title TEXT DEFAULT '',
+    source_label TEXT DEFAULT '',
     page_url TEXT DEFAULT '',
     image_url TEXT NOT NULL,
+    local_media_path TEXT DEFAULT '',
+    local_media_url TEXT DEFAULT '',
     sort_order INTEGER DEFAULT 0,
+    tags_json TEXT DEFAULT '[]',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(collection_id, image_url)
   );
@@ -637,21 +644,35 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS quote_image_collections (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   work_key TEXT UNIQUE NOT NULL,
   work_title TEXT NOT NULL,
+  work_slug TEXT DEFAULT '',
   category_url TEXT DEFAULT '',
   notes TEXT DEFAULT '',
+  tags_json TEXT DEFAULT '[]',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`); } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS quote_images (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   collection_id INTEGER NOT NULL REFERENCES quote_image_collections(id) ON DELETE CASCADE,
+  title TEXT DEFAULT '',
+  source_label TEXT DEFAULT '',
   page_url TEXT DEFAULT '',
   image_url TEXT NOT NULL,
+  local_media_path TEXT DEFAULT '',
+  local_media_url TEXT DEFAULT '',
   sort_order INTEGER DEFAULT 0,
+  tags_json TEXT DEFAULT '[]',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(collection_id, image_url)
 )`); } catch {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_quote_images_collection_sort ON quote_images(collection_id, sort_order, id)"); } catch {}
+try { db.exec("ALTER TABLE quote_image_collections ADD COLUMN work_slug TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE quote_image_collections ADD COLUMN tags_json TEXT DEFAULT '[]'"); } catch {}
+try { db.exec("ALTER TABLE quote_images ADD COLUMN title TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE quote_images ADD COLUMN source_label TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE quote_images ADD COLUMN local_media_path TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE quote_images ADD COLUMN local_media_url TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE quote_images ADD COLUMN tags_json TEXT DEFAULT '[]'"); } catch {}
 
 // Older DBs had NOT NULL lat/lng; rebuild to allow unknown coordinates.
 try {
@@ -839,32 +860,79 @@ const upsertPlace = db.prepare(`
 for (const row of seededPlaces) upsertPlace.run(...row);
 
 const quoteImageCollections = quoteImageSeedCollections();
+const workRecords = db.prepare("SELECT slug, title, category FROM works").all();
+const workRecordByKey = new Map(
+  workRecords.map((row) => [
+    normalizeQuoteImageWorkKey(row.title),
+    row,
+  ]),
+);
 const upsertQuoteCollection = db.prepare(`
-  INSERT INTO quote_image_collections (work_key, work_title, category_url, notes, updated_at)
-  VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+  INSERT INTO quote_image_collections (work_key, work_title, work_slug, category_url, notes, tags_json, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
   ON CONFLICT(work_key) DO UPDATE SET
     work_title=excluded.work_title,
+    work_slug=excluded.work_slug,
     category_url=excluded.category_url,
     notes=excluded.notes,
+    tags_json=excluded.tags_json,
     updated_at=CURRENT_TIMESTAMP
 `);
 const findQuoteCollection = db.prepare("SELECT id FROM quote_image_collections WHERE work_key=?");
 const deleteQuoteImagesForCollection = db.prepare("DELETE FROM quote_images WHERE collection_id=?");
 const insertQuoteImage = db.prepare(`
-  INSERT OR IGNORE INTO quote_images (collection_id, page_url, image_url, sort_order)
-  VALUES (?, ?, ?, ?)
+  INSERT OR IGNORE INTO quote_images (collection_id, title, source_label, page_url, image_url, local_media_path, local_media_url, sort_order, tags_json)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 let quoteCollectionCount = 0;
 let quoteImageCount = 0;
 for (const collection of quoteImageCollections) {
-  upsertQuoteCollection.run(collection.workKey, collection.workTitle, collection.categoryUrl, collection.notes);
+  const workRecord = workRecordByKey.get(collection.workKey) || null;
+  const collectionTags = [...new Set([
+    "source:commons",
+    collection.workTitle ? `work:${collection.workTitle}` : "",
+    workRecord?.slug ? `slug:${workRecord.slug}` : "",
+    workRecord?.category ? `category:${workRecord.category}` : "",
+    ...(Array.isArray(collection.tags) ? collection.tags : []),
+  ].filter(Boolean))];
+  upsertQuoteCollection.run(
+    collection.workKey,
+    collection.workTitle,
+    workRecord?.slug || "",
+    collection.categoryUrl,
+    collection.notes,
+    JSON.stringify(collectionTags),
+  );
   const stored = findQuoteCollection.get(collection.workKey);
   if (!stored) continue;
   quoteCollectionCount += 1;
   deleteQuoteImagesForCollection.run(stored.id);
   collection.images.forEach((image) => {
-    insertQuoteImage.run(stored.id, image.pageUrl, image.imageUrl, image.sortOrder);
+    const rawLabelSource = image.title
+      ? String(image.title)
+      : String(image.pageUrl || image.imageUrl || "");
+    const normalizedLabel = (rawLabelSource.split("/").pop() || `image-${(image.sortOrder || 0) + 1}`)
+      .replace(/\.[a-z0-9]+$/i, "")
+      .replace(/^File:/i, "")
+      .replace(/^Special:FilePath\//i, "")
+      .replace(/[_-]+/g, " ")
+      .trim();
+    const imageTags = [...new Set([
+      ...collectionTags,
+      ...(Array.isArray(image.tags) ? image.tags : []),
+    ].filter(Boolean))];
+    insertQuoteImage.run(
+      stored.id,
+      normalizedLabel,
+      image.sourceLabel || "Wikimedia Commons",
+      image.pageUrl,
+      image.imageUrl,
+      image.localMediaPath || "",
+      image.localMediaUrl || "",
+      image.sortOrder,
+      JSON.stringify(imageTags),
+    );
     quoteImageCount += 1;
   });
 }

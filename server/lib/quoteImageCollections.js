@@ -14,6 +14,13 @@ function normalizeQuoteImageWorkKey(value) {
     .replace(/\s+/g, " ");
 }
 
+function normalizeSeedTags(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((tag) => String(tag || "").trim())
+    .filter(Boolean);
+}
+
 function quoteImageSeedCollections() {
   const works = QUOTE_IMAGE_SEED?.works && typeof QUOTE_IMAGE_SEED.works === "object"
     ? QUOTE_IMAGE_SEED.works
@@ -24,10 +31,16 @@ function quoteImageSeedCollections() {
     workTitle: String(workTitle || "").trim(),
     categoryUrl: String(entry?.category || "").trim(),
     notes: String(entry?.notes || "").trim(),
+    tags: normalizeSeedTags(entry?.tags),
     images: Array.isArray(entry?.images)
       ? entry.images.map((image, index) => ({
+        title: String(image?.title || "").trim(),
+        sourceLabel: String(image?.sourceLabel || image?.source || "").trim(),
         pageUrl: String(image?.page || "").trim(),
         imageUrl: String(image?.download || "").trim(),
+        localMediaPath: String(image?.localMediaPath || "").trim(),
+        localMediaUrl: String(image?.localMediaUrl || "").trim(),
+        tags: normalizeSeedTags(image?.tags),
         sortOrder: index,
       })).filter((image) => image.pageUrl || image.imageUrl)
       : [],
