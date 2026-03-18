@@ -76,6 +76,10 @@ function ensureHttpUrl(value) {
   return parsed.toString();
 }
 
+function isHttpUrl(value) {
+  return /^https?:\/\//i.test(String(value || "").trim());
+}
+
 function safeBaseName(value, fallback = "gallery") {
   return (String(value || fallback).toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || fallback);
 }
@@ -218,7 +222,7 @@ function listGalleryItems() {
         sourceLabel: row.source_label || "",
         pageUrl: row.page_url || "",
         imageUrl: row.local_media_url || row.image_url || "",
-        originalImageUrl: row.image_url || "",
+        originalImageUrl: isHttpUrl(row.image_url || "") ? row.image_url : "",
         localMediaPath: row.local_media_path || "",
         localMediaUrl: row.local_media_url || "",
         externalRef: row.external_ref || "",
@@ -320,10 +324,14 @@ function validateImagePayload(body = {}, existing = null) {
   if (!primaryWorkSlug) throw new Error("Select at least one associated work.");
 
   const pageUrl = body.pageUrl === undefined && existing ? existing.pageUrl : (body.pageUrl ? ensureHttpUrl(body.pageUrl) : "");
-  const imageUrl = body.imageUrl === undefined && existing ? existing.originalImageUrl : (body.imageUrl ? ensureHttpUrl(body.imageUrl) : "");
+  const rawImageUrl = body.imageUrl === undefined
+    ? (existing?.originalImageUrl || "")
+    : String(body.imageUrl || "").trim();
+  const imageUrl = rawImageUrl && isHttpUrl(rawImageUrl) ? ensureHttpUrl(rawImageUrl) : "";
   const localMediaPath = body.localMediaPath === undefined && existing ? existing.localMediaPath : String(body.localMediaPath || "").trim();
   const localMediaUrl = body.localMediaUrl === undefined && existing ? existing.localMediaUrl : String(body.localMediaUrl || "").trim();
-  const resolvedImageUrl = imageUrl || localMediaUrl || existing?.originalImageUrl || existing?.localMediaUrl || "";
+  const fallbackExistingImageUrl = isHttpUrl(existing?.originalImageUrl || "") ? existing.originalImageUrl : "";
+  const resolvedImageUrl = imageUrl || localMediaUrl || fallbackExistingImageUrl || existing?.localMediaUrl || "";
   if (!resolvedImageUrl) throw new Error("Image URL or uploaded media required.");
 
   return {

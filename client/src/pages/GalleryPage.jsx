@@ -42,6 +42,10 @@ function objectPositionStyle(x = 50, y = 50) {
   return `${clampedX}% ${clampedY}%`;
 }
 
+function isHttpUrl(value) {
+  return /^https?:\/\//i.test(String(value || "").trim());
+}
+
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -120,7 +124,7 @@ function editorFromItem(item) {
     title: item?.title || "",
     sourceLabel: item?.sourceLabel || "Wikimedia Commons",
     pageUrl: item?.pageUrl || "",
-    imageUrl: item?.originalImageUrl || "",
+    imageUrl: isHttpUrl(item?.originalImageUrl || "") ? item.originalImageUrl : "",
     localMediaPath: item?.localMediaPath || "",
     localMediaUrl: item?.localMediaUrl || "",
     remoteImportUrl: "",
