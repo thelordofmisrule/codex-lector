@@ -128,9 +128,16 @@ export const chat = {
     workSlug ? `work=${encodeURIComponent(workSlug)}` : "",
     limit ? `limit=${encodeURIComponent(limit)}` : "",
   ].filter(Boolean).join("&")}`),
+  mentions:(prefix, roomKey="", workSlug="", limit=6)=>req(`/chat/mentions?${[
+    prefix ? `prefix=${encodeURIComponent(prefix)}` : "",
+    roomKey ? `room=${encodeURIComponent(roomKey)}` : "",
+    workSlug ? `work=${encodeURIComponent(workSlug)}` : "",
+    limit ? `limit=${encodeURIComponent(limit)}` : "",
+  ].filter(Boolean).join("&")}`),
   subscribe:(subscribed, roomKey="", workSlug="")=>req("/chat/rooms/subscribe",{method:"POST",body:JSON.stringify({subscribed,roomKey,workSlug})}),
   markSeen:(roomKey="", workSlug="", lastSeenMessageId=0)=>req("/chat/rooms/seen",{method:"POST",body:JSON.stringify({roomKey,workSlug,lastSeenMessageId})}),
-  post:(body, roomKey="", workSlug="")=>req("/chat/messages",{method:"POST",body:JSON.stringify({body,roomKey,workSlug})}),
+  post:(body, roomKey="", workSlug="", replyToMessageId=0)=>req("/chat/messages",{method:"POST",body:JSON.stringify({body,roomKey,workSlug,replyToMessageId})}),
+  update:(id, body)=>req(`/chat/messages/${id}`,{method:"PUT",body:JSON.stringify({body})}),
   delete:id=>req(`/chat/messages/${id}`,{method:"DELETE"}),
 };
 export const notifications = {

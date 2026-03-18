@@ -105,6 +105,7 @@ export default function Header() {
       }, 250);
     };
     source.addEventListener("message", refresh);
+    source.addEventListener("edit", refresh);
     source.addEventListener("delete", refresh);
     source.onerror = () => {};
     return () => {

@@ -13,6 +13,7 @@ const FALLBACK_SPECIAL_ROOMS = [
     label: "Lobby",
     kind: "global",
     description: "General conversation across Codex Lector.",
+    context: "General conversation across the site. Ask what people are reading, point to a passage, or pull someone in with @mentions.",
     workSlug: "",
     messageCount: 0,
     lastMessageAt: null,
@@ -22,6 +23,7 @@ const FALLBACK_SPECIAL_ROOMS = [
     label: "Year of Shakespeare",
     kind: "program",
     description: "Shared reading room for March 11, 2026 through March 10, 2027.",
+    context: "Use this room for daily reading check-ins, pacing, and reflections tied to the Year of Shakespeare calendar.",
     workSlug: "",
     messageCount: 0,
     lastMessageAt: null,
@@ -39,6 +41,39 @@ function fmtMessageTime(iso) {
   } catch {
     return "";
   }
+}
+
+function formatMessageSnippet(body, max = 96) {
+  const text = String(body || "").replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
+function chatRoomPath(roomKey = "lobby", workSlug = "") {
+  const params = new URLSearchParams();
+  if (workSlug) params.set("work", workSlug);
+  else if (roomKey && roomKey !== "lobby") params.set("room", roomKey);
+  return `/chat${params.toString() ? `?${params.toString()}` : ""}`;
+}
+
+function buildMessagePermalink(roomKey = "lobby", workSlug = "", messageId = 0) {
+  if (!messageId || typeof window === "undefined") return "";
+  return `${window.location.origin}${chatRoomPath(roomKey, workSlug)}#chat-message-${messageId}`;
+}
+
+function getActiveMention(value, cursor) {
+  const safeValue = String(value || "");
+  const safeCursor = Math.max(0, Math.min(Number(cursor) || 0, safeValue.length));
+  const before = safeValue.slice(0, safeCursor);
+  const match = before.match(/(^|[\s(])@([a-z0-9_]*)$/i);
+  if (!match) return null;
+  const start = before.lastIndexOf("@");
+  if (start < 0) return null;
+  return {
+    start,
+    end: safeCursor,
+    prefix: String(match[2] || "").toLowerCase(),
+  };
 }
 
 function mergeMessages(existing, incoming) {
@@ -116,8 +151,9 @@ function Avatar({ message }) {
   );
 }
 
-function MessageCard({ message, currentUser, deletingId, onDelete }) {
+function MessageCard({ message, currentUser, deletingId, onDelete, onReply, onEdit, onPermalink, onJumpToMessage }) {
   const canDelete = !!currentUser && (currentUser.id === message.userId || currentUser.isAdmin);
+  const canEdit = canDelete;
 
   return (
     <div
@@ -137,9 +173,25 @@ function MessageCard({ message, currentUser, deletingId, onDelete }) {
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <strong style={{ color: message.isAdmin ? "var(--gold)" : "var(--accent)" }}>{message.displayName}</strong>
               {message.isAdmin && <span className="admin-badge">Author</span>}
-              <span style={{ fontSize: 12, color: "var(--text-light)" }}>{fmtMessageTime(message.createdAt)}</span>
+              <span style={{ fontSize: 12, color: "var(--text-light)" }}>
+                {fmtMessageTime(message.createdAt)}
+                {message.isEdited && <span style={{ marginLeft: 6, fontStyle: "italic" }}>(edited)</span>}
+              </span>
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+              {currentUser && (
+                <button className="btn btn-ghost btn-sm" onClick={() => onReply(message)}>
+                  Reply
+                </button>
+              )}
+              <button className="btn btn-ghost btn-sm" onClick={() => onPermalink(message)}>
+                Permalink
+              </button>
+              {canEdit && (
+                <button className="btn btn-ghost btn-sm" onClick={() => onEdit(message)}>
+                  Edit
+                </button>
+              )}
               {currentUser && currentUser.id !== message.userId && (
                 <ReportButton targetType="chat_message" targetId={message.id} label="Report" />
               )}
@@ -155,6 +207,31 @@ function MessageCard({ message, currentUser, deletingId, onDelete }) {
               )}
             </div>
           </div>
+          {message.replyTo && (
+            <button
+              type="button"
+              onClick={() => onJumpToMessage(message.replyTo.id)}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                padding: "8px 10px",
+                marginBottom: 8,
+                borderRadius: 10,
+                border: "1px solid var(--border-light)",
+                background: "var(--bg)",
+                color: "var(--text-muted)",
+                cursor: "pointer",
+              }}
+            >
+              <div style={{ fontSize: 11, fontFamily: "var(--font-display)", letterSpacing: 1, textTransform: "uppercase", color: "var(--text-light)", marginBottom: 4 }}>
+                Replying to @{message.replyTo.username}
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+                {formatMessageSnippet(message.replyTo.body)}
+              </div>
+            </button>
+          )}
           <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.62, color: "var(--text)" }}>
             {message.body}
           </div>
@@ -177,6 +254,11 @@ export default function ChatPage() {
   const [messages, setMessages] = useState([]);
   const [workSearch, setWorkSearch] = useState("");
   const [compose, setCompose] = useState("");
+  const [replyTarget, setReplyTarget] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
+  const [mentionTarget, setMentionTarget] = useState(null);
+  const [mentionOptions, setMentionOptions] = useState([]);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const [loadingSidebar, setLoadingSidebar] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [sending, setSending] = useState(false);
@@ -187,6 +269,8 @@ export default function ChatPage() {
   const [error, setError] = useState("");
   const [showAuth, setShowAuth] = useState(false);
   const messagePaneRef = useRef(null);
+  const composeRef = useRef(null);
+  const firstUnreadRef = useRef(null);
   const activeRoomRef = useRef({ roomKey: "lobby", workSlug: "" });
   const lastSeenRef = useRef(new Map());
   const roomInfoRef = useRef(FALLBACK_SPECIAL_ROOMS[0]);
@@ -212,6 +296,11 @@ export default function ChatPage() {
     () => works.find((work) => work.slug === selectedWorkSlug) || null,
     [works, selectedWorkSlug],
   );
+  const firstUnreadMessageId = useMemo(() => {
+    const lastSeenId = Number(roomInfo.lastSeenMessageId) || 0;
+    if (!roomInfo.hasUnread || !lastSeenId) return 0;
+    return messages.find((message) => message.id > lastSeenId)?.id || 0;
+  }, [messages, roomInfo.hasUnread, roomInfo.lastSeenMessageId]);
 
   const isPaneNearBottom = useCallback(() => {
     const pane = messagePaneRef.current;
@@ -376,6 +465,11 @@ export default function ChatPage() {
   useEffect(() => {
     const nextDraft = localStorage.getItem(draftKey) || "";
     setCompose(nextDraft);
+    setReplyTarget(null);
+    setEditTarget(null);
+    setMentionTarget(null);
+    setMentionOptions([]);
+    setMentionIndex(0);
   }, [draftKey]);
 
   useEffect(() => {
@@ -438,10 +532,22 @@ export default function ChatPage() {
         setMessages((prev) => prev.filter((message) => message.id !== payload.id));
       } catch {}
     };
+    const handleEdit = (event) => {
+      setStreamState("live");
+      try {
+        const payload = JSON.parse(event.data || "{}");
+        if (!payload?.message) return;
+        setMessages((prev) => mergeMessages(prev, [payload.message]));
+        if (payload.room?.key === activeRoomRef.current.roomKey) {
+          setRoomInfo((prev) => mergeRoomState(prev, payload.room));
+        }
+      } catch {}
+    };
 
     source.addEventListener("ready", handleReady);
     source.addEventListener("ping", handlePing);
     source.addEventListener("message", handleMessage);
+    source.addEventListener("edit", handleEdit);
     source.addEventListener("delete", handleDelete);
     source.onerror = () => setStreamState("reconnecting");
 
@@ -459,24 +565,145 @@ export default function ChatPage() {
     return () => window.clearTimeout(timer);
   }, [location.hash, messages.length]);
 
+  useEffect(() => {
+    if (!user) {
+      setMentionOptions([]);
+      return undefined;
+    }
+    if (!mentionTarget || mentionTarget.prefix.length < 1) {
+      setMentionOptions([]);
+      setMentionIndex(0);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const data = await chatApi.mentions(mentionTarget.prefix, selectedWorkSlug ? "" : activeRoomKey, selectedWorkSlug, 6);
+        if (!cancelled) {
+          setMentionOptions(data?.users || []);
+          setMentionIndex(0);
+        }
+      } catch {
+        if (!cancelled) setMentionOptions([]);
+      }
+    }, 120);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeRoomKey, mentionTarget, selectedWorkSlug, user]);
+
   const setComposeDraft = (value) => {
     setCompose(value);
     localStorage.setItem(draftKey, value);
   };
+
+  const updateMentionState = useCallback((nextValue = compose, cursor = composeRef.current?.selectionStart ?? String(nextValue || "").length) => {
+    const activeMention = getActiveMention(nextValue, cursor);
+    setMentionTarget(activeMention);
+    if (!activeMention) {
+      setMentionOptions([]);
+      setMentionIndex(0);
+    }
+  }, [compose]);
+
+  const focusComposer = useCallback((cursorAtEnd = true) => {
+    const node = composeRef.current;
+    if (!node) return;
+    node.focus();
+    if (cursorAtEnd) {
+      const position = node.value.length;
+      requestAnimationFrame(() => node.setSelectionRange(position, position));
+    }
+  }, []);
+
+  const insertMention = useCallback((username) => {
+    const node = composeRef.current;
+    const activeMention = mentionTarget || getActiveMention(compose, node?.selectionStart ?? compose.length);
+    if (!node || !activeMention) return;
+    const before = compose.slice(0, activeMention.start);
+    const after = compose.slice(activeMention.end);
+    const nextValue = `${before}@${username} ${after}`;
+    setComposeDraft(nextValue);
+    setMentionTarget(null);
+    setMentionOptions([]);
+    setMentionIndex(0);
+    requestAnimationFrame(() => {
+      const nextCursor = before.length + username.length + 2;
+      node.focus();
+      node.setSelectionRange(nextCursor, nextCursor);
+    });
+  }, [compose, mentionTarget]);
+
+  const jumpToMessage = useCallback((messageId, behavior = "smooth") => {
+    if (!messageId) return;
+    document.getElementById(`chat-message-${messageId}`)?.scrollIntoView({ block: "center", behavior });
+  }, []);
+
+  const startReply = useCallback((message) => {
+    setEditTarget(null);
+    setReplyTarget(message);
+    const prefix = `@${message.username} `;
+    const nextValue = compose.trim()
+      ? (compose.startsWith(prefix) ? compose : `${prefix}${compose}`)
+      : prefix;
+    setComposeDraft(nextValue);
+    setMentionTarget(null);
+    setMentionOptions([]);
+    setMentionIndex(0);
+    focusComposer();
+  }, [compose, focusComposer]);
+
+  const startEdit = useCallback((message) => {
+    setReplyTarget(null);
+    setEditTarget(message);
+    setComposeDraft(message.body || "");
+    setMentionTarget(null);
+    setMentionOptions([]);
+    setMentionIndex(0);
+    focusComposer();
+  }, [focusComposer]);
+
+  const cancelReply = useCallback(() => {
+    setReplyTarget(null);
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditTarget(null);
+  }, []);
+
+  const copyPermalink = useCallback(async (message) => {
+    const link = buildMessagePermalink(message.roomKey, message.workSlug, message.id);
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast?.success("Permalink copied.");
+    } catch {
+      toast?.error("Could not copy permalink.");
+    }
+  }, [toast]);
 
   const submitMessage = async () => {
     const body = compose.trim();
     if (!user || sending || !body) return;
     setSending(true);
     try {
-      const data = await chatApi.post(body, selectedWorkSlug ? "" : activeRoomKey, selectedWorkSlug);
+      const data = editTarget
+        ? await chatApi.update(editTarget.id, body)
+        : await chatApi.post(body, selectedWorkSlug ? "" : activeRoomKey, selectedWorkSlug, replyTarget?.id || 0);
       if (data.room) syncRoomInfo(data.room, { forceRead: true, lastSeenMessageId: data.message?.id || data.room.lastMessageId || 0 });
       setMessages((prev) => mergeMessages(prev, [data.message]));
       setCompose("");
       localStorage.removeItem(draftKey);
+      setReplyTarget(null);
+      setEditTarget(null);
+      setMentionTarget(null);
+      setMentionOptions([]);
+      setMentionIndex(0);
       scheduleAutoScroll(data.message?.id || data.room?.lastMessageId || 0);
+      toast?.success(editTarget ? "Message updated." : "Message sent.");
     } catch (e) {
-      toast?.error(e.message || "Could not send message.");
+      toast?.error(e.message || (editTarget ? "Could not update message." : "Could not send message."));
     } finally {
       setSending(false);
     }
@@ -534,6 +761,14 @@ export default function ChatPage() {
       void markCurrentRoomSeen(roomInfo, latestMessageId);
     }
   }, [markCurrentRoomSeen, messages, roomInfo, scrollToBottom]);
+
+  const jumpToFirstUnread = useCallback(() => {
+    if (firstUnreadRef.current) {
+      firstUnreadRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+    if (firstUnreadMessageId) jumpToMessage(firstUnreadMessageId);
+  }, [firstUnreadMessageId, jumpToMessage]);
 
   return (
     <>
@@ -743,8 +978,36 @@ export default function ChatPage() {
                         Subscribed
                       </span>
                     )}
+                    {firstUnreadMessageId > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={jumpToFirstUnread}
+                      >
+                        Jump to first unread
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                {roomInfo.context && (
+                  <div
+                    style={{
+                      marginBottom: 12,
+                      padding: "10px 12px",
+                      border: "1px solid var(--border-light)",
+                      borderRadius: 12,
+                      background: "rgba(255,255,255,0.46)",
+                    }}
+                  >
+                    <div style={{ fontSize: 11, fontFamily: "var(--font-display)", letterSpacing: 1.4, textTransform: "uppercase", color: "var(--gold)", marginBottom: 4 }}>
+                      Room Context
+                    </div>
+                    <div style={{ color: "var(--text-muted)", lineHeight: 1.6 }}>
+                      {roomInfo.context}
+                    </div>
+                  </div>
+                )}
 
                 {error && (
                   <div style={{ marginBottom: 14, padding: "12px 14px", borderRadius: 10, background: "rgba(139,31,31,0.08)", border: "1px solid rgba(139,31,31,0.22)", color: "var(--danger)" }}>
@@ -775,13 +1038,37 @@ export default function ChatPage() {
                   </div>
                 ) : (
                   messages.map((message) => (
-                    <MessageCard
-                      key={message.id}
-                      message={message}
-                      currentUser={user}
-                      deletingId={deletingId}
-                      onDelete={deleteMessage}
-                    />
+                    <div key={message.id} ref={message.id === firstUnreadMessageId ? firstUnreadRef : null}>
+                      {message.id === firstUnreadMessageId && (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            margin: "2px 0 10px",
+                            color: "var(--gold)",
+                            fontSize: 11,
+                            fontFamily: "var(--font-display)",
+                            letterSpacing: 1.2,
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          <span style={{ flex: 1, height: 1, background: "rgba(201,168,76,0.38)" }} />
+                          First unread
+                          <span style={{ flex: 1, height: 1, background: "rgba(201,168,76,0.38)" }} />
+                        </div>
+                      )}
+                      <MessageCard
+                        message={message}
+                        currentUser={user}
+                        deletingId={deletingId}
+                        onDelete={deleteMessage}
+                        onReply={startReply}
+                        onEdit={startEdit}
+                        onPermalink={copyPermalink}
+                        onJumpToMessage={jumpToMessage}
+                      />
+                    </div>
                   ))
                 )}
               </div>
@@ -817,18 +1104,105 @@ export default function ChatPage() {
             </div>
 
                 <div className="chat-compose-area">
+                  {(replyTarget || editTarget) && (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        alignItems: "flex-start",
+                        padding: "10px 12px",
+                        borderRadius: 12,
+                        border: "1px solid var(--border-light)",
+                        background: "rgba(255,255,255,0.55)",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 11, fontFamily: "var(--font-display)", letterSpacing: 1.2, textTransform: "uppercase", color: "var(--gold)", marginBottom: 4 }}>
+                          {editTarget ? "Editing message" : `Replying to @${replyTarget?.username}`}
+                        </div>
+                        <div style={{ color: "var(--text-muted)", lineHeight: 1.55 }}>
+                          {formatMessageSnippet((editTarget || replyTarget)?.body || "", 120)}
+                        </div>
+                      </div>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={editTarget ? cancelEdit : cancelReply}
+                        style={{ flexShrink: 0 }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
                   <textarea
+                    ref={composeRef}
                     className="input chat-compose-input"
                     value={compose}
-                    onChange={(event) => setComposeDraft(event.target.value)}
-                    placeholder={currentWork ? `Discuss ${currentWork.title} live...` : "Say something to the room..."}
+                    onChange={(event) => {
+                      setComposeDraft(event.target.value);
+                      updateMentionState(event.target.value, event.target.selectionStart);
+                    }}
+                    onClick={(event) => updateMentionState(event.currentTarget.value, event.currentTarget.selectionStart)}
+                    onKeyUp={(event) => updateMentionState(event.currentTarget.value, event.currentTarget.selectionStart)}
+                    onKeyDown={(event) => {
+                      if (mentionOptions.length) {
+                        if (event.key === "ArrowDown") {
+                          event.preventDefault();
+                          setMentionIndex((value) => Math.min(value + 1, mentionOptions.length - 1));
+                          return;
+                        }
+                        if (event.key === "ArrowUp") {
+                          event.preventDefault();
+                          setMentionIndex((value) => Math.max(value - 1, 0));
+                          return;
+                        }
+                        if ((event.key === "Enter" || event.key === "Tab") && mentionOptions[mentionIndex]) {
+                          event.preventDefault();
+                          insertMention(mentionOptions[mentionIndex].username);
+                          return;
+                        }
+                        if (event.key === "Escape") {
+                          setMentionTarget(null);
+                          setMentionOptions([]);
+                          setMentionIndex(0);
+                          return;
+                        }
+                      }
+                    }}
+                    placeholder={editTarget ? "Revise your message..." : (currentWork ? `Discuss ${currentWork.title} live...` : "Say something to the room...")}
                   />
+                  {mentionOptions.length > 0 && (
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: 4,
+                        padding: 8,
+                        borderRadius: 12,
+                        border: "1px solid var(--border-light)",
+                        background: "var(--surface)",
+                        boxShadow: "0 10px 24px rgba(0,0,0,0.06)",
+                      }}
+                    >
+                      {mentionOptions.map((option, index) => (
+                        <button
+                          key={option.username}
+                          type="button"
+                          className={index === mentionIndex ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+                          onClick={() => insertMention(option.username)}
+                          style={{ justifyContent: "space-between", textAlign: "left" }}
+                        >
+                          <span>@{option.username}</span>
+                          <span style={{ opacity: 0.75 }}>{option.displayName}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="chat-compose-footer">
                     <div className="chat-compose-note">
-                      Messages are visible to signed-in readers. Use `@username` to mention someone directly, and subscribe to rooms if you want unread activity to light up in the header.
+                      Messages are visible to signed-in readers. Use `Reply` to prefill `@username`, and start typing `@` for mention suggestions. Edited messages are labeled.
                     </div>
                     <button className="btn btn-primary" onClick={submitMessage} disabled={sending || !compose.trim()}>
-                      {sending ? "Sending..." : "Send Message"}
+                      {sending ? (editTarget ? "Saving..." : "Sending...") : (editTarget ? "Save Edit" : "Send Message")}
                     </button>
                   </div>
                 </div>

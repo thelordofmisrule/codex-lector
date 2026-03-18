@@ -256,6 +256,7 @@ db.exec(`
     room_key TEXT NOT NULL,
     work_slug TEXT,
     user_id INTEGER NOT NULL REFERENCES users(id),
+    reply_to_message_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL,
     body TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME
@@ -434,10 +435,12 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS chat_messages (
   room_key TEXT NOT NULL,
   work_slug TEXT,
   user_id INTEGER NOT NULL REFERENCES users(id),
+  reply_to_message_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL,
   body TEXT NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME
 )`); } catch {}
+try { db.exec("ALTER TABLE chat_messages ADD COLUMN reply_to_message_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL"); } catch {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_room_created ON chat_messages(room_key, created_at)"); } catch {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_work_created ON chat_messages(work_slug, created_at)"); } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS chat_room_memberships (

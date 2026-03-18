@@ -22,12 +22,14 @@ const SPECIAL_ROOMS = {
     label: "Lobby",
     kind: "global",
     description: "General conversation across Codex Lector.",
+    context: "General conversation across the site. Ask what others are reading, point to a passage, or pull someone in with @mentions.",
   },
   "year-2026-2027": {
     key: "year-2026-2027",
     label: "Year of Shakespeare",
     kind: "program",
     description: "Shared reading room for March 11, 2026 through March 10, 2027.",
+    context: "Use this room for daily reading check-ins, pacing, and reflections tied to the Year of Shakespeare calendar.",
   },
 };
 
@@ -48,6 +50,7 @@ function resolveRoom(roomKeyRaw, workSlugRaw) {
       label: work.title,
       kind: "work",
       description: `Live chat for ${work.title}.`,
+      context: `Close-reading room for ${work.title}. Reply to a message when you want to continue one thread of discussion, and use @mentions to call another reader in.`,
     };
   }
 
@@ -68,6 +71,7 @@ function resolveRoom(roomKeyRaw, workSlugRaw) {
       label: work.title,
       kind: "work",
       description: `Live chat for ${work.title}.`,
+      context: `Close-reading room for ${work.title}. Reply to a message when you want to continue one thread of discussion, and use @mentions to call another reader in.`,
     };
   }
 
@@ -115,6 +119,7 @@ function serializeRoom(room, stats = {}, membership = null) {
     label: room.label,
     kind: room.kind,
     description: room.description,
+    context: room.context || "",
     workSlug: room.workSlug || "",
     messageCount: Number(stats.messageCount) || 0,
     lastMessageAt: stats.lastMessageAt || null,
@@ -139,14 +144,29 @@ function serializeMessage(row) {
     body: row.body,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    isEdited: !!row.updated_at,
+    replyTo: row.reply_to_id ? {
+      id: row.reply_to_id,
+      userId: row.reply_to_user_id,
+      username: row.reply_to_username,
+      displayName: row.reply_to_display_name,
+      body: row.reply_to_body || "",
+    } : null,
   };
 }
 
 function loadMessage(id) {
   return db.prepare(`
-    SELECT m.*, u.username, u.display_name, u.avatar_color, u.oauth_avatar, u.is_admin
+    SELECT m.*, u.username, u.display_name, u.avatar_color, u.oauth_avatar, u.is_admin,
+      parent.id AS reply_to_id,
+      parent.user_id AS reply_to_user_id,
+      parent.body AS reply_to_body,
+      pu.username AS reply_to_username,
+      pu.display_name AS reply_to_display_name
     FROM chat_messages m
     JOIN users u ON u.id=m.user_id
+    LEFT JOIN chat_messages parent ON parent.id=m.reply_to_message_id
+    LEFT JOIN users pu ON pu.id=parent.user_id
     WHERE m.id=?
   `).get(id);
 }
@@ -257,6 +277,36 @@ function notifyMentionedUsers(author, room, message) {
   }
 }
 
+function newlyMentionedUsernames(previousBody, nextBody, authorUsername = "") {
+  const previous = new Set(extractMentionedUsernames(previousBody));
+  return extractMentionedUsernames(nextBody)
+    .filter((username) => username && username !== String(authorUsername || "").toLowerCase())
+    .filter((username) => !previous.has(username));
+}
+
+function notifySpecificMentionedUsers(author, room, message, usernames) {
+  if (!Array.isArray(usernames) || !usernames.length) return;
+  const normalized = [...new Set(usernames.map((value) => String(value || "").toLowerCase()).filter(Boolean))];
+  if (!normalized.length) return;
+
+  const placeholders = normalized.map(() => "?").join(",");
+  const users = db.prepare(`
+    SELECT id, username
+    FROM users
+    WHERE username IN (${placeholders})
+  `).all(...normalized);
+
+  const authorName = author.displayName || author.display_name || author.username || "Someone";
+  for (const user of users) {
+    notify(
+      user.id,
+      "chat_mention",
+      `${authorName} mentioned you in ${room.label}.`,
+      messageLink(room, message.id),
+    );
+  }
+}
+
 function loadMembershipMap(userId) {
   const rows = db.prepare(`
     SELECT room_key, work_slug, is_subscribed, last_seen_message_id, last_seen_at
@@ -329,6 +379,7 @@ r.get("/rooms", requireAuth, (req, res) => {
     label: row.title,
     kind: "work",
     description: `Live chat for ${row.title}.`,
+    context: `Close-reading room for ${row.title}. Reply to a message when you want to continue one thread of discussion, and use @mentions to call another reader in.`,
   }, normalizeStats(row), membershipMap.get(`work:${row.work_slug}`) || null));
 
   res.json({ specialRooms, activeWorkRooms });
@@ -348,9 +399,16 @@ r.get("/messages", requireAuth, (req, res) => {
     : 80;
 
   const rows = db.prepare(`
-    SELECT m.*, u.username, u.display_name, u.avatar_color, u.oauth_avatar, u.is_admin
+    SELECT m.*, u.username, u.display_name, u.avatar_color, u.oauth_avatar, u.is_admin,
+      parent.id AS reply_to_id,
+      parent.user_id AS reply_to_user_id,
+      parent.body AS reply_to_body,
+      pu.username AS reply_to_username,
+      pu.display_name AS reply_to_display_name
     FROM chat_messages m
     JOIN users u ON u.id=m.user_id
+    LEFT JOIN chat_messages parent ON parent.id=m.reply_to_message_id
+    LEFT JOIN users pu ON pu.id=parent.user_id
     WHERE m.room_key=?
     ORDER BY m.id DESC
     LIMIT ?
@@ -363,6 +421,68 @@ r.get("/messages", requireAuth, (req, res) => {
     room: serializeRoom(room, stats, membership),
     messages: rows.reverse().map(serializeMessage),
   });
+});
+
+r.get("/mentions", requireAuth, (req, res) => {
+  const prefix = String(req.query.prefix || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+  if (!prefix || prefix.length < 1) return res.json({ users: [] });
+
+  let room = null;
+  try {
+    room = resolveRoom(req.query.room, req.query.work);
+  } catch {}
+
+  const limit = Math.max(1, Math.min(12, parseInt(req.query.limit, 10) || 6));
+  const users = [];
+  const seen = new Set();
+
+  if (room?.roomKey) {
+    const recentRoomUsers = db.prepare(`
+      SELECT u.id, u.username, u.display_name, MAX(m.id) AS last_message_id
+      FROM chat_messages m
+      JOIN users u ON u.id=m.user_id
+      WHERE m.room_key=?
+        AND u.username LIKE ?
+      GROUP BY u.id, u.username, u.display_name
+      ORDER BY last_message_id DESC
+      LIMIT ?
+    `).all(room.roomKey, `${prefix}%`, limit);
+
+    for (const user of recentRoomUsers) {
+      if (seen.has(user.username)) continue;
+      seen.add(user.username);
+      users.push({
+        id: user.id,
+        username: user.username,
+        displayName: user.display_name,
+        recentInRoom: true,
+      });
+    }
+  }
+
+  if (users.length < limit) {
+    const globalUsers = db.prepare(`
+      SELECT id, username, display_name
+      FROM users
+      WHERE username LIKE ?
+      ORDER BY username ASC
+      LIMIT ?
+    `).all(`${prefix}%`, limit * 2);
+
+    for (const user of globalUsers) {
+      if (seen.has(user.username)) continue;
+      seen.add(user.username);
+      users.push({
+        id: user.id,
+        username: user.username,
+        displayName: user.display_name,
+        recentInRoom: false,
+      });
+      if (users.length >= limit) break;
+    }
+  }
+
+  res.json({ users });
 });
 
 r.post("/rooms/subscribe", requireAuth, (req, res) => {
@@ -430,15 +550,28 @@ r.post("/messages", requireAuth, messageLimit, (req, res) => {
   }
 
   const body = String(req.body?.body || "").replace(/\r\n/g, "\n").trim();
+  const requestedReplyId = Math.max(0, parseInt(req.body?.replyToMessageId, 10) || 0);
   if (!body) return res.status(400).json({ error: "Message body is required." });
   if (body.length > MAX_MESSAGE_LENGTH) {
     return res.status(400).json({ error: `Messages must be ${MAX_MESSAGE_LENGTH} characters or fewer.` });
   }
 
+  let replyTarget = null;
+  if (requestedReplyId) {
+    replyTarget = db.prepare(`
+      SELECT id, room_key
+      FROM chat_messages
+      WHERE id=?
+    `).get(requestedReplyId);
+    if (!replyTarget || replyTarget.room_key !== room.roomKey) {
+      return res.status(400).json({ error: "Reply target is not in this room." });
+    }
+  }
+
   const result = db.prepare(`
-    INSERT INTO chat_messages (room_key, work_slug, user_id, body)
-    VALUES (?, ?, ?, ?)
-  `).run(room.roomKey, room.workSlug || null, req.user.id, body);
+    INSERT INTO chat_messages (room_key, work_slug, user_id, reply_to_message_id, body)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(room.roomKey, room.workSlug || null, req.user.id, requestedReplyId || null, body);
 
   const created = loadMessage(result.lastInsertRowid);
   const stats = roomStats(room.roomKey);
@@ -456,6 +589,51 @@ r.post("/messages", requireAuth, messageLimit, (req, res) => {
   });
 
   res.status(201).json({
+    room: senderRoom,
+    message: serializedMessage,
+  });
+});
+
+r.put("/messages/:id", requireAuth, messageLimit, (req, res) => {
+  const message = db.prepare(`
+    SELECT id, room_key, work_slug, user_id, body
+    FROM chat_messages
+    WHERE id=?
+  `).get(req.params.id);
+  if (!message) return res.status(404).json({ error: "Message not found." });
+  if (message.user_id !== req.user.id && !req.user.isAdmin) {
+    return res.status(403).json({ error: "You do not have permission to edit this message." });
+  }
+
+  const body = String(req.body?.body || "").replace(/\r\n/g, "\n").trim();
+  if (!body) return res.status(400).json({ error: "Message body is required." });
+  if (body.length > MAX_MESSAGE_LENGTH) {
+    return res.status(400).json({ error: `Messages must be ${MAX_MESSAGE_LENGTH} characters or fewer.` });
+  }
+
+  db.prepare(`
+    UPDATE chat_messages
+    SET body=?, updated_at=CURRENT_TIMESTAMP
+    WHERE id=?
+  `).run(body, message.id);
+
+  const updated = loadMessage(message.id);
+  const room = resolveRoom(message.room_key, message.work_slug);
+  const stats = roomStats(message.room_key);
+  const newMentions = newlyMentionedUsernames(message.body, body, updated.username);
+  notifySpecificMentionedUsers(updated, room, updated, newMentions);
+
+  const publicRoom = serializeRoom(room, stats, null);
+  const senderMembership = loadMembership(req.user.id, room.roomKey);
+  const senderRoom = serializeRoom(room, stats, senderMembership);
+  const serializedMessage = serializeMessage(updated);
+
+  broadcast("edit", {
+    room: publicRoom,
+    message: serializedMessage,
+  });
+
+  res.json({
     room: senderRoom,
     message: serializedMessage,
   });
