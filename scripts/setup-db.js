@@ -406,8 +406,6 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_quote_images_collection_sort
     ON quote_images(collection_id, sort_order, id);
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_quote_images_collection_external_ref
-    ON quote_images(collection_id, external_ref);
 
   CREATE TABLE IF NOT EXISTS quote_image_work_links (
     image_id INTEGER NOT NULL REFERENCES quote_images(id) ON DELETE CASCADE,
