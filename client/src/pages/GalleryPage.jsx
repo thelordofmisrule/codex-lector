@@ -1,12 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { gallery as galleryApi, works as worksApi } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 
+function normalizeTagInput(tag) {
+  const raw = String(tag || "").trim().replace(/^[\["']+|[\]"']+$/g, "");
+  if (!raw) return "";
+  if (raw.startsWith("slug:") || raw.startsWith("work:") || raw.startsWith("source:")) return "";
+  if (raw.startsWith("category:")) return raw.slice("category:".length).trim();
+  return raw;
+}
+
 function parseTagsText(raw) {
-  return [...new Set(String(raw || "").split(/[,\n;]+/).map((tag) => tag.trim()).filter(Boolean))];
+  return [...new Set(
+    String(raw || "")
+      .split(/[,\n;]+/)
+      .map((tag) => normalizeTagInput(tag))
+      .filter(Boolean),
+  )];
 }
 
 function isVisibleTag(tag) {
@@ -21,6 +34,12 @@ function displayTagLabel(tag) {
     return String(tag).slice("category:".length).replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
   return String(tag || "");
+}
+
+function objectPositionStyle(x = 50, y = 50) {
+  const clampedX = Number.isFinite(Number(x)) ? Math.max(0, Math.min(100, Number(x))) : 50;
+  const clampedY = Number.isFinite(Number(y)) ? Math.max(0, Math.min(100, Number(y))) : 50;
+  return `${clampedX}% ${clampedY}%`;
 }
 
 function fileToDataUrl(file) {
@@ -90,6 +109,8 @@ function emptyEditor() {
     tagsText: "",
     workSlugs: [],
     primaryWorkSlug: "",
+    thumbX: 50,
+    thumbY: 50,
   };
 }
 
@@ -103,9 +124,11 @@ function editorFromItem(item) {
     localMediaPath: item?.localMediaPath || "",
     localMediaUrl: item?.localMediaUrl || "",
     remoteImportUrl: "",
-    tagsText: (item?.tags || []).filter((tag) => isVisibleTag(tag)).join(", "),
+    tagsText: (item?.tags || []).filter((tag) => isVisibleTag(tag)).map((tag) => displayTagLabel(tag)).join(", "),
     workSlugs: [...new Set(item?.workSlugs || [])],
     primaryWorkSlug: item?.primaryWorkSlug || item?.workSlugs?.[0] || "",
+    thumbX: Number.isFinite(Number(item?.thumbX)) ? Number(item.thumbX) : 50,
+    thumbY: Number.isFinite(Number(item?.thumbY)) ? Number(item.thumbY) : 50,
   };
 }
 
@@ -127,6 +150,7 @@ export default function GalleryPage() {
   const [editor, setEditor] = useState(() => emptyEditor());
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const editorRef = useRef(null);
 
   useEffect(() => {
     worksApi.list()
@@ -171,6 +195,14 @@ export default function GalleryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, selectedTag, selectedWork]);
 
+  useEffect(() => {
+    if (!showEditor || !editorRef.current) return;
+    const id = requestAnimationFrame(() => {
+      editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [showEditor, editor.id]);
+
   const visibleTags = useMemo(
     () => tags.slice(0, 18),
     [tags],
@@ -202,6 +234,8 @@ export default function GalleryPage() {
       tags: parseTagsText(editor.tagsText),
       workSlugs: editor.workSlugs,
       primaryWorkSlug: editor.primaryWorkSlug || editor.workSlugs[0] || "",
+      thumbX: editor.thumbX,
+      thumbY: editor.thumbY,
     };
     if (!payload.primaryWorkSlug) {
       toast?.error("Select at least one associated work.");
@@ -300,7 +334,7 @@ export default function GalleryPage() {
 
       {user?.isAdmin && (
         <div style={{ marginBottom: 22, padding: 16, border: "1px solid var(--border-light)", borderRadius: 16, background: "var(--surface)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: showEditor ? 14 : 0 }}>
+          <div ref={editorRef} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: showEditor ? 14 : 0 }}>
             <div>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 13, letterSpacing: 2, textTransform: "uppercase", color: "var(--accent)" }}>
                 Gallery Admin
@@ -321,6 +355,12 @@ export default function GalleryPage() {
               <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                 <input className="input" value={editor.title} onChange={(event) => setEditor((prev) => ({ ...prev, title: event.target.value }))} placeholder="Image title" />
                 <input className="input" value={editor.sourceLabel} onChange={(event) => setEditor((prev) => ({ ...prev, sourceLabel: event.target.value }))} placeholder="Source label" />
+              </div>
+
+              <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ fontSize: 12, color: "var(--text-light)" }}>
+                  Featured work. This is the main work the image files under and the default work link on the card.
+                </div>
                 <select
                   className="input"
                   value={editor.primaryWorkSlug}
@@ -333,7 +373,7 @@ export default function GalleryPage() {
                     }));
                   }}
                 >
-                  <option value="">Primary work</option>
+                  <option value="">Featured work</option>
                   {catalogWorks.map((work) => (
                     <option key={work.slug} value={work.slug}>{work.title}</option>
                   ))}
@@ -348,11 +388,16 @@ export default function GalleryPage() {
                   workSlugs: next,
                   primaryWorkSlug: next.includes(prev.primaryWorkSlug) ? prev.primaryWorkSlug : (next[0] || ""),
                 }))}
+                placeholder="Add associated work"
               />
+
+              <div style={{ fontSize: 12, color: "var(--text-light)", marginTop: -2 }}>
+                Associated works are the other plays or poems this image should appear under. These use the same canonical work slug system as places.
+              </div>
 
               <input className="input" value={editor.pageUrl} onChange={(event) => setEditor((prev) => ({ ...prev, pageUrl: event.target.value }))} placeholder="Source page URL" />
               <input className="input" value={editor.imageUrl} onChange={(event) => setEditor((prev) => ({ ...prev, imageUrl: event.target.value }))} placeholder="Remote image URL (optional if mirrored locally)" />
-              <textarea className="input" rows={2} value={editor.tagsText} onChange={(event) => setEditor((prev) => ({ ...prev, tagsText: event.target.value }))} placeholder="Tags (comma separated)" style={{ resize: "vertical" }} />
+              <textarea className="input" rows={2} value={editor.tagsText} onChange={(event) => setEditor((prev) => ({ ...prev, tagsText: event.target.value }))} placeholder="Tags (comma separated plain English, e.g. Roman history, Brutus, stage costume)" style={{ resize: "vertical" }} />
 
               <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
                 <label style={{ display: "grid", gap: 6 }}>
@@ -372,13 +417,51 @@ export default function GalleryPage() {
 
               {(editor.localMediaUrl || editor.imageUrl) && (
                 <div style={{ display: "grid", gap: 8 }}>
-                  <div style={{ fontSize: 12, color: "var(--text-light)" }}>
-                    Display source: {editor.localMediaUrl ? "Local media copy" : "Remote image URL"}
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ fontSize: 12, color: "var(--text-light)" }}>
+                      Display source: {editor.localMediaUrl ? "Local media copy" : "Remote image URL"}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setEditor((prev) => ({ ...prev, thumbX: 50, thumbY: 50 }))}
+                    >
+                      Reset thumbnail crop
+                    </button>
+                  </div>
+                  <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                    <label style={{ display: "grid", gap: 6 }}>
+                      <span style={{ fontSize: 12, color: "var(--text-light)" }}>Thumbnail horizontal focus: {Math.round(editor.thumbX)}%</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={editor.thumbX}
+                        onChange={(event) => setEditor((prev) => ({ ...prev, thumbX: Number(event.target.value) }))}
+                      />
+                    </label>
+                    <label style={{ display: "grid", gap: 6 }}>
+                      <span style={{ fontSize: 12, color: "var(--text-light)" }}>Thumbnail vertical focus: {Math.round(editor.thumbY)}%</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={editor.thumbY}
+                        onChange={(event) => setEditor((prev) => ({ ...prev, thumbY: Number(event.target.value) }))}
+                      />
+                    </label>
                   </div>
                   <img
                     src={editor.localMediaUrl || editor.imageUrl}
                     alt={editor.title || "Gallery preview"}
-                    style={{ width: "min(360px, 100%)", aspectRatio: "4 / 3", objectFit: "cover", borderRadius: 12, border: "1px solid var(--border-light)" }}
+                    style={{
+                      width: "min(360px, 100%)",
+                      aspectRatio: "4 / 3",
+                      objectFit: "cover",
+                      objectPosition: objectPositionStyle(editor.thumbX, editor.thumbY),
+                      borderRadius: 12,
+                      border: "1px solid var(--border-light)",
+                    }}
                   />
                 </div>
               )}
@@ -465,7 +548,13 @@ export default function GalleryPage() {
                 src={item.imageUrl}
                 alt={item.title}
                 loading="lazy"
-                style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", display: "block" }}
+                style={{
+                  width: "100%",
+                  aspectRatio: "4 / 3",
+                  objectFit: "cover",
+                  objectPosition: objectPositionStyle(item.thumbX, item.thumbY),
+                  display: "block",
+                }}
               />
               <div style={{ padding: 14, display: "grid", gap: 8 }}>
                 <div>

@@ -677,6 +677,8 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS quote_images (
   manual_override BOOLEAN DEFAULT 0,
   sort_order INTEGER DEFAULT 0,
   tags_json TEXT DEFAULT '[]',
+  thumb_x REAL DEFAULT 50,
+  thumb_y REAL DEFAULT 50,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(collection_id, image_url)
 )`); } catch {}
@@ -699,6 +701,8 @@ try { db.exec("ALTER TABLE quote_images ADD COLUMN external_ref TEXT"); } catch 
 try { db.exec("ALTER TABLE quote_images ADD COLUMN managed_source TEXT DEFAULT 'seed'"); } catch {}
 try { db.exec("ALTER TABLE quote_images ADD COLUMN manual_override BOOLEAN DEFAULT 0"); } catch {}
 try { db.exec("ALTER TABLE quote_images ADD COLUMN tags_json TEXT DEFAULT '[]'"); } catch {}
+try { db.exec("ALTER TABLE quote_images ADD COLUMN thumb_x REAL DEFAULT 50"); } catch {}
+try { db.exec("ALTER TABLE quote_images ADD COLUMN thumb_y REAL DEFAULT 50"); } catch {}
 try { db.exec("UPDATE quote_images SET external_ref=page_url WHERE (external_ref IS NULL OR external_ref='') AND COALESCE(page_url, '')<>''"); } catch {}
 try { db.exec("UPDATE quote_images SET managed_source='seed' WHERE COALESCE(managed_source, '')=''"); } catch {}
 
@@ -943,15 +947,46 @@ const insertQuoteImageWorkLink = db.prepare(`
   VALUES (?, ?)
 `);
 
+function normalizeGalleryTag(rawTag) {
+  const raw = String(rawTag || "").trim().replace(/^[\["']+|[\]"']+$/g, "");
+  if (!raw) return "";
+  if (raw.startsWith("slug:") || raw.startsWith("source:") || raw.startsWith("work:")) return "";
+  if (raw.startsWith("category:")) return raw.slice("category:".length).trim();
+  return raw;
+}
+
+function normalizeGalleryTags(tags) {
+  return [...new Set(
+    (Array.isArray(tags) ? tags : [])
+      .map((tag) => normalizeGalleryTag(tag))
+      .filter(Boolean),
+  )];
+}
+
+const listAllQuoteImageTags = db.prepare("SELECT id, tags_json FROM quote_images");
+const updateQuoteImageTags = db.prepare("UPDATE quote_images SET tags_json=? WHERE id=?");
+for (const row of listAllQuoteImageTags.all()) {
+  let parsed = [];
+  try {
+    parsed = JSON.parse(row.tags_json || "[]");
+  } catch {
+    parsed = [];
+  }
+  const normalized = normalizeGalleryTags(parsed);
+  if (JSON.stringify(normalized) !== JSON.stringify(parsed)) {
+    updateQuoteImageTags.run(JSON.stringify(normalized), row.id);
+  }
+}
+
 let quoteCollectionCount = 0;
 let quoteImageCount = 0;
 for (const collection of quoteImageCollections) {
   const workRecord = workRecordByKey.get(collection.workKey) || null;
   const linkedWorkSlugs = workRecord?.slug ? [workRecord.slug] : [];
-  const collectionTags = [...new Set([
-    workRecord?.category ? `category:${workRecord.category}` : "",
+  const collectionTags = normalizeGalleryTags([
+    workRecord?.category || "",
     ...(Array.isArray(collection.tags) ? collection.tags : []),
-  ].filter(Boolean))];
+  ]);
   upsertQuoteCollection.run(
     collection.workKey,
     collection.workTitle,
@@ -974,10 +1009,10 @@ for (const collection of quoteImageCollections) {
       .replace(/^Special:FilePath\//i, "")
       .replace(/[_-]+/g, " ")
       .trim();
-    const imageTags = [...new Set([
+    const imageTags = normalizeGalleryTags([
       ...collectionTags,
       ...(Array.isArray(image.tags) ? image.tags : []),
-    ].filter(Boolean))];
+    ]);
     const externalRef = String(image.pageUrl || image.imageUrl || "").trim() || null;
     if (externalRef) seenExternalRefs.add(externalRef);
     const existing = externalRef ? findSeededQuoteImage.get(stored.id, externalRef) : null;

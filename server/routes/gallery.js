@@ -24,6 +24,14 @@ function parseTags(raw) {
   }
 }
 
+function normalizePublicTag(rawTag) {
+  const raw = String(rawTag || "").trim().replace(/^[\["']+|[\]"']+$/g, "");
+  if (!raw) return "";
+  if (raw.startsWith("slug:") || raw.startsWith("source:") || raw.startsWith("work:")) return "";
+  if (raw.startsWith("category:")) return raw.slice("category:".length).trim();
+  return raw;
+}
+
 function prettyLabel(value) {
   return String(value || "")
     .replace(/[-_]+/g, " ")
@@ -31,25 +39,20 @@ function prettyLabel(value) {
 }
 
 function isPublicTag(tag) {
-  return !!tag
-    && !tag.startsWith("slug:")
-    && !tag.startsWith("source:")
-    && !tag.startsWith("work:");
+  return !!normalizePublicTag(tag);
 }
 
 function tagLabel(tag) {
-  if (String(tag || "").startsWith("category:")) {
-    return prettyLabel(String(tag).slice("category:".length));
-  }
-  return String(tag || "");
+  return prettyLabel(normalizePublicTag(tag));
 }
 
 function aggregateTags(items) {
   const counts = new Map();
   items.forEach((item) => {
     (item.tags || []).forEach((tag) => {
-      if (!isPublicTag(tag)) return;
-      counts.set(tag, (counts.get(tag) || 0) + 1);
+      const normalized = normalizePublicTag(tag);
+      if (!normalized) return;
+      counts.set(normalized, (counts.get(normalized) || 0) + 1);
     });
   });
   return [...counts.entries()]
@@ -189,6 +192,8 @@ function listGalleryItems() {
       i.manual_override,
       i.sort_order,
       i.tags_json,
+      i.thumb_x,
+      i.thumb_y,
       c.work_slug AS collection_work_slug,
       c.work_title AS collection_work_title,
       c.category_url,
@@ -222,7 +227,9 @@ function listGalleryItems() {
         categoryUrl: row.category_url || "",
         notes: row.notes || "",
         sortOrder: row.sort_order || 0,
-        tags: parseTags(row.tags_json),
+        tags: parseTags(row.tags_json).map((tag) => normalizePublicTag(tag)).filter(Boolean),
+        thumbX: Number.isFinite(Number(row.thumb_x)) ? Number(row.thumb_x) : 50,
+        thumbY: Number.isFinite(Number(row.thumb_y)) ? Number(row.thumb_y) : 50,
         works: [],
         workSlugs: [],
         primaryWorkSlug: row.collection_work_slug || "",
@@ -272,7 +279,7 @@ r.get("/", (req, res) => {
   });
 
   const filtered = facetedItems.filter((item) => {
-    if (tagFilter && !(item.tags || []).some((tag) => tag.toLowerCase() === tagFilter)) return false;
+    if (tagFilter && !(item.tags || []).some((tag) => normalizePublicTag(tag).toLowerCase() === tagFilter)) return false;
     return true;
   });
 
@@ -327,10 +334,14 @@ function validateImagePayload(body = {}, existing = null) {
     imageUrl: resolvedImageUrl,
     localMediaPath,
     localMediaUrl,
-    tags: parseTags(body.tags !== undefined ? body.tags : existing?.tags || []),
+    tags: parseTags(body.tags !== undefined ? body.tags : existing?.tags || [])
+      .map((tag) => normalizePublicTag(tag))
+      .filter(Boolean),
     workSlugs: [...new Set([primaryWorkSlug, ...requestedWorkSlugs])],
     primaryWorkSlug,
     sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : (existing?.sortOrder || 0),
+    thumbX: Number.isFinite(Number(body.thumbX)) ? Math.max(0, Math.min(100, Number(body.thumbX))) : (existing?.thumbX ?? 50),
+    thumbY: Number.isFinite(Number(body.thumbY)) ? Math.max(0, Math.min(100, Number(body.thumbY))) : (existing?.thumbY ?? 50),
   };
 }
 
@@ -340,9 +351,9 @@ r.post("/images", requireAdmin, (req, res) => {
     const inserted = db.prepare(`
       INSERT INTO quote_images (
         collection_id, title, source_label, page_url, image_url, local_media_path, local_media_url,
-        external_ref, managed_source, manual_override, sort_order, tags_json
+        external_ref, managed_source, manual_override, sort_order, tags_json, thumb_x, thumb_y
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'manual', 1, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'manual', 1, ?, ?, ?, ?)
     `).run(
       payload.collectionId,
       payload.title,
@@ -353,6 +364,8 @@ r.post("/images", requireAdmin, (req, res) => {
       payload.localMediaUrl,
       payload.sortOrder,
       JSON.stringify(payload.tags),
+      payload.thumbX,
+      payload.thumbY,
     );
     replaceImageWorkLinks(inserted.lastInsertRowid, payload.workSlugs);
     const item = listGalleryItems().find((entry) => entry.id === inserted.lastInsertRowid);
@@ -380,6 +393,8 @@ r.put("/images/:id", requireAdmin, (req, res) => {
         local_media_url=?,
         sort_order=?,
         tags_json=?,
+        thumb_x=?,
+        thumb_y=?,
         manual_override=1
       WHERE id=?
     `).run(
@@ -392,6 +407,8 @@ r.put("/images/:id", requireAdmin, (req, res) => {
       payload.localMediaUrl,
       payload.sortOrder,
       JSON.stringify(payload.tags),
+      payload.thumbX,
+      payload.thumbY,
       existing.id,
     );
     replaceImageWorkLinks(existing.id, payload.workSlugs);
