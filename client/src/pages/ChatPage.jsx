@@ -359,7 +359,9 @@ export default function ChatPage() {
   }, [emitChatSummaryRefresh, syncRoomInfo, user]);
 
   const handlePaneScroll = useCallback(() => {
-    if (!isPaneNearBottom()) return;
+    const nearBottom = isPaneNearBottom();
+    setShowJumpToLatest(!nearBottom && messages.length > 0);
+    if (!nearBottom) return;
     setShowJumpToLatest(false);
     const latestMessageId = messages[messages.length - 1]?.id || roomInfo.lastMessageId || 0;
     if (latestMessageId) {
