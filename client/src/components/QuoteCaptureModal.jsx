@@ -93,6 +93,23 @@ export default function QuoteCaptureModal({ quote, workSlug, onClose }) {
     };
   }, [onClose, quote]);
 
+  useEffect(() => {
+    if (!quote) return undefined;
+
+    const body = document.body;
+    const html = document.documentElement;
+    const prevBodyOverflow = body.style.overflow;
+    const prevHtmlOverflow = html.style.overflow;
+
+    body.style.overflow = "hidden";
+    html.style.overflow = "hidden";
+
+    return () => {
+      body.style.overflow = prevBodyOverflow;
+      html.style.overflow = prevHtmlOverflow;
+    };
+  }, [quote]);
+
   const selectedImage = useMemo(
     () => artCollection.images.find((image) => String(image.id) === String(selectedImageId)) || null,
     [artCollection.images, selectedImageId],
@@ -152,22 +169,28 @@ export default function QuoteCaptureModal({ quote, workSlug, onClose }) {
         background: "rgba(12, 14, 18, 0.6)",
         backdropFilter: "blur(8px)",
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         justifyContent: "center",
         padding: 18,
+        overflowY: "auto",
+        overscrollBehavior: "contain",
+        WebkitOverflowScrolling: "touch",
       }}
     >
       <div
         ref={modalRef}
         style={{
           width: "min(960px, calc(100vw - 24px))",
-          maxHeight: "calc(100vh - 24px)",
+          maxHeight: "calc(100vh - 36px)",
           overflowY: "auto",
           background: "var(--surface)",
           border: "1px solid var(--border)",
           borderRadius: 18,
           boxShadow: "0 22px 48px rgba(0,0,0,0.22)",
           padding: 18,
+          margin: "0 auto",
+          overscrollBehavior: "contain",
+          WebkitOverflowScrolling: "touch",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
@@ -225,6 +248,20 @@ export default function QuoteCaptureModal({ quote, workSlug, onClose }) {
               <div style={{ color: "var(--text-light)", fontSize: 13 }}>Loading art…</div>
             ) : artError ? (
               <div style={{ color: "var(--danger)", fontSize: 13 }}>{artError}</div>
+            ) : artCollection.images.length === 0 ? (
+              <div
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: "1px solid var(--border-light)",
+                  background: "rgba(255,255,255,0.46)",
+                  color: "var(--text-muted)",
+                  lineHeight: 1.6,
+                  fontSize: 13,
+                }}
+              >
+                No background art is seeded for <strong>{quote.title}</strong> yet. You can still export the quote card without artwork.
+              </div>
             ) : (
               <>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10 }}>
