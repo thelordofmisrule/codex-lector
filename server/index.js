@@ -81,6 +81,7 @@ app.use("/api/places", require("./routes/places"));
 app.use("/api/prosody", require("./routes/prosody"));
 app.use("/api/glossary", require("./routes/glossary"));
 app.use("/api/chat", require("./routes/chat"));
+app.use("/api/quote-images", require("./routes/quoteImages"));
 app.get("/api/health", (req,res) => res.json({ status:"ok" }));
 app.use("/media", express.static(path.join(__dirname, "..", "data", "media"), {
   etag: true,

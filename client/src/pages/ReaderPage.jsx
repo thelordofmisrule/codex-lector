@@ -1989,6 +1989,7 @@ export default function ReaderPage() {
       {quoteCapture && (
         <QuoteCaptureModal
           quote={quoteCapture}
+          workSlug={slug}
           onClose={() => setQuoteCapture(null)}
         />
       )}

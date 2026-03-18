@@ -9,6 +9,7 @@ const fs = require("fs");
 const { rebuildSearchIndex } = require("../server/lib/workSearchIndex");
 const { GLOSSARY_SEED, GLOSSARY_OVERRIDE_SEED } = require("../server/data/glossarySeed");
 const { normalizeGlossaryTerm } = require("../server/lib/glossary");
+const { quoteImageSeedCollections } = require("../server/lib/quoteImageCollections");
 
 const dir = path.join(__dirname, "..", "data");
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -373,6 +374,28 @@ db.exec(`
     is_real BOOLEAN DEFAULT 1,
     source_plays_json TEXT DEFAULT '[]'
   );
+
+  CREATE TABLE IF NOT EXISTS quote_image_collections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    work_key TEXT UNIQUE NOT NULL,
+    work_title TEXT NOT NULL,
+    category_url TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS quote_images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    collection_id INTEGER NOT NULL REFERENCES quote_image_collections(id) ON DELETE CASCADE,
+    page_url TEXT DEFAULT '',
+    image_url TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(collection_id, image_url)
+  );
+  CREATE INDEX IF NOT EXISTS idx_quote_images_collection_sort
+    ON quote_images(collection_id, sort_order, id);
 `);
 
 // Migrations for existing databases
@@ -610,6 +633,25 @@ try { db.exec("ALTER TABLE places ADD COLUMN image_url TEXT DEFAULT ''"); } catc
 try { db.exec("ALTER TABLE places ADD COLUMN aliases_json TEXT DEFAULT '[]'"); } catch {}
 try { db.exec("ALTER TABLE places ADD COLUMN is_real BOOLEAN DEFAULT 1"); } catch {}
 try { db.exec("ALTER TABLE places ADD COLUMN source_plays_json TEXT DEFAULT '[]'"); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS quote_image_collections (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_key TEXT UNIQUE NOT NULL,
+  work_title TEXT NOT NULL,
+  category_url TEXT DEFAULT '',
+  notes TEXT DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS quote_images (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  collection_id INTEGER NOT NULL REFERENCES quote_image_collections(id) ON DELETE CASCADE,
+  page_url TEXT DEFAULT '',
+  image_url TEXT NOT NULL,
+  sort_order INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(collection_id, image_url)
+)`); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_quote_images_collection_sort ON quote_images(collection_id, sort_order, id)"); } catch {}
 
 // Older DBs had NOT NULL lat/lng; rebuild to allow unknown coordinates.
 try {
@@ -795,6 +837,40 @@ const upsertPlace = db.prepare(`
     is_real=1
 `);
 for (const row of seededPlaces) upsertPlace.run(...row);
+
+const quoteImageCollections = quoteImageSeedCollections();
+const upsertQuoteCollection = db.prepare(`
+  INSERT INTO quote_image_collections (work_key, work_title, category_url, notes, updated_at)
+  VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+  ON CONFLICT(work_key) DO UPDATE SET
+    work_title=excluded.work_title,
+    category_url=excluded.category_url,
+    notes=excluded.notes,
+    updated_at=CURRENT_TIMESTAMP
+`);
+const findQuoteCollection = db.prepare("SELECT id FROM quote_image_collections WHERE work_key=?");
+const deleteQuoteImagesForCollection = db.prepare("DELETE FROM quote_images WHERE collection_id=?");
+const insertQuoteImage = db.prepare(`
+  INSERT OR IGNORE INTO quote_images (collection_id, page_url, image_url, sort_order)
+  VALUES (?, ?, ?, ?)
+`);
+
+let quoteCollectionCount = 0;
+let quoteImageCount = 0;
+for (const collection of quoteImageCollections) {
+  upsertQuoteCollection.run(collection.workKey, collection.workTitle, collection.categoryUrl, collection.notes);
+  const stored = findQuoteCollection.get(collection.workKey);
+  if (!stored) continue;
+  quoteCollectionCount += 1;
+  deleteQuoteImagesForCollection.run(stored.id);
+  collection.images.forEach((image) => {
+    insertQuoteImage.run(stored.id, image.pageUrl, image.imageUrl, image.sortOrder);
+    quoteImageCount += 1;
+  });
+}
+if (quoteCollectionCount > 0) {
+  console.log(`Seeded quote art collections: ${quoteCollectionCount} works, ${quoteImageCount} images.`);
+}
 
 const bcrypt = require("bcryptjs");
 const petruch10 = db.prepare("SELECT id FROM users WHERE username='petruch10'").get();

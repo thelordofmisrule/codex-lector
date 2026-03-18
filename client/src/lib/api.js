@@ -173,3 +173,6 @@ export const glossary = {
   save:data=>req("/glossary",{method:"PUT",body:JSON.stringify(data)}),
   remove:data=>req("/glossary",{method:"DELETE",body:JSON.stringify(data)}),
 };
+export const quoteImages = {
+  forWork:slug=>req(`/quote-images/${encodeURIComponent(slug)}`),
+};

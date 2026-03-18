@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "../lib/ToastContext";
+import { quoteImages as quoteImagesApi } from "../lib/api";
 import {
   QUOTE_CAPTURE_THEMES,
   downloadQuoteCardPng,
@@ -18,15 +19,57 @@ function buildFilename(title, extension) {
   return `${base || "codex-lector-quote"}.${extension}`;
 }
 
-export default function QuoteCaptureModal({ quote, onClose }) {
+export default function QuoteCaptureModal({ quote, workSlug, onClose }) {
   const toast = useToast();
   const modalRef = useRef(null);
   const [themeId, setThemeId] = useState(QUOTE_CAPTURE_THEMES[0].id);
   const [busy, setBusy] = useState("");
+  const [artLoading, setArtLoading] = useState(false);
+  const [artError, setArtError] = useState("");
+  const [artCollection, setArtCollection] = useState({ categoryUrl: "", notes: "", images: [] });
+  const [selectedImageId, setSelectedImageId] = useState(0);
+  const [backgroundOpacity, setBackgroundOpacity] = useState(22);
 
   useEffect(() => {
     setThemeId(QUOTE_CAPTURE_THEMES[0].id);
+    setSelectedImageId(0);
+    setBackgroundOpacity(22);
   }, [quote?.text, quote?.citation, quote?.title]);
+
+  useEffect(() => {
+    if (!workSlug) {
+      setArtCollection({ categoryUrl: "", notes: "", images: [] });
+      setArtError("");
+      setArtLoading(false);
+      return;
+    }
+
+    let ignore = false;
+    setArtLoading(true);
+    setArtError("");
+
+    quoteImagesApi.forWork(workSlug)
+      .then((data) => {
+        if (ignore) return;
+        setArtCollection({
+          categoryUrl: data?.categoryUrl || "",
+          notes: data?.notes || "",
+          images: Array.isArray(data?.images) ? data.images : [],
+        });
+      })
+      .catch((error) => {
+        if (ignore) return;
+        setArtCollection({ categoryUrl: "", notes: "", images: [] });
+        setArtError(error?.message || "Could not load quote art.");
+      })
+      .finally(() => {
+        if (!ignore) setArtLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [workSlug]);
 
   useEffect(() => {
     if (!quote) return undefined;
@@ -50,13 +93,19 @@ export default function QuoteCaptureModal({ quote, onClose }) {
     };
   }, [onClose, quote]);
 
+  const selectedImage = useMemo(
+    () => artCollection.images.find((image) => String(image.id) === String(selectedImageId)) || null,
+    [artCollection.images, selectedImageId],
+  );
   const payload = useMemo(() => ({
     text: quote?.text || "",
     title: quote?.title || "",
     citation: quote?.citation || "",
     author: quote?.author || "William Shakespeare",
     themeId,
-  }), [quote, themeId]);
+    backgroundImageUrl: selectedImage?.imageUrl || "",
+    backgroundOpacity: backgroundOpacity / 100,
+  }), [backgroundOpacity, quote, selectedImage?.imageUrl, themeId]);
 
   const preview = getQuoteCapturePreviewStyle(themeId);
   const quoteLines = normalizeQuoteText(quote?.text || "").split("\n");
@@ -75,7 +124,7 @@ export default function QuoteCaptureModal({ quote, onClose }) {
   const downloadSvg = async () => {
     try {
       setBusy("svg");
-      downloadQuoteCardSvg(payload, buildFilename(quote.title, "svg"));
+      await downloadQuoteCardSvg(payload, buildFilename(quote.title, "svg"));
     } catch (error) {
       toast?.error(error?.message || "Could not download SVG.");
     } finally {
@@ -149,6 +198,99 @@ export default function QuoteCaptureModal({ quote, onClose }) {
             ))}
           </div>
 
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 3 }}>
+                  Background Art
+                </div>
+                <div style={{ color: "var(--text-muted)", fontSize: 13 }}>
+                  Add open-source art related to this work behind the quote card.
+                </div>
+              </div>
+              {artCollection.categoryUrl && (
+                <a className="btn btn-ghost btn-sm" href={artCollection.categoryUrl} target="_blank" rel="noopener noreferrer">
+                  Commons Category
+                </a>
+              )}
+            </div>
+
+            {artCollection.notes && (
+              <div style={{ color: "var(--text-light)", fontSize: 12, lineHeight: 1.5 }}>
+                {artCollection.notes}
+              </div>
+            )}
+
+            {artLoading ? (
+              <div style={{ color: "var(--text-light)", fontSize: 13 }}>Loading art…</div>
+            ) : artError ? (
+              <div style={{ color: "var(--danger)", fontSize: 13 }}>{artError}</div>
+            ) : (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10 }}>
+                  <button
+                    type="button"
+                    className={selectedImageId ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm"}
+                    onClick={() => setSelectedImageId(0)}
+                    style={{ minHeight: 108, justifyContent: "center" }}
+                  >
+                    No background
+                  </button>
+                  {artCollection.images.map((image) => {
+                    const active = String(selectedImageId) === String(image.id);
+                    return (
+                      <button
+                        key={image.id}
+                        type="button"
+                        className={active ? "btn btn-primary btn-sm" : "btn btn-secondary btn-sm"}
+                        onClick={() => setSelectedImageId(image.id)}
+                        style={{ padding: 6, display: "grid", gap: 6, textAlign: "left" }}
+                      >
+                        <img
+                          src={image.imageUrl}
+                          alt={image.label}
+                          loading="lazy"
+                          style={{ width: "100%", aspectRatio: "1 / 1", objectFit: "cover", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)" }}
+                        />
+                        <span style={{ display: "block", fontSize: 11, lineHeight: 1.35 }}>
+                          {image.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {selectedImage && (
+                  <div style={{ display: "grid", gap: 8 }}>
+                    <label style={{ display: "grid", gap: 6 }}>
+                      <span style={{ fontSize: 11, letterSpacing: 1.2, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)" }}>
+                        Background Opacity
+                      </span>
+                      <input
+                        type="range"
+                        min="8"
+                        max="42"
+                        step="1"
+                        value={backgroundOpacity}
+                        onChange={(event) => setBackgroundOpacity(parseInt(event.target.value, 10) || 22)}
+                      />
+                    </label>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                      <div style={{ color: "var(--text-light)", fontSize: 12 }}>
+                        {backgroundOpacity}% opacity
+                      </div>
+                      {selectedImage.pageUrl && (
+                        <a className="btn btn-ghost btn-sm" href={selectedImage.pageUrl} target="_blank" rel="noopener noreferrer">
+                          Source Page
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
           <div
             style={{
               ...preview,
@@ -160,6 +302,28 @@ export default function QuoteCaptureModal({ quote, onClose }) {
               boxShadow: "0 18px 44px rgba(0,0,0,0.08)",
             }}
           >
+            {selectedImage && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  backgroundImage: `url("${selectedImage.imageUrl}")`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  opacity: backgroundOpacity / 100,
+                }}
+              />
+            )}
+            {selectedImage && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: preview.background,
+                  opacity: 0.84,
+                }}
+              />
+            )}
             <div
               style={{
                 position: "absolute",

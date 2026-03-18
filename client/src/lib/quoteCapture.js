@@ -53,6 +53,12 @@ function getTheme(themeId) {
   return QUOTE_CAPTURE_THEMES.find((theme) => theme.id === themeId) || QUOTE_CAPTURE_THEMES[0];
 }
 
+function clampOpacity(value, fallback = 0.22) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(0.75, Math.max(0, n));
+}
+
 function escapeXml(value) {
   return String(value || "")
     .replace(/&/g, "&amp;")
@@ -132,8 +138,20 @@ export function getQuoteCapturePreviewStyle(themeId) {
   };
 }
 
-export function buildQuoteCardSvg({ text, title, citation, author = "William Shakespeare", themeId = "classical", siteLabel = "Codex Lector" }) {
+export function buildQuoteCardSvg({
+  text,
+  title,
+  citation,
+  author = "William Shakespeare",
+  themeId = "classical",
+  siteLabel = "Codex Lector",
+  backgroundImageHref = "",
+  backgroundImageUrl = "",
+  backgroundOpacity = 0.22,
+}) {
   const theme = getTheme(themeId);
+  const resolvedBackgroundHref = String(backgroundImageHref || backgroundImageUrl || "").trim();
+  const resolvedBackgroundOpacity = clampOpacity(backgroundOpacity, 0.22);
   const sizing = resolveQuoteSizing(text);
   const lines = wrapQuoteLines(text, sizing.maxChars);
   const quoteStartY = 270;
@@ -158,7 +176,9 @@ export function buildQuoteCardSvg({ text, title, citation, author = "William Sha
   return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${QUOTE_CARD_WIDTH}" height="${QUOTE_CARD_HEIGHT}" viewBox="0 0 ${QUOTE_CARD_WIDTH} ${QUOTE_CARD_HEIGHT}">
   <rect width="${QUOTE_CARD_WIDTH}" height="${QUOTE_CARD_HEIGHT}" fill="${theme.background}" />
-  <rect x="52" y="52" width="1496" height="796" rx="36" fill="${theme.panel}" stroke="${theme.border}" stroke-width="2" />
+  ${resolvedBackgroundHref ? `<image x="52" y="52" width="1496" height="796" preserveAspectRatio="xMidYMid slice" href="${escapeXml(resolvedBackgroundHref)}" opacity="${resolvedBackgroundOpacity}" />` : ""}
+  ${resolvedBackgroundHref ? `<rect x="52" y="52" width="1496" height="796" rx="36" fill="${theme.background}" opacity="0.18" />` : ""}
+  <rect x="52" y="52" width="1496" height="796" rx="36" fill="${theme.panel}" fill-opacity="${resolvedBackgroundHref ? "0.84" : "1"}" stroke="${theme.border}" stroke-width="2" />
   <rect x="104" y="104" width="192" height="34" rx="17" fill="${theme.accentSoft}" />
   <text x="200" y="126" text-anchor="middle" font-family="${escapeXml(theme.metaFont)}" font-size="18" letter-spacing="3" fill="${theme.accent}">QUOTE CAPTURE</text>
   <text x="116" y="232" font-family="${escapeXml(theme.quoteFont)}" font-size="180" fill="${theme.quoteMark}" opacity="0.45">&#8220;</text>
@@ -168,6 +188,33 @@ export function buildQuoteCardSvg({ text, title, citation, author = "William Sha
   <text x="210" y="798" font-family="${escapeXml(theme.metaFont)}" font-size="24" fill="${theme.muted}">${escapeXml([author, citation].filter(Boolean).join(" - "))}</text>
   <text x="1392" y="798" text-anchor="end" font-family="${escapeXml(theme.metaFont)}" font-size="22" letter-spacing="3" fill="${theme.muted}">${escapeXml(siteLabel)}</text>
 </svg>`.trim();
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read image data."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function embedBackgroundImage(payload) {
+  const imageUrl = String(payload?.backgroundImageUrl || "").trim();
+  if (!imageUrl) return payload;
+
+  try {
+    const response = await fetch(imageUrl, { mode: "cors" });
+    if (!response.ok) return payload;
+    const blob = await response.blob();
+    const dataUrl = await blobToDataUrl(blob);
+    return {
+      ...payload,
+      backgroundImageHref: dataUrl,
+    };
+  } catch {
+    return payload;
+  }
 }
 
 function downloadBlob(blob, filename) {
@@ -181,14 +228,16 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
-export function downloadQuoteCardSvg(payload, filename = "codex-lector-quote.svg") {
-  const svg = buildQuoteCardSvg(payload);
+export async function downloadQuoteCardSvg(payload, filename = "codex-lector-quote.svg") {
+  const preparedPayload = await embedBackgroundImage(payload);
+  const svg = buildQuoteCardSvg(preparedPayload);
   const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
   downloadBlob(blob, filename);
 }
 
 export async function downloadQuoteCardPng(payload, filename = "codex-lector-quote.png") {
-  const svg = buildQuoteCardSvg(payload);
+  const preparedPayload = await embedBackgroundImage(payload);
+  const svg = buildQuoteCardSvg(preparedPayload);
   const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
 
