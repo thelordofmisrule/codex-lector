@@ -13,26 +13,47 @@ function parseTags(raw) {
   if (Array.isArray(raw)) {
     return [...new Set(raw.map((tag) => String(tag || "").trim()).filter(Boolean))];
   }
-  if (typeof raw === "string") {
-    return [...new Set(raw.split(/[,\n;]+/).map((tag) => tag.trim()).filter(Boolean))];
-  }
   try {
     const parsed = JSON.parse(raw || "[]");
     return Array.isArray(parsed) ? [...new Set(parsed.map((tag) => String(tag || "").trim()).filter(Boolean))] : [];
   } catch {
+    if (typeof raw === "string") {
+      return [...new Set(raw.split(/[,\n;]+/).map((tag) => tag.trim()).filter(Boolean))];
+    }
     return [];
   }
+}
+
+function prettyLabel(value) {
+  return String(value || "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function isPublicTag(tag) {
+  return !!tag
+    && !tag.startsWith("slug:")
+    && !tag.startsWith("source:")
+    && !tag.startsWith("work:");
+}
+
+function tagLabel(tag) {
+  if (String(tag || "").startsWith("category:")) {
+    return prettyLabel(String(tag).slice("category:".length));
+  }
+  return String(tag || "");
 }
 
 function aggregateTags(items) {
   const counts = new Map();
   items.forEach((item) => {
     (item.tags || []).forEach((tag) => {
+      if (!isPublicTag(tag)) return;
       counts.set(tag, (counts.get(tag) || 0) + 1);
     });
   });
   return [...counts.entries()]
-    .map(([tag, count]) => ({ tag, count }))
+    .map(([tag, count]) => ({ tag, label: tagLabel(tag), count }))
     .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
     .slice(0, 80);
 }

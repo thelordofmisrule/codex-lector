@@ -949,9 +949,6 @@ for (const collection of quoteImageCollections) {
   const workRecord = workRecordByKey.get(collection.workKey) || null;
   const linkedWorkSlugs = workRecord?.slug ? [workRecord.slug] : [];
   const collectionTags = [...new Set([
-    "source:commons",
-    collection.workTitle ? `work:${collection.workTitle}` : "",
-    workRecord?.slug ? `slug:${workRecord.slug}` : "",
     workRecord?.category ? `category:${workRecord.category}` : "",
     ...(Array.isArray(collection.tags) ? collection.tags : []),
   ].filter(Boolean))];

@@ -9,6 +9,20 @@ function parseTagsText(raw) {
   return [...new Set(String(raw || "").split(/[,\n;]+/).map((tag) => tag.trim()).filter(Boolean))];
 }
 
+function isVisibleTag(tag) {
+  return !!tag
+    && !tag.startsWith("slug:")
+    && !tag.startsWith("work:")
+    && !tag.startsWith("source:");
+}
+
+function displayTagLabel(tag) {
+  if (String(tag || "").startsWith("category:")) {
+    return String(tag).slice("category:".length).replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+  return String(tag || "");
+}
+
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -89,7 +103,7 @@ function editorFromItem(item) {
     localMediaPath: item?.localMediaPath || "",
     localMediaUrl: item?.localMediaUrl || "",
     remoteImportUrl: "",
-    tagsText: (item?.tags || []).filter((tag) => !tag.startsWith("slug:") && !tag.startsWith("work:") && !tag.startsWith("source:")).join(", "),
+    tagsText: (item?.tags || []).filter((tag) => isVisibleTag(tag)).join(", "),
     workSlugs: [...new Set(item?.workSlugs || [])],
     primaryWorkSlug: item?.primaryWorkSlug || item?.workSlugs?.[0] || "",
   };
@@ -158,7 +172,7 @@ export default function GalleryPage() {
   }, [query, selectedTag, selectedWork]);
 
   const visibleTags = useMemo(
-    () => tags.filter((tag) => !tag.tag.startsWith("slug:") && !tag.tag.startsWith("work:") && !tag.tag.startsWith("source:")).slice(0, 18),
+    () => tags.slice(0, 18),
     [tags],
   );
 
@@ -422,7 +436,7 @@ export default function GalleryPage() {
               className={selectedTag === tag.tag ? "btn btn-primary btn-sm" : "btn btn-secondary btn-sm"}
               onClick={() => setSelectedTag(tag.tag)}
             >
-              {tag.tag.replace(/^category:/, "")} ({tag.count})
+              {tag.label || displayTagLabel(tag.tag)} ({tag.count})
             </button>
           ))}
         </div>
@@ -485,7 +499,7 @@ export default function GalleryPage() {
                 {item.tags?.length > 0 && (
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {item.tags
-                      .filter((tag) => !tag.startsWith("slug:") && !tag.startsWith("work:") && !tag.startsWith("source:"))
+                      .filter((tag) => isVisibleTag(tag))
                       .slice(0, 4)
                       .map((tag) => (
                         <span
@@ -500,7 +514,7 @@ export default function GalleryPage() {
                             color: "var(--text-light)",
                           }}
                         >
-                          {tag.replace(/^category:/, "")}
+                          {displayTagLabel(tag)}
                         </span>
                       ))}
                   </div>
