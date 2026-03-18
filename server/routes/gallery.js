@@ -186,6 +186,8 @@ function listGalleryItems() {
       i.id,
       i.collection_id,
       i.title,
+      i.artist,
+      i.year,
       i.source_label,
       i.page_url,
       i.image_url,
@@ -219,6 +221,8 @@ function listGalleryItems() {
         id: row.id,
         collectionId: row.collection_id,
         title: row.title || "",
+        artist: row.artist || "",
+        year: row.year || "",
         sourceLabel: row.source_label || "",
         pageUrl: row.page_url || "",
         imageUrl: row.local_media_url || row.image_url || "",
@@ -337,6 +341,8 @@ function validateImagePayload(body = {}, existing = null) {
   return {
     collectionId: ensureCollectionForWork(primaryWorkSlug),
     title: String(body.title !== undefined ? body.title : existing?.title || "").trim(),
+    artist: String(body.artist !== undefined ? body.artist : existing?.artist || "").trim(),
+    year: String(body.year !== undefined ? body.year : existing?.year || "").trim(),
     sourceLabel: String(body.sourceLabel !== undefined ? body.sourceLabel : existing?.sourceLabel || "").trim(),
     pageUrl,
     imageUrl: resolvedImageUrl,
@@ -358,13 +364,15 @@ r.post("/images", requireAdmin, (req, res) => {
     const payload = validateImagePayload(req.body || null, null);
     const inserted = db.prepare(`
       INSERT INTO quote_images (
-        collection_id, title, source_label, page_url, image_url, local_media_path, local_media_url,
+        collection_id, title, artist, year, source_label, page_url, image_url, local_media_path, local_media_url,
         external_ref, managed_source, manual_override, sort_order, tags_json, thumb_x, thumb_y
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'manual', 1, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'manual', 1, ?, ?, ?, ?)
     `).run(
       payload.collectionId,
       payload.title,
+      payload.artist,
+      payload.year,
       payload.sourceLabel,
       payload.pageUrl,
       payload.imageUrl,
@@ -394,6 +402,8 @@ r.put("/images/:id", requireAdmin, (req, res) => {
       SET
         collection_id=?,
         title=?,
+        artist=?,
+        year=?,
         source_label=?,
         page_url=?,
         image_url=?,
@@ -408,6 +418,8 @@ r.put("/images/:id", requireAdmin, (req, res) => {
     `).run(
       payload.collectionId,
       payload.title,
+      payload.artist,
+      payload.year,
       payload.sourceLabel,
       payload.pageUrl,
       payload.imageUrl,

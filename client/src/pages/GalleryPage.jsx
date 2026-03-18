@@ -104,6 +104,8 @@ function emptyEditor() {
   return {
     id: 0,
     title: "",
+    artist: "",
+    year: "",
     sourceLabel: "Wikimedia Commons",
     pageUrl: "",
     imageUrl: "",
@@ -122,6 +124,8 @@ function editorFromItem(item) {
   return {
     id: item?.id || 0,
     title: item?.title || "",
+    artist: item?.artist || "",
+    year: item?.year || "",
     sourceLabel: item?.sourceLabel || "Wikimedia Commons",
     pageUrl: item?.pageUrl || "",
     imageUrl: isHttpUrl(item?.originalImageUrl || "") ? item.originalImageUrl : "",
@@ -245,6 +249,8 @@ export default function GalleryPage() {
   const saveEditor = async () => {
     const payload = {
       title: editor.title,
+      artist: editor.artist,
+      year: editor.year,
       sourceLabel: editor.sourceLabel,
       pageUrl: editor.pageUrl,
       imageUrl: editor.imageUrl,
@@ -373,6 +379,8 @@ export default function GalleryPage() {
             <div style={{ display: "grid", gap: 10 }}>
               <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                 <input className="input" value={editor.title} onChange={(event) => setEditor((prev) => ({ ...prev, title: event.target.value }))} placeholder="Image title" />
+                <input className="input" value={editor.artist} onChange={(event) => setEditor((prev) => ({ ...prev, artist: event.target.value }))} placeholder="Artist" />
+                <input className="input" value={editor.year} onChange={(event) => setEditor((prev) => ({ ...prev, year: event.target.value }))} placeholder="Year or date label" />
                 <input className="input" value={editor.sourceLabel} onChange={(event) => setEditor((prev) => ({ ...prev, sourceLabel: event.target.value }))} placeholder="Source label" />
               </div>
 
@@ -609,7 +617,17 @@ export default function GalleryPage() {
                   >
                     {item.title}
                   </button>
-                  <div style={{ fontSize: 12, color: "var(--text-light)", textTransform: "uppercase", letterSpacing: 1.1 }}>
+                  {item.artist && (
+                    <div style={{ fontSize: 13, color: "var(--text)" }}>
+                      {item.artist}
+                    </div>
+                  )}
+                  {item.year && (
+                    <div style={{ fontSize: 12, color: "var(--text-light)" }}>
+                      {item.year}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 12, color: "var(--text-light)", textTransform: "uppercase", letterSpacing: 1.1, marginTop: 4 }}>
                     {(item.works || []).slice(0, 2).map((work) => work.title).join(" · ")}
                     {(item.works || []).length > 2 ? ` +${item.works.length - 2}` : ""}
                   </div>
@@ -699,8 +717,18 @@ export default function GalleryPage() {
                 <div style={{ fontFamily: "var(--font-display)", fontSize: 18, color: "var(--accent)", lineHeight: 1.3 }}>
                   {lightboxItem.title}
                 </div>
+                {lightboxItem.artist && (
+                  <div style={{ fontSize: 14, color: "var(--text)", marginTop: 6 }}>
+                    {lightboxItem.artist}
+                  </div>
+                )}
+                {lightboxItem.year && (
+                  <div style={{ fontSize: 12, color: "var(--text-light)", marginTop: 2 }}>
+                    {lightboxItem.year}
+                  </div>
+                )}
                 {!!lightboxItem.works?.length && (
-                  <div style={{ fontSize: 12, color: "var(--text-light)", textTransform: "uppercase", letterSpacing: 1.1, marginTop: 4 }}>
+                  <div style={{ fontSize: 12, color: "var(--text-light)", textTransform: "uppercase", letterSpacing: 1.1, marginTop: 6 }}>
                     {lightboxItem.works.map((work) => work.title).join(" · ")}
                   </div>
                 )}

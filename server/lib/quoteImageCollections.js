@@ -35,6 +35,8 @@ function quoteImageSeedCollections() {
     images: Array.isArray(entry?.images)
       ? entry.images.map((image, index) => ({
         title: String(image?.title || "").trim(),
+        artist: String(image?.artist || "").trim(),
+        year: String(image?.year || "").trim(),
         sourceLabel: String(image?.sourceLabel || image?.source || "").trim(),
         pageUrl: String(image?.page || "").trim(),
         imageUrl: String(image?.download || "").trim(),

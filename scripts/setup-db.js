@@ -391,6 +391,8 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     collection_id INTEGER NOT NULL REFERENCES quote_image_collections(id) ON DELETE CASCADE,
     title TEXT DEFAULT '',
+    artist TEXT DEFAULT '',
+    year TEXT DEFAULT '',
     source_label TEXT DEFAULT '',
     page_url TEXT DEFAULT '',
     image_url TEXT NOT NULL,
@@ -401,6 +403,8 @@ db.exec(`
     manual_override BOOLEAN DEFAULT 0,
     sort_order INTEGER DEFAULT 0,
     tags_json TEXT DEFAULT '[]',
+    thumb_x REAL DEFAULT 50,
+    thumb_y REAL DEFAULT 50,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(collection_id, image_url)
   );
@@ -667,6 +671,8 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS quote_images (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   collection_id INTEGER NOT NULL REFERENCES quote_image_collections(id) ON DELETE CASCADE,
   title TEXT DEFAULT '',
+  artist TEXT DEFAULT '',
+  year TEXT DEFAULT '',
   source_label TEXT DEFAULT '',
   page_url TEXT DEFAULT '',
   image_url TEXT NOT NULL,
@@ -694,6 +700,8 @@ try { db.exec("CREATE INDEX IF NOT EXISTS idx_quote_image_work_links_work ON quo
 try { db.exec("ALTER TABLE quote_image_collections ADD COLUMN work_slug TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE quote_image_collections ADD COLUMN tags_json TEXT DEFAULT '[]'"); } catch {}
 try { db.exec("ALTER TABLE quote_images ADD COLUMN title TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE quote_images ADD COLUMN artist TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE quote_images ADD COLUMN year TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE quote_images ADD COLUMN source_label TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE quote_images ADD COLUMN local_media_path TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE quote_images ADD COLUMN local_media_url TEXT DEFAULT ''"); } catch {}
@@ -918,15 +926,17 @@ const findSeededQuoteImage = db.prepare(`
 `);
 const insertSeededQuoteImage = db.prepare(`
   INSERT INTO quote_images (
-    collection_id, title, source_label, page_url, image_url, local_media_path, local_media_url,
+    collection_id, title, artist, year, source_label, page_url, image_url, local_media_path, local_media_url,
     external_ref, managed_source, manual_override, sort_order, tags_json
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'seed', 0, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'seed', 0, ?, ?)
 `);
 const updateSeededQuoteImage = db.prepare(`
   UPDATE quote_images
   SET
     title=?,
+    artist=?,
+    year=?,
     source_label=?,
     page_url=?,
     image_url=?,
@@ -1022,6 +1032,8 @@ for (const collection of quoteImageCollections) {
       const inserted = insertSeededQuoteImage.run(
         stored.id,
         normalizedLabel,
+        image.artist || "",
+        image.year || "",
         image.sourceLabel || "Wikimedia Commons",
         image.pageUrl,
         image.imageUrl,
@@ -1035,6 +1047,8 @@ for (const collection of quoteImageCollections) {
     } else if (!existing.manual_override) {
       updateSeededQuoteImage.run(
         normalizedLabel,
+        image.artist || "",
+        image.year || "",
         image.sourceLabel || "Wikimedia Commons",
         image.pageUrl,
         image.imageUrl,

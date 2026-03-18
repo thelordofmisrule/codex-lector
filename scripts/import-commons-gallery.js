@@ -224,6 +224,8 @@ async function downloadImage(imageUrl, destinationPath) {
 function mergeImage(existingImage, importedImage) {
   return {
     title: importedImage.title || existingImage?.title || "",
+    artist: existingImage?.artist || "",
+    year: existingImage?.year || "",
     sourceLabel: importedImage.sourceLabel || existingImage?.sourceLabel || "Wikimedia Commons",
     page: importedImage.pageUrl,
     download: importedImage.imageUrl,
