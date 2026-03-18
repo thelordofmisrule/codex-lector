@@ -1,19 +1,124 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { gallery as galleryApi } from "../lib/api";
+import { useAuth } from "../lib/AuthContext";
+import { gallery as galleryApi, works as worksApi } from "../lib/api";
+import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
+
+function parseTagsText(raw) {
+  return [...new Set(String(raw || "").split(/[,\n;]+/).map((tag) => tag.trim()).filter(Boolean))];
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read image file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function toggleSlug(list, slug) {
+  const next = Array.isArray(list) ? [...list] : [];
+  if (next.includes(slug)) return next.filter((item) => item !== slug);
+  return [...next, slug];
+}
+
+function WorkChipPicker({ works, value, onChange, placeholder = "Add work association" }) {
+  const selected = Array.isArray(value) ? value : [];
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <select
+        className="input"
+        value=""
+        onChange={(event) => {
+          const slug = event.target.value;
+          if (slug) onChange(toggleSlug(selected, slug));
+          event.target.value = "";
+        }}
+      >
+        <option value="">{placeholder}</option>
+        {works.map((work) => (
+          <option key={work.slug} value={work.slug}>{work.title}</option>
+        ))}
+      </select>
+      {selected.length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {selected.map((slug) => {
+            const work = works.find((entry) => entry.slug === slug);
+            return (
+              <button
+                key={slug}
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => onChange(toggleSlug(selected, slug))}
+              >
+                {work?.title || slug} ×
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function emptyEditor() {
+  return {
+    id: 0,
+    title: "",
+    sourceLabel: "Wikimedia Commons",
+    pageUrl: "",
+    imageUrl: "",
+    localMediaPath: "",
+    localMediaUrl: "",
+    remoteImportUrl: "",
+    tagsText: "",
+    workSlugs: [],
+    primaryWorkSlug: "",
+  };
+}
+
+function editorFromItem(item) {
+  return {
+    id: item?.id || 0,
+    title: item?.title || "",
+    sourceLabel: item?.sourceLabel || "Wikimedia Commons",
+    pageUrl: item?.pageUrl || "",
+    imageUrl: item?.originalImageUrl || "",
+    localMediaPath: item?.localMediaPath || "",
+    localMediaUrl: item?.localMediaUrl || "",
+    remoteImportUrl: "",
+    tagsText: (item?.tags || []).filter((tag) => !tag.startsWith("slug:") && !tag.startsWith("work:") && !tag.startsWith("source:")).join(", "),
+    workSlugs: [...new Set(item?.workSlugs || [])],
+    primaryWorkSlug: item?.primaryWorkSlug || item?.workSlugs?.[0] || "",
+  };
+}
 
 export default function GalleryPage() {
   const toast = useToast();
+  const { user } = useAuth();
+  const { confirm } = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
   const searchParamsKey = searchParams.toString();
   const [loading, setLoading] = useState(true);
   const [works, setWorks] = useState([]);
   const [items, setItems] = useState([]);
   const [tags, setTags] = useState([]);
+  const [catalogWorks, setCatalogWorks] = useState([]);
   const [selectedWork, setSelectedWork] = useState(() => searchParams.get("work") || "");
   const [selectedTag, setSelectedTag] = useState(() => searchParams.get("tag") || "");
   const [query, setQuery] = useState(() => searchParams.get("q") || "");
+  const [showEditor, setShowEditor] = useState(false);
+  const [editor, setEditor] = useState(() => emptyEditor());
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    worksApi.list()
+      .then((data) => setCatalogWorks((data || []).filter((work) => work.has_content).sort((a, b) => a.title.localeCompare(b.title))))
+      .catch(() => setCatalogWorks([]));
+  }, []);
 
   useEffect(() => {
     setSelectedWork(searchParams.get("work") || "");
@@ -27,39 +132,143 @@ export default function GalleryPage() {
     if (selectedTag) nextParams.set("tag", selectedTag);
     if (query) nextParams.set("q", query);
     const next = nextParams.toString();
-    const current = searchParamsKey;
-    if (next !== current) setSearchParams(nextParams, { replace: true });
+    if (next !== searchParamsKey) setSearchParams(nextParams, { replace: true });
   }, [query, searchParamsKey, selectedTag, selectedWork, setSearchParams]);
 
-  useEffect(() => {
-    let ignore = false;
+  const loadGallery = () => {
     setLoading(true);
-    galleryApi.list({ workSlug: selectedWork, tag: selectedTag, q: query, limit: 240 })
+    return galleryApi.list({ workSlug: selectedWork, tag: selectedTag, q: query, limit: 240 })
       .then((data) => {
-        if (ignore) return;
         setWorks(data?.works || []);
         setItems(data?.items || []);
         setTags(data?.tags || []);
       })
       .catch((error) => {
-        if (ignore) return;
         toast?.error(error?.message || "Could not load gallery.");
         setWorks([]);
         setItems([]);
         setTags([]);
       })
-      .finally(() => {
-        if (!ignore) setLoading(false);
-      });
-    return () => {
-      ignore = true;
-    };
-  }, [query, selectedTag, selectedWork, toast]);
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadGallery();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, selectedTag, selectedWork]);
 
   const visibleTags = useMemo(
     () => tags.filter((tag) => !tag.tag.startsWith("slug:") && !tag.tag.startsWith("work:") && !tag.tag.startsWith("source:")).slice(0, 18),
     [tags],
   );
+
+  const displayedWorks = useMemo(
+    () => works.length ? works : catalogWorks.map((work) => ({ workSlug: work.slug, workTitle: work.title })),
+    [catalogWorks, works],
+  );
+
+  const openNewEditor = () => {
+    setEditor(emptyEditor());
+    setShowEditor(true);
+  };
+
+  const openEditEditor = (item) => {
+    setEditor(editorFromItem(item));
+    setShowEditor(true);
+  };
+
+  const saveEditor = async () => {
+    const payload = {
+      title: editor.title,
+      sourceLabel: editor.sourceLabel,
+      pageUrl: editor.pageUrl,
+      imageUrl: editor.imageUrl,
+      localMediaPath: editor.localMediaPath,
+      localMediaUrl: editor.localMediaUrl,
+      tags: parseTagsText(editor.tagsText),
+      workSlugs: editor.workSlugs,
+      primaryWorkSlug: editor.primaryWorkSlug || editor.workSlugs[0] || "",
+    };
+    if (!payload.primaryWorkSlug) {
+      toast?.error("Select at least one associated work.");
+      return;
+    }
+    setSaving(true);
+    try {
+      if (editor.id) await galleryApi.updateImage(editor.id, payload);
+      else await galleryApi.createImage(payload);
+      toast?.success(editor.id ? "Gallery image updated." : "Gallery image added.");
+      setShowEditor(false);
+      setEditor(emptyEditor());
+      await loadGallery();
+    } catch (error) {
+      toast?.error(error?.message || "Could not save gallery image.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteImage = async () => {
+    if (!editor.id) return;
+    const ok = await confirm({
+      title: "Remove Gallery Image",
+      message: "Remove this gallery image? Seeded items will be hidden from the site rather than permanently deleted.",
+      confirmText: "Remove",
+      cancelText: "Keep",
+      danger: true,
+    });
+    if (!ok) return;
+    setSaving(true);
+    try {
+      await galleryApi.deleteImage(editor.id);
+      toast?.success("Gallery image removed.");
+      setShowEditor(false);
+      setEditor(emptyEditor());
+      await loadGallery();
+    } catch (error) {
+      toast?.error(error?.message || "Could not remove gallery image.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const uploadLocalFile = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const uploaded = await galleryApi.uploadImage(file.name, file.type, dataUrl);
+      setEditor((prev) => ({
+        ...prev,
+        localMediaPath: uploaded.localMediaPath || "",
+        localMediaUrl: uploaded.localMediaUrl || "",
+      }));
+      toast?.success("Image uploaded to gallery library.");
+    } catch (error) {
+      toast?.error(error?.message || "Could not upload image.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const importRemoteImage = async () => {
+    if (!editor.remoteImportUrl.trim()) return;
+    setUploading(true);
+    try {
+      const uploaded = await galleryApi.importRemote(editor.remoteImportUrl, editor.title || "gallery");
+      setEditor((prev) => ({
+        ...prev,
+        localMediaPath: uploaded.localMediaPath || "",
+        localMediaUrl: uploaded.localMediaUrl || "",
+        remoteImportUrl: "",
+      }));
+      toast?.success("Remote image mirrored into the gallery library.");
+    } catch (error) {
+      toast?.error(error?.message || "Could not import remote image.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="animate-in" style={{ maxWidth: 1200, margin: "0 auto", padding: "26px 24px 40px" }}>
@@ -71,14 +280,114 @@ export default function GalleryPage() {
           Shakespeare Art Gallery
         </h1>
         <p style={{ margin: "12px 0 0", color: "var(--text-muted)", lineHeight: 1.7, fontSize: 15 }}>
-          Open-source Shakespeare artwork organized for reuse across Codex Lector. Filter by work now; character tags, source groupings, and quote-card backgrounds can build on the same gallery over time.
+          Open-source Shakespeare artwork organized for reuse across Codex Lector. Works are associated canonically by work slug, so the same image library can support quote cards, places, and future character galleries.
         </p>
       </div>
+
+      {user?.isAdmin && (
+        <div style={{ marginBottom: 22, padding: 16, border: "1px solid var(--border-light)", borderRadius: 16, background: "var(--surface)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: showEditor ? 14 : 0 }}>
+            <div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 13, letterSpacing: 2, textTransform: "uppercase", color: "var(--accent)" }}>
+                Gallery Admin
+              </div>
+              <div style={{ fontSize: 13, color: "var(--text-light)", marginTop: 4 }}>
+                Add images manually, retag them, mirror new source URLs locally, and associate them with one or more works.
+              </div>
+            </div>
+            {!showEditor ? (
+              <button className="btn btn-primary" onClick={openNewEditor}>Add Gallery Image</button>
+            ) : (
+              <button className="btn btn-secondary" onClick={() => { setShowEditor(false); setEditor(emptyEditor()); }}>Close Editor</button>
+            )}
+          </div>
+
+          {showEditor && (
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                <input className="input" value={editor.title} onChange={(event) => setEditor((prev) => ({ ...prev, title: event.target.value }))} placeholder="Image title" />
+                <input className="input" value={editor.sourceLabel} onChange={(event) => setEditor((prev) => ({ ...prev, sourceLabel: event.target.value }))} placeholder="Source label" />
+                <select
+                  className="input"
+                  value={editor.primaryWorkSlug}
+                  onChange={(event) => {
+                    const slug = event.target.value;
+                    setEditor((prev) => ({
+                      ...prev,
+                      primaryWorkSlug: slug,
+                      workSlugs: slug ? [...new Set([slug, ...(prev.workSlugs || [])])] : prev.workSlugs,
+                    }));
+                  }}
+                >
+                  <option value="">Primary work</option>
+                  {catalogWorks.map((work) => (
+                    <option key={work.slug} value={work.slug}>{work.title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <WorkChipPicker
+                works={catalogWorks}
+                value={editor.workSlugs}
+                onChange={(next) => setEditor((prev) => ({
+                  ...prev,
+                  workSlugs: next,
+                  primaryWorkSlug: next.includes(prev.primaryWorkSlug) ? prev.primaryWorkSlug : (next[0] || ""),
+                }))}
+              />
+
+              <input className="input" value={editor.pageUrl} onChange={(event) => setEditor((prev) => ({ ...prev, pageUrl: event.target.value }))} placeholder="Source page URL" />
+              <input className="input" value={editor.imageUrl} onChange={(event) => setEditor((prev) => ({ ...prev, imageUrl: event.target.value }))} placeholder="Remote image URL (optional if mirrored locally)" />
+              <textarea className="input" rows={2} value={editor.tagsText} onChange={(event) => setEditor((prev) => ({ ...prev, tagsText: event.target.value }))} placeholder="Tags (comma separated)" style={{ resize: "vertical" }} />
+
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontSize: 12, color: "var(--text-light)" }}>Upload local file</span>
+                  <input type="file" accept="image/*" onChange={(event) => uploadLocalFile(event.target.files?.[0])} disabled={uploading} />
+                </label>
+                <div style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontSize: 12, color: "var(--text-light)" }}>Mirror remote URL to local media</span>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input className="input" value={editor.remoteImportUrl} onChange={(event) => setEditor((prev) => ({ ...prev, remoteImportUrl: event.target.value }))} placeholder="https://…" />
+                    <button className="btn btn-secondary btn-sm" onClick={importRemoteImage} disabled={uploading || !editor.remoteImportUrl.trim()}>
+                      Mirror
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {(editor.localMediaUrl || editor.imageUrl) && (
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div style={{ fontSize: 12, color: "var(--text-light)" }}>
+                    Display source: {editor.localMediaUrl ? "Local media copy" : "Remote image URL"}
+                  </div>
+                  <img
+                    src={editor.localMediaUrl || editor.imageUrl}
+                    alt={editor.title || "Gallery preview"}
+                    style={{ width: "min(360px, 100%)", aspectRatio: "4 / 3", objectFit: "cover", borderRadius: 12, border: "1px solid var(--border-light)" }}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button className="btn btn-primary btn-sm" onClick={saveEditor} disabled={saving || uploading}>
+                  {saving ? "Saving..." : editor.id ? "Save Image" : "Add Image"}
+                </button>
+                {editor.id ? (
+                  <button className="btn btn-secondary btn-sm" onClick={deleteImage} disabled={saving}>
+                    Remove Image
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 2fr) auto", gap: 10, marginBottom: 16 }}>
         <select className="input" value={selectedWork} onChange={(event) => setSelectedWork(event.target.value)}>
           <option value="">All works</option>
-          {works.map((work) => (
+          {displayedWorks.map((work) => (
             <option key={work.workSlug || work.workTitle} value={work.workSlug}>
               {work.workTitle}
             </option>
@@ -88,7 +397,7 @@ export default function GalleryPage() {
           className="input"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search image title or work…"
+          placeholder="Search image title, work, or tag…"
         />
         <button
           className="btn btn-secondary"
@@ -150,13 +459,14 @@ export default function GalleryPage() {
                     {item.title}
                   </div>
                   <div style={{ fontSize: 12, color: "var(--text-light)", textTransform: "uppercase", letterSpacing: 1.1 }}>
-                    {item.workTitle}
+                    {(item.works || []).slice(0, 2).map((work) => work.title).join(" · ")}
+                    {(item.works || []).length > 2 ? ` +${item.works.length - 2}` : ""}
                   </div>
                 </div>
 
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {item.workSlug && (
-                    <Link className="btn btn-ghost btn-sm" to={`/read/${item.workSlug}`}>
+                  {item.primaryWorkSlug && (
+                    <Link className="btn btn-ghost btn-sm" to={`/read/${item.primaryWorkSlug}`}>
                       Open Work
                     </Link>
                   )}
@@ -164,6 +474,11 @@ export default function GalleryPage() {
                     <a className="btn btn-secondary btn-sm" href={item.pageUrl} target="_blank" rel="noopener noreferrer">
                       Source
                     </a>
+                  )}
+                  {user?.isAdmin && (
+                    <button className="btn btn-secondary btn-sm" onClick={() => openEditEditor(item)}>
+                      Edit
+                    </button>
                   )}
                 </div>
 

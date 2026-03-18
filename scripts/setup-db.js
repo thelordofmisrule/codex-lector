@@ -396,6 +396,9 @@ db.exec(`
     image_url TEXT NOT NULL,
     local_media_path TEXT DEFAULT '',
     local_media_url TEXT DEFAULT '',
+    external_ref TEXT,
+    managed_source TEXT DEFAULT 'seed',
+    manual_override BOOLEAN DEFAULT 0,
     sort_order INTEGER DEFAULT 0,
     tags_json TEXT DEFAULT '[]',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -403,6 +406,17 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_quote_images_collection_sort
     ON quote_images(collection_id, sort_order, id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_quote_images_collection_external_ref
+    ON quote_images(collection_id, external_ref);
+
+  CREATE TABLE IF NOT EXISTS quote_image_work_links (
+    image_id INTEGER NOT NULL REFERENCES quote_images(id) ON DELETE CASCADE,
+    work_slug TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (image_id, work_slug)
+  );
+  CREATE INDEX IF NOT EXISTS idx_quote_image_work_links_work
+    ON quote_image_work_links(work_slug, image_id);
 `);
 
 // Migrations for existing databases
@@ -660,19 +674,35 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS quote_images (
   image_url TEXT NOT NULL,
   local_media_path TEXT DEFAULT '',
   local_media_url TEXT DEFAULT '',
+  external_ref TEXT,
+  managed_source TEXT DEFAULT 'seed',
+  manual_override BOOLEAN DEFAULT 0,
   sort_order INTEGER DEFAULT 0,
   tags_json TEXT DEFAULT '[]',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(collection_id, image_url)
 )`); } catch {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_quote_images_collection_sort ON quote_images(collection_id, sort_order, id)"); } catch {}
+try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_quote_images_collection_external_ref ON quote_images(collection_id, external_ref)"); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS quote_image_work_links (
+  image_id INTEGER NOT NULL REFERENCES quote_images(id) ON DELETE CASCADE,
+  work_slug TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (image_id, work_slug)
+)`); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_quote_image_work_links_work ON quote_image_work_links(work_slug, image_id)"); } catch {}
 try { db.exec("ALTER TABLE quote_image_collections ADD COLUMN work_slug TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE quote_image_collections ADD COLUMN tags_json TEXT DEFAULT '[]'"); } catch {}
 try { db.exec("ALTER TABLE quote_images ADD COLUMN title TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE quote_images ADD COLUMN source_label TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE quote_images ADD COLUMN local_media_path TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE quote_images ADD COLUMN local_media_url TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE quote_images ADD COLUMN external_ref TEXT"); } catch {}
+try { db.exec("ALTER TABLE quote_images ADD COLUMN managed_source TEXT DEFAULT 'seed'"); } catch {}
+try { db.exec("ALTER TABLE quote_images ADD COLUMN manual_override BOOLEAN DEFAULT 0"); } catch {}
 try { db.exec("ALTER TABLE quote_images ADD COLUMN tags_json TEXT DEFAULT '[]'"); } catch {}
+try { db.exec("UPDATE quote_images SET external_ref=page_url WHERE (external_ref IS NULL OR external_ref='') AND COALESCE(page_url, '')<>''"); } catch {}
+try { db.exec("UPDATE quote_images SET managed_source='seed' WHERE COALESCE(managed_source, '')=''"); } catch {}
 
 // Older DBs had NOT NULL lat/lng; rebuild to allow unknown coordinates.
 try {
@@ -879,16 +909,47 @@ const upsertQuoteCollection = db.prepare(`
     updated_at=CURRENT_TIMESTAMP
 `);
 const findQuoteCollection = db.prepare("SELECT id FROM quote_image_collections WHERE work_key=?");
-const deleteQuoteImagesForCollection = db.prepare("DELETE FROM quote_images WHERE collection_id=?");
-const insertQuoteImage = db.prepare(`
-  INSERT OR IGNORE INTO quote_images (collection_id, title, source_label, page_url, image_url, local_media_path, local_media_url, sort_order, tags_json)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+const findSeededQuoteImage = db.prepare(`
+  SELECT id, manual_override
+  FROM quote_images
+  WHERE collection_id=? AND external_ref=?
+`);
+const insertSeededQuoteImage = db.prepare(`
+  INSERT INTO quote_images (
+    collection_id, title, source_label, page_url, image_url, local_media_path, local_media_url,
+    external_ref, managed_source, manual_override, sort_order, tags_json
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'seed', 0, ?, ?)
+`);
+const updateSeededQuoteImage = db.prepare(`
+  UPDATE quote_images
+  SET
+    title=?,
+    source_label=?,
+    page_url=?,
+    image_url=?,
+    sort_order=?,
+    tags_json=?,
+    managed_source='seed'
+  WHERE id=?
+`);
+const listSeededQuoteImagesForCollection = db.prepare(`
+  SELECT id, external_ref, manual_override
+  FROM quote_images
+  WHERE collection_id=? AND managed_source='seed'
+`);
+const deleteQuoteImageById = db.prepare("DELETE FROM quote_images WHERE id=?");
+const clearQuoteImageWorkLinks = db.prepare("DELETE FROM quote_image_work_links WHERE image_id=?");
+const insertQuoteImageWorkLink = db.prepare(`
+  INSERT OR IGNORE INTO quote_image_work_links (image_id, work_slug)
+  VALUES (?, ?)
 `);
 
 let quoteCollectionCount = 0;
 let quoteImageCount = 0;
 for (const collection of quoteImageCollections) {
   const workRecord = workRecordByKey.get(collection.workKey) || null;
+  const linkedWorkSlugs = workRecord?.slug ? [workRecord.slug] : [];
   const collectionTags = [...new Set([
     "source:commons",
     collection.workTitle ? `work:${collection.workTitle}` : "",
@@ -907,7 +968,7 @@ for (const collection of quoteImageCollections) {
   const stored = findQuoteCollection.get(collection.workKey);
   if (!stored) continue;
   quoteCollectionCount += 1;
-  deleteQuoteImagesForCollection.run(stored.id);
+  const seenExternalRefs = new Set();
   collection.images.forEach((image) => {
     const rawLabelSource = image.title
       ? String(image.title)
@@ -922,18 +983,50 @@ for (const collection of quoteImageCollections) {
       ...collectionTags,
       ...(Array.isArray(image.tags) ? image.tags : []),
     ].filter(Boolean))];
-    insertQuoteImage.run(
-      stored.id,
-      normalizedLabel,
-      image.sourceLabel || "Wikimedia Commons",
-      image.pageUrl,
-      image.imageUrl,
-      image.localMediaPath || "",
-      image.localMediaUrl || "",
-      image.sortOrder,
-      JSON.stringify(imageTags),
-    );
+    const externalRef = String(image.pageUrl || image.imageUrl || "").trim() || null;
+    if (externalRef) seenExternalRefs.add(externalRef);
+    const existing = externalRef ? findSeededQuoteImage.get(stored.id, externalRef) : null;
+
+    let imageId = existing?.id || 0;
+    if (!existing) {
+      const inserted = insertSeededQuoteImage.run(
+        stored.id,
+        normalizedLabel,
+        image.sourceLabel || "Wikimedia Commons",
+        image.pageUrl,
+        image.imageUrl,
+        image.localMediaPath || "",
+        image.localMediaUrl || "",
+        externalRef,
+        image.sortOrder,
+        JSON.stringify(imageTags),
+      );
+      imageId = inserted.lastInsertRowid;
+    } else if (!existing.manual_override) {
+      updateSeededQuoteImage.run(
+        normalizedLabel,
+        image.sourceLabel || "Wikimedia Commons",
+        image.pageUrl,
+        image.imageUrl,
+        image.sortOrder,
+        JSON.stringify(imageTags),
+        existing.id,
+      );
+    }
+
+    if (imageId && !existing?.manual_override) {
+      clearQuoteImageWorkLinks.run(imageId);
+      linkedWorkSlugs.forEach((workSlug) => insertQuoteImageWorkLink.run(imageId, workSlug));
+    }
     quoteImageCount += 1;
+  });
+
+  const staleSeededImages = listSeededQuoteImagesForCollection.all(stored.id);
+  staleSeededImages.forEach((image) => {
+    if (image.manual_override) return;
+    if (image.external_ref && !seenExternalRefs.has(image.external_ref)) {
+      deleteQuoteImageById.run(image.id);
+    }
   });
 }
 if (quoteCollectionCount > 0) {

@@ -44,22 +44,26 @@ r.get("/:slug", (req, res) => {
        OR work_key=?
   `).get(work.slug, workKey);
 
-  if (!collection) {
-    return res.json({
-      workSlug: work.slug,
-      workTitle: work.title,
-      categoryUrl: "",
-      notes: "",
-      images: [],
-    });
-  }
-
   const images = db.prepare(`
-    SELECT id, title, source_label, page_url, image_url, local_media_path, local_media_url, sort_order, tags_json
-    FROM quote_images
-    WHERE collection_id=?
+    SELECT DISTINCT
+      i.id,
+      i.title,
+      i.source_label,
+      i.page_url,
+      i.image_url,
+      i.local_media_path,
+      i.local_media_url,
+      i.sort_order,
+      i.tags_json
+    FROM quote_images i
+    LEFT JOIN quote_image_work_links l ON l.image_id=i.id
+    WHERE COALESCE(i.managed_source, 'seed') <> 'hidden'
+      AND (
+        l.work_slug=?
+        OR (l.work_slug IS NULL AND i.collection_id=?)
+      )
     ORDER BY sort_order, id
-  `).all(collection.id).map((row) => ({
+  `).all(work.slug, collection?.id || 0).map((row) => ({
     id: row.id,
     title: row.title || "",
     sourceLabel: row.source_label || "",
@@ -75,10 +79,10 @@ r.get("/:slug", (req, res) => {
 
   return res.json({
     workSlug: work.slug,
-    workTitle: collection.work_title || work.title,
-    categoryUrl: collection.category_url || "",
-    notes: collection.notes || "",
-    tags: parseTags(collection.tags_json),
+    workTitle: collection?.work_title || work.title,
+    categoryUrl: collection?.category_url || "",
+    notes: collection?.notes || "",
+    tags: parseTags(collection?.tags_json || "[]"),
     images,
   });
 });

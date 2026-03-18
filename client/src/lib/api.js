@@ -182,6 +182,11 @@ export const gallery = {
     if (opts.limit) params.set("limit", String(opts.limit));
     return req(`/gallery${params.toString() ? `?${params.toString()}` : ""}`);
   },
+  uploadImage:(fileName,mimeType,dataUrl)=>req("/gallery/upload-image",{method:"POST",body:JSON.stringify({fileName,mimeType,dataUrl})}),
+  importRemote:(remoteUrl,fileName="gallery")=>req("/gallery/import-remote",{method:"POST",body:JSON.stringify({remoteUrl,fileName})}),
+  createImage:data=>req("/gallery/images",{method:"POST",body:JSON.stringify(data)}),
+  updateImage:(id,data)=>req(`/gallery/images/${id}`,{method:"PUT",body:JSON.stringify(data)}),
+  deleteImage:id=>req(`/gallery/images/${id}`,{method:"DELETE"}),
 };
 export const quoteImages = {
   forWork:slug=>req(`/quote-images/${encodeURIComponent(slug)}`),

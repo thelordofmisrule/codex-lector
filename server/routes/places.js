@@ -6,6 +6,7 @@ const db = require("../db");
 const { requireAuth, requireAdmin } = require("../auth");
 const { notify, notifyAdmins } = require("../notify");
 const { createRateLimit } = require("../rateLimit");
+const { buildWorkLookup, resolveWorkSlugs, workRefsFromSlugs } = require("../lib/workCatalog");
 
 const r = express.Router();
 const WORK_CACHE_MS = 10 * 60 * 1000;
@@ -67,6 +68,10 @@ function parseStringList(raw) {
   return [];
 }
 
+function parseSourceWorkSlugs(raw, workLookup = buildWorkLookup()) {
+  return resolveWorkSlugs(parseStringList(raw), workLookup);
+}
+
 function parseNullableNumber(value, fieldName) {
   if (value === null || value === undefined) return null;
   const str = String(value).trim();
@@ -83,7 +88,7 @@ function parseBool(value) {
   return s === "true" || s === "1" || s === "yes";
 }
 
-function sanitizePlacePatch(body = {}) {
+function sanitizePlacePatch(body = {}, workLookup = buildWorkLookup()) {
   const patch = {};
   const setText = (key, value) => { patch[key] = String(value ?? "").trim(); };
   if (body.name !== undefined) setText("name", body.name);
@@ -94,7 +99,8 @@ function sanitizePlacePatch(body = {}) {
   if (body.historicalNote !== undefined) setText("historical_note", body.historicalNote);
   if (body.imageUrl !== undefined) setText("image_url", body.imageUrl);
   if (body.aliases !== undefined) patch.aliases_json = JSON.stringify(parseStringList(body.aliases));
-  if (body.sourcePlays !== undefined) patch.source_plays_json = JSON.stringify(parseStringList(body.sourcePlays));
+  if (body.sourceWorkSlugs !== undefined) patch.source_plays_json = JSON.stringify(parseSourceWorkSlugs(body.sourceWorkSlugs, workLookup));
+  else if (body.sourcePlays !== undefined) patch.source_plays_json = JSON.stringify(parseSourceWorkSlugs(body.sourcePlays, workLookup));
   if (body.lat !== undefined) patch.lat = parseNullableNumber(body.lat, "latitude");
   if (body.lng !== undefined) patch.lng = parseNullableNumber(body.lng, "longitude");
   if (body.isReal !== undefined) patch.is_real = parseBool(body.isReal) ? 1 : 0;
@@ -141,7 +147,7 @@ function makeUniquePlaceSlug(preferred, nameFallback) {
 }
 
 function buildPlaceInsert(body = {}) {
-  const patch = sanitizePlacePatch(body);
+  const patch = sanitizePlacePatch(body, buildWorkLookup());
   const name = String(patch.name || "").trim();
   if (!name) throw new Error("Name is required.");
   return {
@@ -273,7 +279,9 @@ function findPlaceMentions(place, parsedWorks, opts = {}) {
   return citations;
 }
 
-function serializePlace(row) {
+function serializePlace(row, workLookup = buildWorkLookup()) {
+  const sourceWorkSlugs = parseSourceWorkSlugs(row.source_plays_json, workLookup);
+  const sourceWorks = workRefsFromSlugs(sourceWorkSlugs, workLookup);
   return {
     id: row.id,
     slug: row.slug,
@@ -288,7 +296,9 @@ function serializePlace(row) {
     imageUrl: row.image_url || "",
     aliases: parseAliases(row.aliases_json),
     isReal: !!row.is_real,
-    sourcePlays: parseAliases(row.source_plays_json),
+    sourcePlays: sourceWorks.map((work) => work.title),
+    sourceWorkSlugs,
+    sourceWorks,
   };
 }
 
@@ -296,8 +306,9 @@ r.get("/", (req, res) => {
   const includeAll = String(req.query.all || "") === "1";
   const realOnly = String(req.query.real || "") === "1";
   const rows = db.prepare(`SELECT * FROM places ${realOnly ? "WHERE is_real=1" : ""} ORDER BY name`).all();
+  const workLookup = buildWorkLookup();
   if (includeAll) {
-    return res.json({ places: rows.map(serializePlace) });
+    return res.json({ places: rows.map((row) => serializePlace(row, workLookup)) });
   }
 
   const parsedWorks = parseWorkCache();
@@ -305,7 +316,7 @@ r.get("/", (req, res) => {
   const places = rows.map(row => {
     const mentions = findPlaceMentions(row, parsedWorks, { workSlug, maxTotal: 6, maxPerWork: 1 });
     return {
-      ...serializePlace(row),
+      ...serializePlace(row, workLookup),
       workCount: new Set(mentions.map(item => item.workSlug)).size,
       mentionCount: mentions.length,
       sampleWorks: mentions.slice(0, 3).map(item => ({
@@ -352,7 +363,7 @@ r.post("/", requireAdmin, (req, res) => {
   try {
     const place = buildPlaceInsert(req.body || {});
     const inserted = insertPlaceRecord(place);
-    res.status(201).json({ place: serializePlace(inserted) });
+    res.status(201).json({ place: serializePlace(inserted, buildWorkLookup()) });
   } catch (e) {
     res.status(400).json({ error: e.message || "Invalid place payload." });
   }
@@ -402,7 +413,7 @@ r.post("/suggestions/new", requireAuth, suggestionLimit, (req, res) => {
 
   let patch = {};
   try {
-    patch = sanitizePlacePatch(rawChanges);
+    patch = sanitizePlacePatch(rawChanges, buildWorkLookup());
   } catch (e) {
     return res.status(400).json({ error: e.message || "Invalid place suggestion." });
   }
@@ -455,7 +466,7 @@ r.post("/suggestions/new/:id/accept", requireAdmin, (req, res) => {
     .run(req.user.id, inserted.id, req.params.id);
 
   notify(suggestion.user_id, "place_create_suggestion_accepted", `Your new place suggestion for ${inserted.name} was accepted.`, `/places`);
-  res.json({ ok: true, place: serializePlace(inserted) });
+  res.json({ ok: true, place: serializePlace(inserted, buildWorkLookup()) });
 });
 
 r.post("/suggestions/new/:id/reject", requireAdmin, (req, res) => {
@@ -475,7 +486,7 @@ r.put("/:slug", requireAdmin, (req, res) => {
 
   let patch = {};
   try {
-    patch = sanitizePlacePatch(req.body || {});
+    patch = sanitizePlacePatch(req.body || {}, buildWorkLookup());
   } catch (e) {
     return res.status(400).json({ error: e.message || "Invalid place payload." });
   }
@@ -487,7 +498,7 @@ r.put("/:slug", requireAdmin, (req, res) => {
   }
 
   const updated = db.prepare("SELECT * FROM places WHERE id=?").get(row.id);
-  res.json({ place: serializePlace(updated) });
+  res.json({ place: serializePlace(updated, buildWorkLookup()) });
 });
 
 r.delete("/:slug", requireAdmin, (req, res) => {
@@ -558,7 +569,7 @@ r.post("/:slug/suggestions", requireAuth, suggestionLimit, (req, res) => {
 
   let patch = {};
   try {
-    patch = sanitizePlacePatch(rawChanges);
+    patch = sanitizePlacePatch(rawChanges, buildWorkLookup());
   } catch (e) {
     return res.status(400).json({ error: e.message || "Invalid place suggestion." });
   }
@@ -704,7 +715,7 @@ r.get("/:slug", (req, res) => {
   const workCount = new Set(citations.map(item => item.workSlug)).size;
 
   res.json({
-    place: serializePlace(row),
+    place: serializePlace(row, buildWorkLookup()),
     workCount,
     citations,
     excludedCount: exclusionSet.size,

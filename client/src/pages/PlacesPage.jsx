@@ -48,6 +48,58 @@ function normalizeCsvList(raw) {
   return [...new Set(String(raw || "").split(/[,\n;]+/).map(s => s.trim()).filter(Boolean))];
 }
 
+function sortedWorks(works) {
+  return [...works].sort((a, b) => a.title.localeCompare(b.title));
+}
+
+function toggleSlug(list, slug) {
+  const next = Array.isArray(list) ? [...list] : [];
+  if (next.includes(slug)) return next.filter(item => item !== slug);
+  return [...next, slug];
+}
+
+function WorkSlugPicker({ works, value, onChange, placeholder = "Associate works" }) {
+  const selected = Array.isArray(value) ? value : [];
+  const orderedWorks = sortedWorks(works);
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <select
+        className="input"
+        value=""
+        onChange={(event) => {
+          const slug = event.target.value;
+          if (slug) onChange(toggleSlug(selected, slug));
+          event.target.value = "";
+        }}
+      >
+        <option value="">{placeholder}</option>
+        {orderedWorks.map((work) => (
+          <option key={work.slug} value={work.slug}>
+            {work.title}
+          </option>
+        ))}
+      </select>
+      {selected.length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {selected.map((slug) => {
+            const work = orderedWorks.find((entry) => entry.slug === slug);
+            return (
+              <button
+                key={slug}
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => onChange(toggleSlug(selected, slug))}
+              >
+                {work?.title || slug} ×
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function placeDraftFromPlace(place) {
   return {
     name: place?.name || "",
@@ -57,7 +109,7 @@ function placeDraftFromPlace(place) {
     lat: place?.lat ?? "",
     lng: place?.lng ?? "",
     aliases: (place?.aliases || []).join(", "),
-    sourcePlays: (place?.sourcePlays || []).join(", "),
+    sourceWorkSlugs: [...new Set(place?.sourceWorkSlugs || (place?.sourceWorks || []).map((work) => work.slug).filter(Boolean))],
     isReal: place?.isReal !== false,
     description: place?.description || "",
     historicalNote: place?.historicalNote || "",
@@ -95,9 +147,9 @@ function buildSuggestionChanges(originalPlace, draft) {
   const prevAliases = [...new Set((originalPlace.aliases || []).map(s => String(s || "").trim()).filter(Boolean))];
   if (nextAliases.join("|") !== prevAliases.join("|")) changes.aliases = nextAliases;
 
-  const nextPlays = normalizeCsvList(draft.sourcePlays);
-  const prevPlays = [...new Set((originalPlace.sourcePlays || []).map(s => String(s || "").trim()).filter(Boolean))];
-  if (nextPlays.join("|") !== prevPlays.join("|")) changes.sourcePlays = nextPlays;
+  const nextWorkSlugs = [...new Set((draft.sourceWorkSlugs || []).map(s => String(s || "").trim()).filter(Boolean))];
+  const prevWorkSlugs = [...new Set((originalPlace.sourceWorkSlugs || []).map(s => String(s || "").trim()).filter(Boolean))];
+  if (nextWorkSlugs.join("|") !== prevWorkSlugs.join("|")) changes.sourceWorkSlugs = nextWorkSlugs;
 
   if (!!draft.isReal !== !!originalPlace.isReal) changes.isReal = !!draft.isReal;
   return changes;
@@ -121,7 +173,7 @@ function buildCreatePayloadFromDraft(draft) {
     lat: parsedLat,
     lng: parsedLng,
     aliases: normalizeCsvList(draft.aliases),
-    sourcePlays: normalizeCsvList(draft.sourcePlays),
+    sourceWorkSlugs: [...new Set((draft.sourceWorkSlugs || []).map(s => String(s || "").trim()).filter(Boolean))],
     isReal: !!draft.isReal,
     description: String(draft.description || "").trim(),
     historicalNote: String(draft.historicalNote || "").trim(),
@@ -777,7 +829,12 @@ export default function PlacesPage() {
                       <input className="input" value={createEditor.lng} onChange={e => setCreateEditor(prev => ({ ...prev, lng: e.target.value }))} placeholder="Longitude" />
                     </div>
                     <input className="input" value={createEditor.aliases} onChange={e => setCreateEditor(prev => ({ ...prev, aliases: e.target.value }))} placeholder="Aliases (comma separated)" />
-                    <input className="input" value={createEditor.sourcePlays} onChange={e => setCreateEditor(prev => ({ ...prev, sourcePlays: e.target.value }))} placeholder="Source plays (comma separated)" />
+                    <WorkSlugPicker
+                      works={works}
+                      value={createEditor.sourceWorkSlugs}
+                      onChange={(next) => setCreateEditor(prev => ({ ...prev, sourceWorkSlugs: next }))}
+                      placeholder="Associate works"
+                    />
                     <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-muted)" }}>
                       <input type="checkbox" checked={!!createEditor.isReal} onChange={e => setCreateEditor(prev => ({ ...prev, isReal: e.target.checked }))} />
                       Real-world location
@@ -828,7 +885,12 @@ export default function PlacesPage() {
                       <input className="input" value={suggestNewDraft.lng} onChange={e => setSuggestNewDraft(prev => ({ ...prev, lng: e.target.value }))} placeholder="Longitude" />
                     </div>
                     <input className="input" value={suggestNewDraft.aliases} onChange={e => setSuggestNewDraft(prev => ({ ...prev, aliases: e.target.value }))} placeholder="Aliases (comma separated)" />
-                    <input className="input" value={suggestNewDraft.sourcePlays} onChange={e => setSuggestNewDraft(prev => ({ ...prev, sourcePlays: e.target.value }))} placeholder="Source plays (comma separated)" />
+                    <WorkSlugPicker
+                      works={works}
+                      value={suggestNewDraft.sourceWorkSlugs}
+                      onChange={(next) => setSuggestNewDraft(prev => ({ ...prev, sourceWorkSlugs: next }))}
+                      placeholder="Associate works"
+                    />
                     <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-muted)" }}>
                       <input type="checkbox" checked={!!suggestNewDraft.isReal} onChange={e => setSuggestNewDraft(prev => ({ ...prev, isReal: e.target.checked }))} />
                       Real-world location
@@ -996,7 +1058,12 @@ export default function PlacesPage() {
                           <input className="input" value={suggestDraft.lng} onChange={e => setSuggestDraft(prev => ({ ...prev, lng: e.target.value }))} placeholder="Longitude" />
                         </div>
                         <input className="input" value={suggestDraft.aliases} onChange={e => setSuggestDraft(prev => ({ ...prev, aliases: e.target.value }))} placeholder="Aliases (comma separated)" />
-                        <input className="input" value={suggestDraft.sourcePlays} onChange={e => setSuggestDraft(prev => ({ ...prev, sourcePlays: e.target.value }))} placeholder="Source plays (comma separated)" />
+                        <WorkSlugPicker
+                          works={works}
+                          value={suggestDraft.sourceWorkSlugs}
+                          onChange={(next) => setSuggestDraft(prev => ({ ...prev, sourceWorkSlugs: next }))}
+                          placeholder="Associate works"
+                        />
                         <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-muted)" }}>
                           <input type="checkbox" checked={!!suggestDraft.isReal} onChange={e => setSuggestDraft(prev => ({ ...prev, isReal: e.target.checked }))} />
                           Real-world location
@@ -1079,11 +1146,11 @@ export default function PlacesPage() {
                         onChange={e => setEditor(prev => ({ ...prev, aliases: e.target.value }))}
                         placeholder="Aliases (comma separated)"
                       />
-                      <input
-                        className="input"
-                        value={editor.sourcePlays}
-                        onChange={e => setEditor(prev => ({ ...prev, sourcePlays: e.target.value }))}
-                        placeholder="Source plays (comma separated)"
+                      <WorkSlugPicker
+                        works={works}
+                        value={editor.sourceWorkSlugs}
+                        onChange={(next) => setEditor(prev => ({ ...prev, sourceWorkSlugs: next }))}
+                        placeholder="Associate works"
                       />
                       <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-muted)" }}>
                         <input
