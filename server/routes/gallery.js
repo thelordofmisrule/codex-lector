@@ -4,7 +4,7 @@ const path = require("path");
 const crypto = require("crypto");
 const db = require("../db");
 const { requireAdmin } = require("../auth");
-const { buildWorkLookup, resolveWorkSlugs } = require("../lib/workCatalog");
+const { buildWorkLookup, resolveWorkSlugs, equivalentWorkSlugs } = require("../lib/workCatalog");
 const { normalizeQuoteImageWorkKey } = require("../lib/quoteImageCollections");
 
 const r = express.Router();
@@ -272,13 +272,15 @@ r.get("/", (req, res) => {
   const query = String(req.query.q || "").trim().toLowerCase();
   const limit = Math.min(400, Math.max(1, parseInt(req.query.limit || "120", 10) || 120));
   const items = listGalleryItems();
+  const workLookup = buildWorkLookup();
+  const equivalentSlugs = new Set(workSlug ? equivalentWorkSlugs(workSlug, workLookup) : []);
 
   const works = [...new Map(
     items.flatMap((item) => item.works.map((work) => [work.slug, { workSlug: work.slug, workTitle: work.title }])),
   ).values()].sort((a, b) => a.workTitle.localeCompare(b.workTitle));
 
   const facetedItems = items.filter((item) => {
-    if (workSlug && !item.workSlugs.includes(workSlug)) return false;
+    if (workSlug && !(item.workSlugs || []).some((slug) => equivalentSlugs.has(slug))) return false;
     if (query) {
       const haystack = `${item.title} ${item.workTitle} ${item.works.map((work) => work.title).join(" ")} ${(item.tags || []).join(" ")}`.toLowerCase();
       if (!haystack.includes(query)) return false;

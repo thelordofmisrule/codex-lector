@@ -44,6 +44,20 @@ function listWorks() {
   return db.prepare("SELECT slug, title, category FROM works ORDER BY title").all();
 }
 
+function workPreferenceScore(work) {
+  const slug = String(work?.slug || "");
+  const category = String(work?.category || "");
+  if (category === "first_folio" || slug.startsWith("f1-")) return 3;
+  if (category === "apocrypha" || slug.startsWith("apo-")) return 2;
+  return 1;
+}
+
+function compareWorkPreference(left, right) {
+  const scoreDiff = workPreferenceScore(left) - workPreferenceScore(right);
+  if (scoreDiff !== 0) return scoreDiff;
+  return String(left?.slug || "").localeCompare(String(right?.slug || ""));
+}
+
 function buildWorkLookup(works = listWorks()) {
   const bySlug = new Map();
   const byAlias = new Map();
@@ -51,7 +65,8 @@ function buildWorkLookup(works = listWorks()) {
   works.forEach((work) => {
     bySlug.set(work.slug, work);
     buildWorkAliases(work).forEach((alias) => {
-      if (!byAlias.has(alias)) byAlias.set(alias, work);
+      const existing = byAlias.get(alias);
+      if (!existing || compareWorkPreference(work, existing) < 0) byAlias.set(alias, work);
     });
   });
 
@@ -87,12 +102,27 @@ function workRefsFromSlugs(slugs, lookup = buildWorkLookup()) {
     .map((work) => ({ slug: work.slug, title: work.title, category: work.category }));
 }
 
+function equivalentWorkSlugs(value, lookup = buildWorkLookup()) {
+  const work = typeof value === "string" && lookup.bySlug.has(value)
+    ? lookup.bySlug.get(value)
+    : resolveWork(value, lookup);
+  if (!work) return [];
+  const familyKey = normalizeWorkRef(work.title);
+  return lookup.works
+    .filter((candidate) => normalizeWorkRef(candidate.title) === familyKey)
+    .sort(compareWorkPreference)
+    .map((candidate) => candidate.slug);
+}
+
 module.exports = {
   normalizeWorkRef,
   buildWorkAliases,
   listWorks,
+  workPreferenceScore,
+  compareWorkPreference,
   buildWorkLookup,
   resolveWork,
   resolveWorkSlugs,
   workRefsFromSlugs,
+  equivalentWorkSlugs,
 };

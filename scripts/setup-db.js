@@ -9,6 +9,7 @@ const fs = require("fs");
 const { rebuildSearchIndex } = require("../server/lib/workSearchIndex");
 const { GLOSSARY_SEED, GLOSSARY_OVERRIDE_SEED } = require("../server/data/glossarySeed");
 const { normalizeGlossaryTerm } = require("../server/lib/glossary");
+const { compareWorkPreference } = require("../server/lib/workCatalog");
 const { quoteImageSeedCollections, normalizeQuoteImageWorkKey } = require("../server/lib/quoteImageCollections");
 
 const dir = path.join(__dirname, "..", "data");
@@ -901,12 +902,14 @@ for (const row of seededPlaces) upsertPlace.run(...row);
 
 const quoteImageCollections = quoteImageSeedCollections();
 const workRecords = db.prepare("SELECT slug, title, category FROM works").all();
-const workRecordByKey = new Map(
-  workRecords.map((row) => [
-    normalizeQuoteImageWorkKey(row.title),
-    row,
-  ]),
-);
+const workRecordByKey = new Map();
+workRecords.forEach((row) => {
+  const key = normalizeQuoteImageWorkKey(row.title);
+  const existing = workRecordByKey.get(key);
+  if (!existing || compareWorkPreference(row, existing) < 0) {
+    workRecordByKey.set(key, row);
+  }
+});
 const upsertQuoteCollection = db.prepare(`
   INSERT INTO quote_image_collections (work_key, work_title, work_slug, category_url, notes, tags_json, updated_at)
   VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)

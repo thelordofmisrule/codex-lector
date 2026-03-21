@@ -1,6 +1,7 @@
 const express = require("express");
 const db = require("../db");
 const { normalizeQuoteImageWorkKey } = require("../lib/quoteImageCollections");
+const { buildWorkLookup, equivalentWorkSlugs } = require("../lib/workCatalog");
 
 const r = express.Router();
 
@@ -37,12 +38,17 @@ r.get("/:slug", (req, res) => {
   if (!work) return res.status(404).json({ error: "Work not found." });
 
   const workKey = normalizeQuoteImageWorkKey(work.title);
+  const workLookup = buildWorkLookup();
+  const familySlugs = equivalentWorkSlugs(work.slug, workLookup);
+  const familyPlaceholders = familySlugs.map(() => "?").join(", ");
   const collection = db.prepare(`
     SELECT id, work_key, work_title, category_url, notes, tags_json
     FROM quote_image_collections
-    WHERE work_slug=?
+    WHERE work_slug IN (${familyPlaceholders})
        OR work_key=?
-  `).get(work.slug, workKey);
+    ORDER BY work_slug=?
+    LIMIT 1
+  `).get(...familySlugs, workKey, work.slug);
 
   const images = db.prepare(`
     SELECT DISTINCT
@@ -59,11 +65,11 @@ r.get("/:slug", (req, res) => {
     LEFT JOIN quote_image_work_links l ON l.image_id=i.id
     WHERE COALESCE(i.managed_source, 'seed') <> 'hidden'
       AND (
-        l.work_slug=?
+        l.work_slug IN (${familyPlaceholders})
         OR (l.work_slug IS NULL AND i.collection_id=?)
       )
     ORDER BY sort_order, id
-  `).all(work.slug, collection?.id || 0).map((row) => ({
+  `).all(...familySlugs, collection?.id || 0).map((row) => ({
     id: row.id,
     title: row.title || "",
     sourceLabel: row.source_label || "",
