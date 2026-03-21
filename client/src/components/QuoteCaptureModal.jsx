@@ -29,12 +29,12 @@ export default function QuoteCaptureModal({ quote, workSlug, onClose }) {
   const [artError, setArtError] = useState("");
   const [artCollection, setArtCollection] = useState({ categoryUrl: "", notes: "", images: [] });
   const [selectedImageId, setSelectedImageId] = useState(0);
-  const [backgroundOpacity, setBackgroundOpacity] = useState(22);
+  const [backgroundOpacity, setBackgroundOpacity] = useState(36);
 
   useEffect(() => {
     setThemeId(QUOTE_CAPTURE_THEMES[0].id);
     setSelectedImageId(0);
-    setBackgroundOpacity(22);
+    setBackgroundOpacity(36);
   }, [quote?.text, quote?.citation, quote?.title]);
 
   useEffect(() => {
@@ -315,11 +315,11 @@ export default function QuoteCaptureModal({ quote, workSlug, onClose }) {
                       </span>
                       <input
                         type="range"
-                        min="8"
-                        max="42"
+                        min="16"
+                        max="58"
                         step="1"
                         value={backgroundOpacity}
-                        onChange={(event) => setBackgroundOpacity(parseInt(event.target.value, 10) || 22)}
+                        onChange={(event) => setBackgroundOpacity(parseInt(event.target.value, 10) || 36)}
                       />
                     </label>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -367,7 +367,7 @@ export default function QuoteCaptureModal({ quote, workSlug, onClose }) {
                   position: "absolute",
                   inset: 0,
                   background: preview.background,
-                  opacity: 0.84,
+                  opacity: 0.7,
                 }}
               />
             )}

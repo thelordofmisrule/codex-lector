@@ -53,10 +53,10 @@ function getTheme(themeId) {
   return QUOTE_CAPTURE_THEMES.find((theme) => theme.id === themeId) || QUOTE_CAPTURE_THEMES[0];
 }
 
-function clampOpacity(value, fallback = 0.22) {
+function clampOpacity(value, fallback = 0.36) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
-  return Math.min(0.75, Math.max(0, n));
+  return Math.min(0.85, Math.max(0, n));
 }
 
 function escapeXml(value) {
@@ -147,11 +147,11 @@ export function buildQuoteCardSvg({
   siteLabel = "Codex Lector",
   backgroundImageHref = "",
   backgroundImageUrl = "",
-  backgroundOpacity = 0.22,
+  backgroundOpacity = 0.36,
 }) {
   const theme = getTheme(themeId);
   const resolvedBackgroundHref = String(backgroundImageHref || backgroundImageUrl || "").trim();
-  const resolvedBackgroundOpacity = clampOpacity(backgroundOpacity, 0.22);
+  const resolvedBackgroundOpacity = clampOpacity(backgroundOpacity, 0.36);
   const sizing = resolveQuoteSizing(text);
   const lines = wrapQuoteLines(text, sizing.maxChars);
   const quoteStartY = 270;
@@ -177,8 +177,8 @@ export function buildQuoteCardSvg({
 <svg xmlns="http://www.w3.org/2000/svg" width="${QUOTE_CARD_WIDTH}" height="${QUOTE_CARD_HEIGHT}" viewBox="0 0 ${QUOTE_CARD_WIDTH} ${QUOTE_CARD_HEIGHT}">
   <rect width="${QUOTE_CARD_WIDTH}" height="${QUOTE_CARD_HEIGHT}" fill="${theme.background}" />
   ${resolvedBackgroundHref ? `<image x="52" y="52" width="1496" height="796" preserveAspectRatio="xMidYMid slice" href="${escapeXml(resolvedBackgroundHref)}" opacity="${resolvedBackgroundOpacity}" />` : ""}
-  ${resolvedBackgroundHref ? `<rect x="52" y="52" width="1496" height="796" rx="36" fill="${theme.background}" opacity="0.18" />` : ""}
-  <rect x="52" y="52" width="1496" height="796" rx="36" fill="${theme.panel}" fill-opacity="${resolvedBackgroundHref ? "0.84" : "1"}" stroke="${theme.border}" stroke-width="2" />
+  ${resolvedBackgroundHref ? `<rect x="52" y="52" width="1496" height="796" rx="36" fill="${theme.background}" opacity="0.1" />` : ""}
+  <rect x="52" y="52" width="1496" height="796" rx="36" fill="${theme.panel}" fill-opacity="${resolvedBackgroundHref ? "0.7" : "1"}" stroke="${theme.border}" stroke-width="2" />
   <rect x="104" y="104" width="192" height="34" rx="17" fill="${theme.accentSoft}" />
   <text x="200" y="126" text-anchor="middle" font-family="${escapeXml(theme.metaFont)}" font-size="18" letter-spacing="3" fill="${theme.accent}">QUOTE CAPTURE</text>
   <text x="116" y="232" font-family="${escapeXml(theme.quoteFont)}" font-size="180" fill="${theme.quoteMark}" opacity="0.45">&#8220;</text>
