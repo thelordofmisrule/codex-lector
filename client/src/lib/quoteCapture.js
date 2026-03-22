@@ -1,5 +1,6 @@
 const QUOTE_CARD_WIDTH = 1600;
 const QUOTE_CARD_HEIGHT = 900;
+const QUOTE_CARD_RADIUS = 40;
 
 export const QUOTE_CAPTURE_THEMES = [
   {
@@ -176,14 +177,20 @@ export function buildQuoteCardSvg({
   return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${QUOTE_CARD_WIDTH}" height="${QUOTE_CARD_HEIGHT}" viewBox="0 0 ${QUOTE_CARD_WIDTH} ${QUOTE_CARD_HEIGHT}">
   <defs>
+    <clipPath id="cardClip">
+      <rect x="0" y="0" width="${QUOTE_CARD_WIDTH}" height="${QUOTE_CARD_HEIGHT}" rx="${QUOTE_CARD_RADIUS}" ry="${QUOTE_CARD_RADIUS}" />
+    </clipPath>
     <filter id="textHalo" x="-20%" y="-20%" width="140%" height="140%">
       <feDropShadow dx="0" dy="2" stdDeviation="7" flood-color="#000000" flood-opacity="0.28" />
     </filter>
   </defs>
-  <rect width="${QUOTE_CARD_WIDTH}" height="${QUOTE_CARD_HEIGHT}" fill="${theme.background}" />
-  ${resolvedBackgroundHref ? `<image x="52" y="52" width="1496" height="796" preserveAspectRatio="xMidYMid slice" href="${escapeXml(resolvedBackgroundHref)}" opacity="${resolvedBackgroundOpacity}" />` : ""}
-  ${resolvedBackgroundHref ? `<rect x="52" y="52" width="1496" height="796" rx="36" fill="${theme.background}" opacity="0.05" />` : ""}
-  <rect x="52" y="52" width="1496" height="796" rx="36" fill="${theme.panel}" fill-opacity="${resolvedBackgroundHref ? "0.34" : "1"}" stroke="${theme.border}" stroke-width="2" />
+  <g clip-path="url(#cardClip)">
+    <rect width="${QUOTE_CARD_WIDTH}" height="${QUOTE_CARD_HEIGHT}" fill="${theme.background}" />
+    ${resolvedBackgroundHref ? `<image x="0" y="0" width="${QUOTE_CARD_WIDTH}" height="${QUOTE_CARD_HEIGHT}" preserveAspectRatio="xMidYMid slice" href="${escapeXml(resolvedBackgroundHref)}" opacity="${resolvedBackgroundOpacity}" />` : ""}
+    ${resolvedBackgroundHref ? `<rect width="${QUOTE_CARD_WIDTH}" height="${QUOTE_CARD_HEIGHT}" fill="${theme.background}" opacity="0.05" />` : ""}
+    <rect width="${QUOTE_CARD_WIDTH}" height="${QUOTE_CARD_HEIGHT}" fill="${theme.panel}" fill-opacity="${resolvedBackgroundHref ? "0.34" : "1"}" />
+  </g>
+  <rect x="1" y="1" width="${QUOTE_CARD_WIDTH - 2}" height="${QUOTE_CARD_HEIGHT - 2}" rx="${QUOTE_CARD_RADIUS}" ry="${QUOTE_CARD_RADIUS}" fill="none" stroke="${theme.border}" stroke-width="2" />
   <rect x="104" y="104" width="192" height="34" rx="17" fill="${theme.accentSoft}" />
   <text x="200" y="126" text-anchor="middle" font-family="${escapeXml(theme.metaFont)}" font-size="18" letter-spacing="3" fill="${theme.accent}">QUOTE CAPTURE</text>
   <text x="116" y="232" font-family="${escapeXml(theme.quoteFont)}" font-size="180" fill="${theme.quoteMark}" opacity="0.45">&#8220;</text>
