@@ -191,8 +191,6 @@ export function buildQuoteCardSvg({
     <rect width="${QUOTE_CARD_WIDTH}" height="${QUOTE_CARD_HEIGHT}" fill="${theme.panel}" fill-opacity="${resolvedBackgroundHref ? "0.34" : "1"}" />
   </g>
   <rect x="1" y="1" width="${QUOTE_CARD_WIDTH - 2}" height="${QUOTE_CARD_HEIGHT - 2}" rx="${QUOTE_CARD_RADIUS}" ry="${QUOTE_CARD_RADIUS}" fill="none" stroke="${theme.border}" stroke-width="2" />
-  <rect x="104" y="104" width="192" height="34" rx="17" fill="${theme.accentSoft}" />
-  <text x="200" y="126" text-anchor="middle" font-family="${escapeXml(theme.metaFont)}" font-size="18" letter-spacing="3" fill="${theme.accent}">QUOTE CAPTURE</text>
   <text x="116" y="232" font-family="${escapeXml(theme.quoteFont)}" font-size="180" fill="${theme.quoteMark}" opacity="0.45">&#8220;</text>
   ${quoteLines.replaceAll("<text ", `<text ${resolvedBackgroundHref ? `filter="url(#textHalo)" ` : ""}`)}
   <line x1="210" x2="1390" y1="700" y2="700" stroke="${theme.border}" stroke-width="2" />
