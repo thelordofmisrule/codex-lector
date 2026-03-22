@@ -29,12 +29,12 @@ export default function QuoteCaptureModal({ quote, workSlug, onClose }) {
   const [artError, setArtError] = useState("");
   const [artCollection, setArtCollection] = useState({ categoryUrl: "", notes: "", images: [] });
   const [selectedImageId, setSelectedImageId] = useState(0);
-  const [backgroundOpacity, setBackgroundOpacity] = useState(36);
+  const [backgroundOpacity, setBackgroundOpacity] = useState(62);
 
   useEffect(() => {
     setThemeId(QUOTE_CAPTURE_THEMES[0].id);
     setSelectedImageId(0);
-    setBackgroundOpacity(36);
+    setBackgroundOpacity(62);
   }, [quote?.text, quote?.citation, quote?.title]);
 
   useEffect(() => {
@@ -315,11 +315,11 @@ export default function QuoteCaptureModal({ quote, workSlug, onClose }) {
                       </span>
                       <input
                         type="range"
-                        min="16"
-                        max="58"
+                        min="28"
+                        max="78"
                         step="1"
                         value={backgroundOpacity}
-                        onChange={(event) => setBackgroundOpacity(parseInt(event.target.value, 10) || 36)}
+                        onChange={(event) => setBackgroundOpacity(parseInt(event.target.value, 10) || 62)}
                       />
                     </label>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -367,7 +367,7 @@ export default function QuoteCaptureModal({ quote, workSlug, onClose }) {
                   position: "absolute",
                   inset: 0,
                   background: preview.background,
-                  opacity: 0.7,
+                  opacity: 0.34,
                 }}
               />
             )}
@@ -406,6 +406,7 @@ export default function QuoteCaptureModal({ quote, workSlug, onClose }) {
                       lineHeight: 1.42,
                       marginBottom: line ? 8 : 16,
                       color: preview.color,
+                      textShadow: selectedImage ? "0 2px 14px rgba(0,0,0,0.28), 0 0 4px rgba(255,255,255,0.18)" : "none",
                     }}
                   >
                     {line || "\u00A0"}
@@ -417,11 +418,11 @@ export default function QuoteCaptureModal({ quote, workSlug, onClose }) {
                   {quote.title}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                  <div style={{ color: preview.muted, fontFamily: preview.metaFont, fontSize: 14 }}>
+                  <div style={{ color: preview.muted, fontFamily: preview.metaFont, fontSize: 14, textShadow: selectedImage ? "0 1px 10px rgba(0,0,0,0.24)" : "none" }}>
                     {quote.author}
                     {quote.citation ? ` - ${quote.citation}` : ""}
                   </div>
-                  <div style={{ color: preview.muted, fontFamily: preview.metaFont, fontSize: 14, letterSpacing: 2, textTransform: "uppercase" }}>
+                  <div style={{ color: preview.muted, fontFamily: preview.metaFont, fontSize: 14, letterSpacing: 2, textTransform: "uppercase", textShadow: selectedImage ? "0 1px 10px rgba(0,0,0,0.24)" : "none" }}>
                     Codex Lector
                   </div>
                 </div>

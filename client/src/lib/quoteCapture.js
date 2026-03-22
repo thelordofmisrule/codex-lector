@@ -53,7 +53,7 @@ function getTheme(themeId) {
   return QUOTE_CAPTURE_THEMES.find((theme) => theme.id === themeId) || QUOTE_CAPTURE_THEMES[0];
 }
 
-function clampOpacity(value, fallback = 0.36) {
+function clampOpacity(value, fallback = 0.62) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(0.85, Math.max(0, n));
@@ -147,11 +147,11 @@ export function buildQuoteCardSvg({
   siteLabel = "Codex Lector",
   backgroundImageHref = "",
   backgroundImageUrl = "",
-  backgroundOpacity = 0.36,
+  backgroundOpacity = 0.62,
 }) {
   const theme = getTheme(themeId);
   const resolvedBackgroundHref = String(backgroundImageHref || backgroundImageUrl || "").trim();
-  const resolvedBackgroundOpacity = clampOpacity(backgroundOpacity, 0.36);
+  const resolvedBackgroundOpacity = clampOpacity(backgroundOpacity, 0.62);
   const sizing = resolveQuoteSizing(text);
   const lines = wrapQuoteLines(text, sizing.maxChars);
   const quoteStartY = 270;
@@ -175,18 +175,23 @@ export function buildQuoteCardSvg({
 
   return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${QUOTE_CARD_WIDTH}" height="${QUOTE_CARD_HEIGHT}" viewBox="0 0 ${QUOTE_CARD_WIDTH} ${QUOTE_CARD_HEIGHT}">
+  <defs>
+    <filter id="textHalo" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="7" flood-color="#000000" flood-opacity="0.28" />
+    </filter>
+  </defs>
   <rect width="${QUOTE_CARD_WIDTH}" height="${QUOTE_CARD_HEIGHT}" fill="${theme.background}" />
   ${resolvedBackgroundHref ? `<image x="52" y="52" width="1496" height="796" preserveAspectRatio="xMidYMid slice" href="${escapeXml(resolvedBackgroundHref)}" opacity="${resolvedBackgroundOpacity}" />` : ""}
-  ${resolvedBackgroundHref ? `<rect x="52" y="52" width="1496" height="796" rx="36" fill="${theme.background}" opacity="0.1" />` : ""}
-  <rect x="52" y="52" width="1496" height="796" rx="36" fill="${theme.panel}" fill-opacity="${resolvedBackgroundHref ? "0.7" : "1"}" stroke="${theme.border}" stroke-width="2" />
+  ${resolvedBackgroundHref ? `<rect x="52" y="52" width="1496" height="796" rx="36" fill="${theme.background}" opacity="0.05" />` : ""}
+  <rect x="52" y="52" width="1496" height="796" rx="36" fill="${theme.panel}" fill-opacity="${resolvedBackgroundHref ? "0.34" : "1"}" stroke="${theme.border}" stroke-width="2" />
   <rect x="104" y="104" width="192" height="34" rx="17" fill="${theme.accentSoft}" />
   <text x="200" y="126" text-anchor="middle" font-family="${escapeXml(theme.metaFont)}" font-size="18" letter-spacing="3" fill="${theme.accent}">QUOTE CAPTURE</text>
   <text x="116" y="232" font-family="${escapeXml(theme.quoteFont)}" font-size="180" fill="${theme.quoteMark}" opacity="0.45">&#8220;</text>
-  ${quoteLines}
+  ${quoteLines.replaceAll("<text ", `<text ${resolvedBackgroundHref ? `filter="url(#textHalo)" ` : ""}`)}
   <line x1="210" x2="1390" y1="700" y2="700" stroke="${theme.border}" stroke-width="2" />
-  <text x="210" y="758" font-family="${escapeXml(theme.titleFont)}" font-size="26" letter-spacing="2.4" fill="${theme.accent}">${escapeXml(title || author)}</text>
-  <text x="210" y="798" font-family="${escapeXml(theme.metaFont)}" font-size="24" fill="${theme.muted}">${escapeXml([author, citation].filter(Boolean).join(" - "))}</text>
-  <text x="1392" y="798" text-anchor="end" font-family="${escapeXml(theme.metaFont)}" font-size="22" letter-spacing="3" fill="${theme.muted}">${escapeXml(siteLabel)}</text>
+  <text x="210" y="758" font-family="${escapeXml(theme.titleFont)}" font-size="26" letter-spacing="2.4" fill="${theme.accent}" ${resolvedBackgroundHref ? `filter="url(#textHalo)"` : ""}>${escapeXml(title || author)}</text>
+  <text x="210" y="798" font-family="${escapeXml(theme.metaFont)}" font-size="24" fill="${theme.muted}" ${resolvedBackgroundHref ? `filter="url(#textHalo)"` : ""}>${escapeXml([author, citation].filter(Boolean).join(" - "))}</text>
+  <text x="1392" y="798" text-anchor="end" font-family="${escapeXml(theme.metaFont)}" font-size="22" letter-spacing="3" fill="${theme.muted}" ${resolvedBackgroundHref ? `filter="url(#textHalo)"` : ""}>${escapeXml(siteLabel)}</text>
 </svg>`.trim();
 }
 
