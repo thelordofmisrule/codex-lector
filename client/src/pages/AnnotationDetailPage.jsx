@@ -8,7 +8,7 @@ import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import { parsePlayShakespeareXML } from "../lib/textParser";
 import { preservedAnnotationTextStyle, quotedExcerpt, quotedText, smartenAnnotationText } from "../lib/annotationFormat";
-import { ANNOTATION_KINDS as ANNOT_TYPES, getAnnotationKind } from "../lib/annotationKinds";
+import { ANNOTATION_KINDS as ANNOT_TYPES, DEFAULT_ANNOTATION_COLOR, getAnnotationKind } from "../lib/annotationKinds";
 import { getWorkEditionOptionLabel } from "../lib/workPresentation";
 
 function fmt(iso) { try { return new Date(iso).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}); } catch { return ""; } }
@@ -128,6 +128,7 @@ export default function AnnotationDetailPage() {
     try { return JSON.parse(localStorage.getItem(suggestDraftKey) || "{}").reason || ""; } catch { return ""; }
   });
   const [sugMsg, setSugMsg] = useState("");
+  const [showSugTypeOptions, setShowSugTypeOptions] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(suggestDraftKey, JSON.stringify({ note:sugNote, color:sugColor, reason:sugReason }));
@@ -324,7 +325,12 @@ export default function AnnotationDetailPage() {
             </button>
           </div>
           {!showSuggest ? (
-            <button className="btn btn-secondary" onClick={()=>{setShowSuggest(true);setSugNote(ann.note);setSugColor(ann.color);}}>
+            <button className="btn btn-secondary" onClick={()=>{
+              setShowSuggest(true);
+              setSugNote(ann.note);
+              setSugColor(ann.color);
+              setShowSugTypeOptions(ann.color !== DEFAULT_ANNOTATION_COLOR);
+            }}>
               ✏️ Suggest an Edit
             </button>
           ) : (
@@ -332,21 +338,47 @@ export default function AnnotationDetailPage() {
               <div style={{ fontSize:12, textTransform:"uppercase", letterSpacing:2, color:"var(--text-light)", fontFamily:"var(--font-display)", marginBottom:10 }}>
                 Suggest an Edit
               </div>
-              <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
-                {ANNOT_TYPES.map((t) => (
-                  <button key={t.id} onClick={()=>setSugColor(t.color)} className="btn btn-sm" style={{
-                    fontSize:12, border: t.color===sugColor ? "2px solid var(--accent)" : "2px solid transparent",
-                    background: t.color===sugColor ? "var(--accent-faint)" : "var(--bg)",
-                  }}>{t.icon} {t.label}</button>
-                ))}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:10, flexWrap:"wrap" }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setShowSugTypeOptions((value) => !value)}
+                >
+                  {sugColor === null || sugColor === DEFAULT_ANNOTATION_COLOR
+                    ? "Add type (optional)"
+                    : `${getAnnotationKind(sugColor).icon} ${getAnnotationKind(sugColor).label}`}
+                </button>
+                {sugColor !== null && sugColor !== DEFAULT_ANNOTATION_COLOR && !showSugTypeOptions && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setSugColor(DEFAULT_ANNOTATION_COLOR)}
+                    style={{ color:"var(--text-light)" }}
+                  >
+                    Reset to Note
+                  </button>
+                )}
               </div>
+              {showSugTypeOptions && (
+                <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
+                  {ANNOT_TYPES.map((t) => (
+                    <button key={t.id} onClick={()=>setSugColor(t.color)} className="btn btn-sm" style={{
+                      fontSize:12, border: t.color===sugColor ? "2px solid var(--accent)" : "2px solid transparent",
+                      background: t.color===sugColor ? "var(--accent-faint)" : "var(--bg)",
+                    }}>{t.icon} {t.label}</button>
+                  ))}
+                </div>
+              )}
               <textarea className="input" value={sugNote} onChange={e=>setSugNote(e.target.value)} placeholder="Your suggested annotation text…"
                 style={{ minHeight:80, resize:"vertical", fontSize:16, fontFamily:"var(--font-fell)", marginBottom:8, lineHeight:1.7 }} />
               <textarea className="input" value={sugReason} onChange={e=>setSugReason(e.target.value)} placeholder="Reason for the change (optional)…"
                 style={{ minHeight:40, resize:"vertical", fontSize:14, marginBottom:10, lineHeight:1.5 }} />
               <div style={{ display:"flex", gap:8 }}>
                 <button className="btn btn-primary" onClick={submitSuggestion}>Submit Suggestion</button>
-                <button className="btn btn-secondary" onClick={()=>setShowSuggest(false)}>Cancel</button>
+                <button className="btn btn-secondary" onClick={()=>{
+                  setShowSuggest(false);
+                  setShowSugTypeOptions(false);
+                }}>Cancel</button>
               </div>
               {sugMsg && <div style={{ fontSize:13, color:"var(--danger)", marginTop:6 }}>{sugMsg}</div>}
             </div>

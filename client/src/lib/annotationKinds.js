@@ -38,6 +38,7 @@ export const ANNOTATION_KINDS = [
 ];
 
 export const DEFAULT_ANNOTATION_COLOR = 2;
+export const NON_DEFAULT_ANNOTATION_KINDS = ANNOTATION_KINDS.filter((kind) => kind.color !== DEFAULT_ANNOTATION_COLOR);
 
 export function getAnnotationKind(color) {
   return ANNOTATION_KINDS.find((kind) => kind.color === Number(color)) || ANNOTATION_KINDS[DEFAULT_ANNOTATION_COLOR] || ANNOTATION_KINDS[0];

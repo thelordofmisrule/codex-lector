@@ -591,8 +591,10 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
   const [note, setNote] = useState(annot.note);
   const [color, setColor] = useState(annot.color);
   const [isGlobalDraft, setIsGlobalDraft] = useState(!!annot.is_global);
+  const [showTypeOptions, setShowTypeOptions] = useState(annot.color !== DEFAULT_ANNOTATION_COLOR);
   const editRef = useRef(null);
   const type = getAnnotationKind(annot.color);
+  const draftKind = getAnnotationKind(color);
   const isLong = (annot.note || "").length > 60;
   const canModify = isAdmin || annot.user_id === userId;
   const isGlobal = !!annot.is_global;
@@ -601,20 +603,43 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
     setNote(annot.note);
     setColor(annot.color);
     setIsGlobalDraft(!!annot.is_global);
+    setShowTypeOptions(annot.color !== DEFAULT_ANNOTATION_COLOR);
   }, [annot.color, annot.is_global, annot.note]);
 
   useOutsideDismiss(editRef, cancelEdit, editing);
 
   if (editing) return (
     <div ref={editRef} style={{ padding:10, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:6, marginBottom:4 }}>
-      <div style={{ display:"flex", gap:4, marginBottom:6, flexWrap:"wrap" }}>
-        {ANNOT_TYPES.map((kind) => (
-          <button key={kind.id} onClick={()=>setColor(kind.color)} style={{
-            fontSize:11, padding:"3px 8px", borderRadius:4, border: kind.color===color ? "1px solid var(--accent)" : "1px solid transparent",
-            background: kind.color===color ? "var(--accent-faint)" : "transparent", cursor:"pointer", fontFamily:"var(--font-body)", color:"var(--text-muted)",
-          }}>{kind.icon} {kind.label}</button>
-        ))}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:6, flexWrap:"wrap" }}>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={() => setShowTypeOptions((value) => !value)}
+          style={{ fontSize:11 }}
+        >
+          {draftKind.color === DEFAULT_ANNOTATION_COLOR ? "Add type (optional)" : `${draftKind.icon} ${draftKind.label}`}
+        </button>
+        {draftKind.color !== DEFAULT_ANNOTATION_COLOR && !showTypeOptions && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setColor(DEFAULT_ANNOTATION_COLOR)}
+            style={{ fontSize:11, color:"var(--text-light)" }}
+          >
+            Reset to Note
+          </button>
+        )}
       </div>
+      {showTypeOptions && (
+        <div style={{ display:"flex", gap:4, marginBottom:6, flexWrap:"wrap" }}>
+          {ANNOT_TYPES.map((kind) => (
+            <button key={kind.id} onClick={()=>setColor(kind.color)} style={{
+              fontSize:11, padding:"3px 8px", borderRadius:4, border: kind.color===color ? "1px solid var(--accent)" : "1px solid transparent",
+              background: kind.color===color ? "var(--accent-faint)" : "transparent", cursor:"pointer", fontFamily:"var(--font-body)", color:"var(--text-muted)",
+            }}>{kind.icon} {kind.label}</button>
+          ))}
+        </div>
+      )}
       {canPublishGlobal && (
         <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:"var(--text-light)", marginBottom:6 }}>
           <input type="checkbox" checked={isGlobalDraft} onChange={e=>setIsGlobalDraft(e.target.checked)} />
@@ -722,13 +747,21 @@ function AnnotationPopover({
   const [color, setColor] = useState(() => panel?.mode === "compose" && panel?.draftKey ? (parseInt(localStorage.getItem(`${panel.draftKey}:color`) || String(DEFAULT_ANNOTATION_COLOR), 10) || DEFAULT_ANNOTATION_COLOR) : DEFAULT_ANNOTATION_COLOR);
   const [layerId, setLayerId] = useState(() => panel?.mode === "compose" && panel?.draftKey ? (localStorage.getItem(`${panel.draftKey}:layer`) || "") : "");
   const [isGlobal, setIsGlobal] = useState(() => panel?.mode === "compose" && panel?.draftKey ? (localStorage.getItem(`${panel.draftKey}:global`) === "1") : !!canPublishGlobal);
+  const [showTypeOptions, setShowTypeOptions] = useState(() => {
+    const draftColor = panel?.mode === "compose" && panel?.draftKey
+      ? (parseInt(localStorage.getItem(`${panel.draftKey}:color`) || String(DEFAULT_ANNOTATION_COLOR), 10) || DEFAULT_ANNOTATION_COLOR)
+      : DEFAULT_ANNOTATION_COLOR;
+    return draftColor !== DEFAULT_ANNOTATION_COLOR;
+  });
 
   useEffect(() => {
     if (!panel || panel.mode !== "compose") return;
     setNote(panel.draftKey ? (localStorage.getItem(`${panel.draftKey}:note`) || "") : "");
-    setColor(panel.draftKey ? (parseInt(localStorage.getItem(`${panel.draftKey}:color`) || String(DEFAULT_ANNOTATION_COLOR), 10) || DEFAULT_ANNOTATION_COLOR) : DEFAULT_ANNOTATION_COLOR);
+    const draftColor = panel.draftKey ? (parseInt(localStorage.getItem(`${panel.draftKey}:color`) || String(DEFAULT_ANNOTATION_COLOR), 10) || DEFAULT_ANNOTATION_COLOR) : DEFAULT_ANNOTATION_COLOR;
+    setColor(draftColor);
     setLayerId(panel.draftKey ? (localStorage.getItem(`${panel.draftKey}:layer`) || "") : "");
     setIsGlobal(panel.draftKey ? (localStorage.getItem(`${panel.draftKey}:global`) === "1") : !!canPublishGlobal);
+    setShowTypeOptions(draftColor !== DEFAULT_ANNOTATION_COLOR);
   }, [canPublishGlobal, panel]);
 
   const floatingStyle = useFloatingCardPosition(
@@ -798,6 +831,7 @@ function AnnotationPopover({
 
   const excerpt = String(panel.text || panel.lineText || "").trim();
   const annotations = panel.annotations || [];
+  const draftKind = getAnnotationKind(color);
 
   return (
     <>
@@ -830,16 +864,38 @@ function AnnotationPopover({
           <>
             {canSave ? (
               <>
-                <div style={{ display:"flex", gap:4, marginBottom:6, flexWrap:"wrap" }}>
-                  {ANNOT_TYPES.map((kind) => (
-                    <button key={kind.id} onClick={()=>setColorDraft(kind.color)} className="btn btn-sm" style={{
-                      fontSize:11,
-                      border: kind.color === color ? "2px solid var(--accent)" : "2px solid transparent",
-                      background: kind.color === color ? "var(--accent-faint)" : "var(--bg)",
-                      color: kind.color === color ? "var(--text)" : "var(--text-muted)",
-                    }}>{kind.icon} {kind.label}</button>
-                  ))}
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:6, flexWrap:"wrap" }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setShowTypeOptions((value) => !value)}
+                    style={{ fontSize:11 }}
+                  >
+                    {draftKind.color === DEFAULT_ANNOTATION_COLOR ? "Add type (optional)" : `${draftKind.icon} ${draftKind.label}`}
+                  </button>
+                  {draftKind.color !== DEFAULT_ANNOTATION_COLOR && !showTypeOptions && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setColorDraft(DEFAULT_ANNOTATION_COLOR)}
+                      style={{ fontSize:11, color:"var(--text-light)" }}
+                    >
+                      Reset to Note
+                    </button>
+                  )}
                 </div>
+                {showTypeOptions && (
+                  <div style={{ display:"flex", gap:4, marginBottom:6, flexWrap:"wrap" }}>
+                    {ANNOT_TYPES.map((kind) => (
+                      <button key={kind.id} onClick={()=>setColorDraft(kind.color)} className="btn btn-sm" style={{
+                        fontSize:11,
+                        border: kind.color === color ? "2px solid var(--accent)" : "2px solid transparent",
+                        background: kind.color === color ? "var(--accent-faint)" : "var(--bg)",
+                        color: kind.color === color ? "var(--text)" : "var(--text-muted)",
+                      }}>{kind.icon} {kind.label}</button>
+                    ))}
+                  </div>
+                )}
                 <textarea className="input" value={note} onChange={e=>setNoteDraft(e.target.value)} placeholder="Your note…"
                   autoFocus style={{ minHeight:70, resize:"vertical", fontSize:14, lineHeight:1.6 }} />
                 {myLayers && myLayers.length > 0 && (
