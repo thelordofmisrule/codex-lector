@@ -6,7 +6,8 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
-const { rebuildSearchIndex } = require("../server/lib/workSearchIndex");
+const crypto = require("crypto");
+const { ensureSearchSchema, rebuildSearchIndex } = require("../server/lib/workSearchIndex");
 const { GLOSSARY_SEED, GLOSSARY_OVERRIDE_SEED } = require("../server/data/glossarySeed");
 const { normalizeGlossaryTerm } = require("../server/lib/glossary");
 const { compareWorkPreference } = require("../server/lib/workCatalog");
@@ -18,7 +19,30 @@ if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 const db = new Database(path.join(dir, "codex.db"));
 db.pragma("journal_mode = WAL");
 
+function digestParts(parts) {
+  const hash = crypto.createHash("sha1");
+  parts.forEach((part) => {
+    hash.update(Buffer.isBuffer(part) ? part : String(part || ""));
+    hash.update("\n");
+  });
+  return hash.digest("hex");
+}
+
+function digestFile(filePath) {
+  try {
+    return digestParts([fs.readFileSync(filePath)]);
+  } catch {
+    return "";
+  }
+}
+
 db.exec(`
+  CREATE TABLE IF NOT EXISTS setup_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
@@ -422,6 +446,15 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_quote_image_work_links_work
     ON quote_image_work_links(work_slug, image_id);
+`);
+
+const getSetupState = db.prepare("SELECT value FROM setup_state WHERE key=?");
+const setSetupState = db.prepare(`
+  INSERT INTO setup_state (key, value, updated_at)
+  VALUES (?, ?, CURRENT_TIMESTAMP)
+  ON CONFLICT(key) DO UPDATE SET
+    value=excluded.value,
+    updated_at=CURRENT_TIMESTAMP
 `);
 
 // Migrations for existing databases
@@ -1018,93 +1051,113 @@ for (const row of listAllQuoteImageTags.all()) {
   }
 }
 
-let quoteCollectionCount = 0;
-let quoteImageCount = 0;
-for (const collection of quoteImageCollections) {
-  const workRecord = workRecordByKey.get(collection.workKey) || null;
-  const linkedWorkSlugs = workRecord?.slug ? [workRecord.slug] : [];
-  const collectionTags = normalizeGalleryTags([
-    workRecord?.category || "",
-    ...(Array.isArray(collection.tags) ? collection.tags : []),
-  ]);
-  upsertQuoteCollection.run(
-    collection.workKey,
-    collection.workTitle,
-    workRecord?.slug || "",
-    collection.categoryUrl,
-    collection.notes,
-    JSON.stringify(collectionTags),
-  );
-  const stored = findQuoteCollection.get(collection.workKey);
-  if (!stored) continue;
-  quoteCollectionCount += 1;
-  const seenExternalRefs = new Set();
-  collection.images.forEach((image) => {
-    const rawLabelSource = image.title
-      ? String(image.title)
-      : String(image.pageUrl || image.imageUrl || "");
-    const normalizedLabel = (rawLabelSource.split("/").pop() || `image-${(image.sortOrder || 0) + 1}`)
-      .replace(/\.[a-z0-9]+$/i, "")
-      .replace(/^File:/i, "")
-      .replace(/^Special:FilePath\//i, "")
-      .replace(/[_-]+/g, " ")
-      .trim();
-    const imageTags = normalizeGalleryTags([
-      ...collectionTags,
-      ...(Array.isArray(image.tags) ? image.tags : []),
+const quoteArtSeedSignature = digestFile(path.join(__dirname, "..", "server", "data", "shakespeare_commons_images.json"));
+const quoteArtWorkSignature = digestParts(
+  workRecords
+    .map((row) => `${row.slug}|${row.title}|${row.category}`)
+    .sort(),
+);
+const quoteArtSignature = digestParts(["quote-art-v2", quoteArtSeedSignature, quoteArtWorkSignature]);
+const quoteArtStateKey = "quote_art_seed_signature";
+const storedQuoteArtSignature = getSetupState.get(quoteArtStateKey)?.value || "";
+const existingQuoteCollections = Number(db.prepare("SELECT COUNT(*) AS count FROM quote_image_collections").get().count || 0);
+const existingSeededQuoteImages = Number(db.prepare("SELECT COUNT(*) AS count FROM quote_images WHERE managed_source='seed'").get().count || 0);
+const shouldSyncQuoteArt = (
+  storedQuoteArtSignature !== quoteArtSignature
+  || existingQuoteCollections === 0
+  || (quoteImageCollections.length > 0 && existingSeededQuoteImages === 0)
+);
+
+if (shouldSyncQuoteArt) {
+  let quoteCollectionCount = 0;
+  let quoteImageCount = 0;
+  for (const collection of quoteImageCollections) {
+    const workRecord = workRecordByKey.get(collection.workKey) || null;
+    const linkedWorkSlugs = workRecord?.slug ? [workRecord.slug] : [];
+    const collectionTags = normalizeGalleryTags([
+      workRecord?.category || "",
+      ...(Array.isArray(collection.tags) ? collection.tags : []),
     ]);
-    const externalRef = String(image.pageUrl || image.imageUrl || "").trim() || null;
-    if (externalRef) seenExternalRefs.add(externalRef);
-    const existing = externalRef ? findSeededQuoteImage.get(stored.id, externalRef) : null;
+    upsertQuoteCollection.run(
+      collection.workKey,
+      collection.workTitle,
+      workRecord?.slug || "",
+      collection.categoryUrl,
+      collection.notes,
+      JSON.stringify(collectionTags),
+    );
+    const stored = findQuoteCollection.get(collection.workKey);
+    if (!stored) continue;
+    quoteCollectionCount += 1;
+    const seenExternalRefs = new Set();
+    collection.images.forEach((image) => {
+      const rawLabelSource = image.title
+        ? String(image.title)
+        : String(image.pageUrl || image.imageUrl || "");
+      const normalizedLabel = (rawLabelSource.split("/").pop() || `image-${(image.sortOrder || 0) + 1}`)
+        .replace(/\.[a-z0-9]+$/i, "")
+        .replace(/^File:/i, "")
+        .replace(/^Special:FilePath\//i, "")
+        .replace(/[_-]+/g, " ")
+        .trim();
+      const imageTags = normalizeGalleryTags([
+        ...collectionTags,
+        ...(Array.isArray(image.tags) ? image.tags : []),
+      ]);
+      const externalRef = String(image.pageUrl || image.imageUrl || "").trim() || null;
+      if (externalRef) seenExternalRefs.add(externalRef);
+      const existing = externalRef ? findSeededQuoteImage.get(stored.id, externalRef) : null;
 
-    let imageId = existing?.id || 0;
-    if (!existing) {
-      const inserted = insertSeededQuoteImage.run(
-        stored.id,
-        normalizedLabel,
-        image.artist || "",
-        image.year || "",
-        image.sourceLabel || "Wikimedia Commons",
-        image.pageUrl,
-        image.imageUrl,
-        image.localMediaPath || "",
-        image.localMediaUrl || "",
-        externalRef,
-        image.sortOrder,
-        JSON.stringify(imageTags),
-      );
-      imageId = inserted.lastInsertRowid;
-    } else if (!existing.manual_override) {
-      updateSeededQuoteImage.run(
-        normalizedLabel,
-        image.artist || "",
-        image.year || "",
-        image.sourceLabel || "Wikimedia Commons",
-        image.pageUrl,
-        image.imageUrl,
-        image.sortOrder,
-        JSON.stringify(imageTags),
-        existing.id,
-      );
-    }
+      let imageId = existing?.id || 0;
+      if (!existing) {
+        const inserted = insertSeededQuoteImage.run(
+          stored.id,
+          normalizedLabel,
+          image.artist || "",
+          image.year || "",
+          image.sourceLabel || "Wikimedia Commons",
+          image.pageUrl,
+          image.imageUrl,
+          image.localMediaPath || "",
+          image.localMediaUrl || "",
+          externalRef,
+          image.sortOrder,
+          JSON.stringify(imageTags),
+        );
+        imageId = inserted.lastInsertRowid;
+      } else if (!existing.manual_override) {
+        updateSeededQuoteImage.run(
+          normalizedLabel,
+          image.artist || "",
+          image.year || "",
+          image.sourceLabel || "Wikimedia Commons",
+          image.pageUrl,
+          image.imageUrl,
+          image.sortOrder,
+          JSON.stringify(imageTags),
+          existing.id,
+        );
+      }
 
-    if (imageId && !existing?.manual_override) {
-      clearQuoteImageWorkLinks.run(imageId);
-      linkedWorkSlugs.forEach((workSlug) => insertQuoteImageWorkLink.run(imageId, workSlug));
-    }
-    quoteImageCount += 1;
-  });
+      if (imageId && !existing?.manual_override) {
+        clearQuoteImageWorkLinks.run(imageId);
+        linkedWorkSlugs.forEach((workSlug) => insertQuoteImageWorkLink.run(imageId, workSlug));
+      }
+      quoteImageCount += 1;
+    });
 
-  const staleSeededImages = listSeededQuoteImagesForCollection.all(stored.id);
-  staleSeededImages.forEach((image) => {
-    if (image.manual_override) return;
-    if (image.external_ref && !seenExternalRefs.has(image.external_ref)) {
-      deleteQuoteImageById.run(image.id);
-    }
-  });
-}
-if (quoteCollectionCount > 0) {
-  console.log(`Seeded quote art collections: ${quoteCollectionCount} works, ${quoteImageCount} images.`);
+    const staleSeededImages = listSeededQuoteImagesForCollection.all(stored.id);
+    staleSeededImages.forEach((image) => {
+      if (image.manual_override) return;
+      if (image.external_ref && !seenExternalRefs.has(image.external_ref)) {
+        deleteQuoteImageById.run(image.id);
+      }
+    });
+  }
+  setSetupState.run(quoteArtStateKey, quoteArtSignature);
+  if (quoteCollectionCount > 0) {
+    console.log(`Seeded quote art collections: ${quoteCollectionCount} works, ${quoteImageCount} images.`);
+  }
 }
 
 const bcrypt = require("bcryptjs");
@@ -1146,8 +1199,35 @@ if (bootstrapAdminPassword && !admin) {
   console.log("No bootstrap admin created. Sign in via OAuth, then run node scripts/set-admin.js <username> if needed.");
 }
 
-const searchSummary = rebuildSearchIndex(db, { logger: console });
-console.log(`Search index ready: ${searchSummary.lines} searchable lines across ${searchSummary.works} works.${searchSummary.ftsEnabled ? " FTS enabled." : " FTS unavailable; using fallback search."}`);
+ensureSearchSchema(db);
+const searchCodeSignature = digestParts([
+  digestFile(path.join(__dirname, "..", "server", "lib", "workSearch.js")),
+  digestFile(path.join(__dirname, "..", "server", "lib", "workSearchIndex.js")),
+]);
+const searchInputState = db.prepare(`
+  SELECT COUNT(*) AS works, COALESCE(MAX(fetched_at), '') AS max_fetched_at
+  FROM works
+  WHERE content IS NOT NULL
+`).get();
+const indexedLineCount = Number(db.prepare("SELECT COUNT(*) AS count FROM work_search_lines").get().count || 0);
+const searchStateSignature = digestParts([
+  "search-index-v2",
+  String(searchInputState.works || 0),
+  String(searchInputState.max_fetched_at || ""),
+  searchCodeSignature,
+]);
+const searchStateKey = "search_index_signature";
+const storedSearchSignature = getSetupState.get(searchStateKey)?.value || "";
+const shouldRebuildSearch = (
+  storedSearchSignature !== searchStateSignature
+  || (Number(searchInputState.works || 0) > 0 && indexedLineCount === 0)
+);
+
+if (shouldRebuildSearch) {
+  const searchSummary = rebuildSearchIndex(db, { logger: console });
+  setSetupState.run(searchStateKey, searchStateSignature);
+  console.log(`Search index ready: ${searchSummary.lines} searchable lines across ${searchSummary.works} works.${searchSummary.ftsEnabled ? " FTS enabled." : " FTS unavailable; using fallback search."}`);
+}
 
 console.log("Database setup complete.");
 db.close();
