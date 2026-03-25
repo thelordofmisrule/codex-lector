@@ -9,10 +9,10 @@ import { preservedAnnotationTextStyle, quotedExcerpt, smartenAnnotationText } fr
 import { findPlaceAwarenessMatch, warmPlaceAwarenessIndex } from "../lib/placeAwareness";
 import { analyzeProsodyLine, parseProsodyScan } from "../lib/prosody";
 import { YEAR_OF_SHAKESPEARE_ROWS, buildReadingWaypoints, getCalendarRowsForWork } from "../lib/yearOfShakespeare";
-import { useFloatingCardPosition } from "../lib/floatingCard";
-import { ANNOTATION_KINDS as ANNOT_TYPES, DEFAULT_ANNOTATION_COLOR, getAnnotationKind } from "../lib/annotationKinds";
+import { ANNOTATION_KINDS as ANNOT_TYPES, DEFAULT_ANNOTATION_COLOR, getAnnotationColor, getAnnotationKind, getAnnotationKindId } from "../lib/annotationKinds";
 import PlaceAwareness from "../components/PlaceAwareness";
 import QuoteCaptureModal from "../components/QuoteCaptureModal";
+import ReaderOverlayShell from "../components/ReaderOverlayShell";
 import ThreadedComments from "../components/ThreadedComments";
 import WordLookup from "../components/WordLookup";
 
@@ -589,11 +589,11 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
   const [editing, setEditing] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [note, setNote] = useState(annot.note);
-  const [color, setColor] = useState(annot.color);
+  const [color, setColor] = useState(getAnnotationColor(annot.kind, annot.color));
   const [isGlobalDraft, setIsGlobalDraft] = useState(!!annot.is_global);
-  const [showTypeOptions, setShowTypeOptions] = useState(annot.color !== DEFAULT_ANNOTATION_COLOR);
+  const [showTypeOptions, setShowTypeOptions] = useState(getAnnotationColor(annot.kind, annot.color) !== DEFAULT_ANNOTATION_COLOR);
   const editRef = useRef(null);
-  const type = getAnnotationKind(annot.color);
+  const type = getAnnotationKind(annot.kind, annot.color);
   const draftKind = getAnnotationKind(color);
   const isLong = (annot.note || "").length > 60;
   const canModify = isAdmin || annot.user_id === userId;
@@ -601,10 +601,10 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
   const cancelEdit = useCallback(() => {
     setEditing(false);
     setNote(annot.note);
-    setColor(annot.color);
+    setColor(getAnnotationColor(annot.kind, annot.color));
     setIsGlobalDraft(!!annot.is_global);
-    setShowTypeOptions(annot.color !== DEFAULT_ANNOTATION_COLOR);
-  }, [annot.color, annot.is_global, annot.note]);
+    setShowTypeOptions(getAnnotationColor(annot.kind, annot.color) !== DEFAULT_ANNOTATION_COLOR);
+  }, [annot.color, annot.is_global, annot.kind, annot.note]);
 
   useOutsideDismiss(editRef, cancelEdit, editing);
 
@@ -699,7 +699,7 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
 
 function LineAnnotationMarker({ annotations, onClick }) {
   if (!annotations?.length) return null;
-  const uniqueKinds = [...new Set(annotations.map((annot) => getAnnotationKind(annot.color).icon))].slice(0, 2);
+  const uniqueKinds = [...new Set(annotations.map((annot) => getAnnotationKind(annot.kind, annot.color).icon))].slice(0, 2);
   return (
     <button
       type="button"
@@ -742,7 +742,6 @@ function AnnotationPopover({
   deleteAnnot,
   mobileSheet = false,
 }) {
-  const popoverRef = useRef(null);
   const [note, setNote] = useState(() => panel?.mode === "compose" && panel?.draftKey ? (localStorage.getItem(`${panel.draftKey}:note`) || "") : "");
   const [color, setColor] = useState(() => panel?.mode === "compose" && panel?.draftKey ? (parseInt(localStorage.getItem(`${panel.draftKey}:color`) || String(DEFAULT_ANNOTATION_COLOR), 10) || DEFAULT_ANNOTATION_COLOR) : DEFAULT_ANNOTATION_COLOR);
   const [layerId, setLayerId] = useState(() => panel?.mode === "compose" && panel?.draftKey ? (localStorage.getItem(`${panel.draftKey}:layer`) || "") : "");
@@ -763,14 +762,6 @@ function AnnotationPopover({
     setIsGlobal(panel.draftKey ? (localStorage.getItem(`${panel.draftKey}:global`) === "1") : !!canPublishGlobal);
     setShowTypeOptions(draftColor !== DEFAULT_ANNOTATION_COLOR);
   }, [canPublishGlobal, panel]);
-
-  const floatingStyle = useFloatingCardPosition(
-    popoverRef,
-    panel ? { x: panel.x, y: panel.y } : { x: 0, y: 0 },
-    360,
-    [panel?.mode, note, color, layerId, isGlobal, myLayers?.length || 0, panel?.annotations?.length || 0],
-    8,
-  );
 
   if (!panel) return null;
 
@@ -799,49 +790,19 @@ function AnnotationPopover({
     }
   };
 
-  const panelStyle = mobileSheet
-    ? {
-        position: "fixed",
-        left: 12,
-        right: 12,
-        bottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
-        zIndex: 200,
-        maxHeight: "min(74vh, 620px)",
-        overflowY: "auto",
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: 18,
-        boxShadow: "0 -10px 36px var(--shadow)",
-        padding: "12px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
-      }
-    : {
-        position: "fixed",
-        top: floatingStyle.top,
-        left: floatingStyle.left,
-        zIndex: 200,
-        width: "min(360px, calc(100vw - 24px))",
-        maxHeight: floatingStyle.maxHeight,
-        overflowY: "auto",
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        boxShadow: "0 12px 40px var(--shadow)",
-        padding: 16,
-      };
-
   const excerpt = String(panel.text || panel.lineText || "").trim();
   const annotations = panel.annotations || [];
   const draftKind = getAnnotationKind(color);
 
   return (
-    <>
-      <div aria-hidden="true" onClick={onClose} style={{ position:"fixed", inset:0, zIndex:199 }} />
-      <div ref={popoverRef} className="reader-annot-tooltip" style={panelStyle}>
-        {mobileSheet && (
-          <div style={{ display:"flex", justifyContent:"center", marginBottom:10 }}>
-            <div style={{ width:42, height:4, borderRadius:999, background:"var(--border)" }} />
-          </div>
-        )}
+    <ReaderOverlayShell
+      position={{ x: panel.x, y: panel.y }}
+      onClose={onClose}
+      mobileSheet={mobileSheet}
+      desktopWidth={360}
+      deps={[panel?.mode, note, color, layerId, isGlobal, myLayers?.length || 0, panel?.annotations?.length || 0]}
+      className="reader-annot-tooltip"
+    >
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8, marginBottom:10 }}>
           <div>
             <div style={{ fontSize:11, color:"var(--gold)", fontFamily:"var(--font-display)", letterSpacing:1.6, textTransform:"uppercase", marginBottom:2 }}>
@@ -949,8 +910,7 @@ function AnnotationPopover({
             </div>
           </>
         )}
-      </div>
-    </>
+    </ReaderOverlayShell>
   );
 }
 
@@ -973,26 +933,16 @@ function ProsodyLineText({ text, mode, override }) {
 }
 
 function ProsodyNoteTooltip({ note, onClose, onEdit }) {
-  const tooltipRef = useRef(null);
-  useOutsideDismiss(tooltipRef, onClose, !!note);
   if (!note) return null;
   const override = note.override || {};
   return (
-    <div
-      ref={tooltipRef}
+    <ReaderOverlayShell
+      position={note.position}
+      onClose={onClose}
+      desktopWidth={300}
       className="reader-prosody-note-tooltip"
-      style={{
-        position: "fixed",
-        top: note.position.y + 8,
-        left: Math.max(12, Math.min(note.position.x - 150, window.innerWidth - 320)),
-        width: "min(300px, calc(100vw - 24px))",
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        boxShadow: "0 10px 28px var(--shadow)",
-        padding: 14,
-        zIndex: 220,
-      }}
+      style={{ padding: 14 }}
+      deps={[note.lineKey, override.noteTitle, override.noteBody]}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start", marginBottom: 8 }}>
         <div>
@@ -1019,12 +969,11 @@ function ProsodyNoteTooltip({ note, onClose, onEdit }) {
           <button className="btn btn-secondary btn-sm" onClick={onEdit}>Edit Prosody</button>
         </div>
       )}
-    </div>
+    </ReaderOverlayShell>
   );
 }
 
 function ProsodyEditor({ draft, onClose, onSave, onDelete }) {
-  const editorRef = useRef(null);
   const display = getProsodyDisplay(draft.lineText, draft.override);
   const [scanText, setScanText] = useState(display.scanText);
   const [stressPattern, setStressPattern] = useState(display.stressPattern);
@@ -1033,7 +982,6 @@ function ProsodyEditor({ draft, onClose, onSave, onDelete }) {
   const [error, setError] = useState("");
   const segments = parseProsodyScan(scanText, stressPattern);
   const normalizedPattern = normalizeStressPattern(stressPattern, segments.length);
-  useOutsideDismiss(editorRef, onClose, !!draft);
 
   const toggleStress = (index) => {
     const next = normalizeStressPattern(stressPattern, segments.length).split("");
@@ -1065,21 +1013,12 @@ function ProsodyEditor({ draft, onClose, onSave, onDelete }) {
   };
 
   return (
-    <div
-      ref={editorRef}
+    <ReaderOverlayShell
+      position={draft.position}
+      onClose={onClose}
+      desktopWidth={380}
       className="reader-prosody-editor"
-      style={{
-        position: "fixed",
-        top: Math.max(24, Math.min(draft.position.y + 12, window.innerHeight - 520)),
-        left: Math.max(12, Math.min(draft.position.x - 190, window.innerWidth - 400)),
-        width: "min(380px, calc(100vw - 24px))",
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: 12,
-        boxShadow: "0 16px 36px var(--shadow)",
-        padding: 16,
-        zIndex: 230,
-      }}
+      deps={[draft.lineKey, scanText, stressPattern, noteTitle, noteBody, error]}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start", marginBottom: 10 }}>
         <div>
@@ -1174,7 +1113,7 @@ function ProsodyEditor({ draft, onClose, onSave, onDelete }) {
           {segments.length} syllable{segments.length === 1 ? "" : "s"}
         </div>
       </div>
-    </div>
+    </ReaderOverlayShell>
   );
 }
 
@@ -1703,7 +1642,16 @@ export default function ReaderPage() {
   const saveAnnot = async (note, color, layerId, isGlobal) => {
     try {
       if (!annotationPanel) return;
-      const a = await annotsApi.create({ workId:work.id, lineId:annotationPanel.lineId, note, color, selectedText:annotationPanel.text, isGlobal });
+      const kind = getAnnotationKindId(color);
+      const a = await annotsApi.create({
+        workId:work.id,
+        lineId:annotationPanel.lineId,
+        note,
+        kind,
+        color,
+        selectedText:annotationPanel.text,
+        isGlobal,
+      });
       let nextAnnot = a;
       if (layerId) {
         await layersApi.addAnnotation(layerId, a.id).catch(()=>{});
@@ -1739,7 +1687,8 @@ export default function ReaderPage() {
   };
   const editAnnot = async (id, note, color, isGlobal) => {
     try {
-      const u = await annotsApi.update(id,{note,color,isGlobal});
+      const kind = getAnnotationKindId(color);
+      const u = await annotsApi.update(id,{note,kind,color,isGlobal});
       setAnnots(prev => prev.map(a => a.id===id ? { ...a, ...u } : a));
       toast?.success("Annotation updated.");
     } catch (e) {
@@ -1891,7 +1840,8 @@ export default function ReaderPage() {
   let personalCount = 0;
 
   annots.forEach((annot) => {
-    typeCounts[annot.color] = (typeCounts[annot.color] || 0) + 1;
+    const kindColor = getAnnotationColor(annot.kind, annot.color);
+    typeCounts[kindColor] = (typeCounts[kindColor] || 0) + 1;
 
     if (annot.is_global) {
       globalCount += 1;
@@ -1927,7 +1877,7 @@ export default function ReaderPage() {
   });
 
   const filteredAnnots = annots.filter((annot) => {
-    if (!isNoteTypeVisible(readerVisibility, annot.color)) return false;
+    if (!isNoteTypeVisible(readerVisibility, getAnnotationColor(annot.kind, annot.color))) return false;
     if (annot.is_global) return readerVisibility.showGlobal;
     if (annot.layer_id) return isLayerVisible(readerVisibility, annot.layer_id);
     if (userId && annot.user_id === userId) return readerVisibility.showPersonal;
@@ -1940,7 +1890,7 @@ export default function ReaderPage() {
   });
 
   const showAnnots = filteredAnnots.length > 0;
-  const readingCalendarRows = getCalendarRowsForWork(parsed.title || work.title, YEAR_OF_SHAKESPEARE_ROWS);
+  const readingCalendarRows = getCalendarRowsForWork(work, YEAR_OF_SHAKESPEARE_ROWS);
   const readingWaypoints = buildReadingWaypoints(countRenderableLines(parsed), readingCalendarRows);
   const waypointsByIndex = Object.fromEntries(readingWaypoints.map((waypoint) => [waypoint.lineIndex, waypoint]));
   const printDownloads = getWorkPrintDownloads(parsed.title || work.title, slug);

@@ -66,7 +66,7 @@ export default function LayerDetailPage() {
               <span style={{ fontSize:12, color:"var(--text-light)", marginLeft:8, fontWeight:400 }}>({group.annots.length})</span>
             </h2>
             {group.annots.map(a => {
-              const type = getAnnotationKind(a.color);
+              const type = getAnnotationKind(a.kind, a.color);
               return (
                 <div key={a.id} style={{
                   padding:"10px 14px", marginBottom:6, borderRadius:6,

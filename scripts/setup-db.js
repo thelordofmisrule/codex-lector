@@ -59,6 +59,7 @@ db.exec(`
     annotation_id INTEGER NOT NULL REFERENCES annotations(id) ON DELETE CASCADE,
     user_id INTEGER NOT NULL REFERENCES users(id),
     suggested_note TEXT NOT NULL,
+    suggested_kind TEXT DEFAULT 'note',
     suggested_color INTEGER,
     reason TEXT DEFAULT '',
     status TEXT DEFAULT 'pending',
@@ -139,7 +140,8 @@ db.exec(`
     user_id INTEGER NOT NULL REFERENCES users(id),
     line_id TEXT NOT NULL,
     note TEXT NOT NULL,
-    color INTEGER DEFAULT 0,
+    kind TEXT DEFAULT 'note',
+    color INTEGER DEFAULT 2,
     selected_text TEXT NOT NULL DEFAULT '',
     is_global BOOLEAN DEFAULT 0,
     layer_id INTEGER REFERENCES annotation_layers(id),
@@ -432,6 +434,31 @@ try { db.exec("ALTER TABLE users ADD COLUMN can_publish_global BOOLEAN DEFAULT 0
 try { db.exec("ALTER TABLE users ADD COLUMN needs_onboarding BOOLEAN DEFAULT 0"); } catch {}
 try { db.exec("UPDATE users SET email=NULL WHERE email IS NOT NULL"); } catch {}
 try { db.exec("ALTER TABLE annotations ADD COLUMN is_global BOOLEAN DEFAULT 0"); } catch {}
+try { db.exec("ALTER TABLE annotations ADD COLUMN kind TEXT DEFAULT 'note'"); } catch {}
+try { db.exec("ALTER TABLE annotation_suggestions ADD COLUMN suggested_kind TEXT DEFAULT 'note'"); } catch {}
+try { db.exec(`
+  UPDATE annotations
+  SET kind = CASE COALESCE(color, 2)
+    WHEN 0 THEN 'language'
+    WHEN 1 THEN 'rhetoric'
+    WHEN 2 THEN 'note'
+    WHEN 3 THEN 'context'
+    ELSE 'note'
+  END
+  WHERE kind IS NULL OR TRIM(kind) = ''
+`); } catch {}
+try { db.exec(`
+  UPDATE annotation_suggestions
+  SET suggested_kind = CASE
+    WHEN suggested_color IS NULL THEN 'note'
+    WHEN suggested_color = 0 THEN 'language'
+    WHEN suggested_color = 1 THEN 'rhetoric'
+    WHEN suggested_color = 2 THEN 'note'
+    WHEN suggested_color = 3 THEN 'context'
+    ELSE 'note'
+  END
+  WHERE suggested_kind IS NULL OR TRIM(suggested_kind) = ''
+`); } catch {}
 // Mark all existing annotations as global (they were admin-only before)
 try { db.exec("UPDATE annotations SET is_global=1 WHERE is_global=0"); } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS bookmarks (

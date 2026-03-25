@@ -8,7 +8,7 @@ import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import { parsePlayShakespeareXML } from "../lib/textParser";
 import { preservedAnnotationTextStyle, quotedExcerpt, quotedText, smartenAnnotationText } from "../lib/annotationFormat";
-import { ANNOTATION_KINDS as ANNOT_TYPES, DEFAULT_ANNOTATION_COLOR, getAnnotationKind } from "../lib/annotationKinds";
+import { ANNOTATION_KINDS as ANNOT_TYPES, DEFAULT_ANNOTATION_COLOR, getAnnotationColor, getAnnotationKind, getAnnotationKindId } from "../lib/annotationKinds";
 import { getWorkEditionOptionLabel } from "../lib/workPresentation";
 
 function fmt(iso) { try { return new Date(iso).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}); } catch { return ""; } }
@@ -149,7 +149,7 @@ export default function AnnotationDetailPage() {
   if (!data) return <div style={{padding:60,textAlign:"center",color:"var(--danger)"}}>Annotation not found.</div>;
 
   const { annotation: ann, comments, suggestions } = data;
-  const type = getAnnotationKind(ann.color);
+  const type = getAnnotationKind(ann.kind, ann.color);
   const copyPageLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -202,7 +202,8 @@ export default function AnnotationDetailPage() {
         workId: targetWork.id,
         lineId: chosen.lineId,
         note: ann.note,
-        color: ann.color,
+        kind: getAnnotationKindId(ann.kind, ann.color),
+        color: getAnnotationColor(ann.kind, ann.color),
         selectedText: (parallelHighlight || chosen.text || "").trim(),
         isGlobal: !!ann.is_global,
       });
@@ -235,7 +236,12 @@ export default function AnnotationDetailPage() {
     setSugMsg("");
     if (!sugNote.trim()) return setSugMsg("Suggested text required.");
     try {
-      const s = await api.suggest(id, { suggestedNote:sugNote.trim(), suggestedColor:sugColor, reason:sugReason.trim() });
+      const s = await api.suggest(id, {
+        suggestedNote:sugNote.trim(),
+        suggestedKind:getAnnotationKindId(sugColor),
+        suggestedColor:sugColor,
+        reason:sugReason.trim(),
+      });
       setData(prev => ({ ...prev, suggestions: [s, ...prev.suggestions] }));
       localStorage.removeItem(suggestDraftKey);
       setShowSuggest(false); setSugNote(""); setSugColor(null); setSugReason("");
@@ -328,8 +334,8 @@ export default function AnnotationDetailPage() {
             <button className="btn btn-secondary" onClick={()=>{
               setShowSuggest(true);
               setSugNote(ann.note);
-              setSugColor(ann.color);
-              setShowSugTypeOptions(ann.color !== DEFAULT_ANNOTATION_COLOR);
+              setSugColor(getAnnotationColor(ann.kind, ann.color));
+              setShowSugTypeOptions(getAnnotationColor(ann.kind, ann.color) !== DEFAULT_ANNOTATION_COLOR);
             }}>
               ✏️ Suggest an Edit
             </button>

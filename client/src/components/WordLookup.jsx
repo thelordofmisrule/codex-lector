@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { words as wordsApi, glossary as glossaryApi } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
 import { useAuth } from "../lib/AuthContext";
 import { useConfirm } from "../lib/ConfirmContext";
-import { useFloatingCardPosition } from "../lib/floatingCard";
+import ReaderOverlayShell from "./ReaderOverlayShell";
 
 const GLOSS_SCOPE_LABELS = {
   global: "Headword",
@@ -88,8 +88,6 @@ export default function WordLookup({
     line: { overrideId: null, lookupTerm: sanitizeTerm(word), definition: "", sourceLabel: "" },
   }));
   const [saving, setSaving] = useState(false);
-  const cardRef = useRef(null);
-
   useEffect(() => {
     if (!word) return undefined;
     let cancelled = false;
@@ -122,45 +120,6 @@ export default function WordLookup({
   if (!word) return null;
 
   const displayWord = label || word;
-  const floatingStyle = useFloatingCardPosition(
-    cardRef,
-    { x: position.x, y: position.y },
-    360,
-    [loading, !!data?.gloss, data?.examples?.length || 0, data?.frequency?.length || 0, editorOpen, activeScope, saving],
-    12
-  );
-  const panelStyle = mobileSheet
-    ? {
-        position: "fixed",
-        left: 12,
-        right: 12,
-        bottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
-        zIndex: 200,
-        maxHeight: "min(72vh, 560px)",
-        overflowY: "auto",
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: 18,
-        boxShadow: "0 -10px 36px var(--shadow)",
-        padding: "12px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
-        fontSize: 14,
-      }
-    : {
-        position: "fixed",
-        top: floatingStyle.top,
-        left: floatingStyle.left,
-        zIndex: 200,
-        width: "min(360px, calc(100vw - 24px))",
-        maxHeight: floatingStyle.maxHeight,
-        overflowY: "auto",
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        boxShadow: "0 12px 40px var(--shadow)",
-        padding: 16,
-        fontSize: 14,
-      };
-
   const hasGloss = !!data?.gloss?.definition;
   const hasCorpusResults = (data?.totalCount || 0) > 0;
   const currentDraft = drafts[activeScope] || drafts.global;
@@ -258,14 +217,15 @@ export default function WordLookup({
   };
 
   return (
-    <>
-      <div aria-hidden="true" onClick={onClose} style={{ position:"fixed", inset:0, zIndex:199 }} />
-      <div ref={cardRef} style={panelStyle}>
-        {mobileSheet && (
-          <div style={{ display:"flex", justifyContent:"center", marginBottom:10 }}>
-            <div style={{ width:42, height:4, borderRadius:999, background:"var(--border)" }} />
-          </div>
-        )}
+    <ReaderOverlayShell
+      position={position}
+      onClose={onClose}
+      mobileSheet={mobileSheet}
+      desktopWidth={360}
+      maxMobileHeight="min(72vh, 560px)"
+      deps={[loading, !!data?.gloss, data?.examples?.length || 0, data?.frequency?.length || 0, editorOpen, activeScope, saving]}
+      style={{ fontSize: 14 }}
+    >
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <span style={{ fontFamily:"var(--font-display)", fontSize:20, color:"var(--accent)", letterSpacing:1 }}>{displayWord}</span>
           <button aria-label="Close word lookup" onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:18, color:"var(--text-light)", padding:"0 4px" }}>✕</button>
@@ -496,7 +456,6 @@ export default function WordLookup({
             )}
           </div>
         )}
-      </div>
-    </>
+    </ReaderOverlayShell>
   );
 }

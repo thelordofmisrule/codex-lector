@@ -38,8 +38,27 @@ export const ANNOTATION_KINDS = [
 ];
 
 export const DEFAULT_ANNOTATION_COLOR = 2;
-export const NON_DEFAULT_ANNOTATION_KINDS = ANNOTATION_KINDS.filter((kind) => kind.color !== DEFAULT_ANNOTATION_COLOR);
+export const DEFAULT_ANNOTATION_KIND = ANNOTATION_KINDS[DEFAULT_ANNOTATION_COLOR]?.id || "note";
 
-export function getAnnotationKind(color) {
-  return ANNOTATION_KINDS.find((kind) => kind.color === Number(color)) || ANNOTATION_KINDS[DEFAULT_ANNOTATION_COLOR] || ANNOTATION_KINDS[0];
+export function getAnnotationKind(value, legacyColor = null) {
+  const kindId = typeof value === "string" && Number.isNaN(Number(value)) ? value.trim().toLowerCase() : "";
+  if (kindId) {
+    return ANNOTATION_KINDS.find((kind) => kind.id === kindId)
+      || ANNOTATION_KINDS.find((kind) => kind.color === Number(legacyColor))
+      || ANNOTATION_KINDS[DEFAULT_ANNOTATION_COLOR]
+      || ANNOTATION_KINDS[0];
+  }
+
+  return ANNOTATION_KINDS.find((kind) => kind.color === Number(value))
+    || ANNOTATION_KINDS.find((kind) => kind.color === Number(legacyColor))
+    || ANNOTATION_KINDS[DEFAULT_ANNOTATION_COLOR]
+    || ANNOTATION_KINDS[0];
+}
+
+export function getAnnotationKindId(value, legacyColor = null) {
+  return getAnnotationKind(value, legacyColor).id;
+}
+
+export function getAnnotationColor(value, legacyColor = null) {
+  return getAnnotationKind(value, legacyColor).color;
 }

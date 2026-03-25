@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { works as worksApi, progress as progressApi } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import {
+  buildCalendarWorkLookup,
   YEAR_OF_SHAKESPEARE_ROWS,
   longDateLabel,
   monthLabel,
-  normalizeTitleKey,
   resolveWorkLinks,
   toMonthKey,
 } from "../lib/yearOfShakespeare";
@@ -28,23 +28,7 @@ export default function YearOfShakespearePage() {
     worksApi.list()
       .then((allWorks) => {
         if (cancelled) return;
-        const map = Object.create(null);
-        (allWorks || []).forEach((w) => {
-          if (!w?.title || !w?.slug) return;
-          const key = normalizeTitleKey(w.title);
-          if (!key) return;
-          if (!map[key]) map[key] = { modernSlug: "", firstFolioSlug: "", anySlug: "" };
-          const entry = map[key];
-          if (!entry.anySlug) entry.anySlug = w.slug;
-          if (w.variant === "first-folio") {
-            if (!entry.firstFolioSlug) entry.firstFolioSlug = w.slug;
-          } else if (w.variant === "ps") {
-            entry.modernSlug = w.slug;
-          } else if (!entry.modernSlug) {
-            entry.modernSlug = w.slug;
-          }
-        });
-        setWorkLookup(map);
+        setWorkLookup(buildCalendarWorkLookup(allWorks || []));
       })
       .catch(() => {});
     return () => { cancelled = true; };

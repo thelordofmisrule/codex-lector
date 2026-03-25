@@ -132,6 +132,49 @@ export function candidateTitleKeys(value) {
   return [...keys];
 }
 
+export function buildCalendarWorkLookup(works = []) {
+  const lookup = Object.create(null);
+
+  const ensureEntry = (key) => {
+    if (!key) return null;
+    if (!lookup[key]) {
+      lookup[key] = {
+        familySlug: "",
+        familyTitle: "",
+        modernSlug: "",
+        firstFolioSlug: "",
+        anySlug: "",
+      };
+    }
+    return lookup[key];
+  };
+
+  (works || []).forEach((work) => {
+    if (!work?.slug) return;
+    const familyTitle = work.familyTitle || work.title || "";
+    const familySlug = work.familySlug || work.slug;
+    const titleKeys = new Set([
+      ...candidateTitleKeys(familyTitle),
+      ...candidateTitleKeys(work.title),
+    ]);
+
+    titleKeys.forEach((key) => {
+      const entry = ensureEntry(key);
+      if (!entry) return;
+      if (!entry.familySlug) entry.familySlug = familySlug;
+      if (!entry.familyTitle) entry.familyTitle = familyTitle;
+      if (!entry.anySlug || work.isPrimaryEdition) entry.anySlug = work.slug;
+      if (work.editionKey === "first-folio") {
+        if (!entry.firstFolioSlug) entry.firstFolioSlug = work.slug;
+      } else if (!entry.modernSlug) {
+        entry.modernSlug = work.slug;
+      }
+    });
+  });
+
+  return lookup;
+}
+
 export function resolveWorkLinks(workLabel, kind, workLookup) {
   const candidates = candidateTitleKeys(workLabel);
   let found = null;
@@ -175,7 +218,15 @@ export function resolveWorkLinks(workLabel, kind, workLookup) {
 }
 
 export function getCalendarRowsForWork(workTitle, rows = YEAR_OF_SHAKESPEARE_ROWS) {
-  const workKeys = new Set(candidateTitleKeys(workTitle));
+  const workKeys = new Set(
+    typeof workTitle === "string"
+      ? candidateTitleKeys(workTitle)
+      : [
+          ...candidateTitleKeys(workTitle?.familyTitle),
+          ...candidateTitleKeys(workTitle?.title),
+          ...candidateTitleKeys(workTitle?.slug),
+        ]
+  );
   if (!workKeys.size) return [];
 
   return rows.filter((row) => {

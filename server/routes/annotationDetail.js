@@ -3,6 +3,7 @@ const db = require("../db");
 const { requireAuth, requireAdmin, optionalAuth } = require("../auth");
 const { notifyAdmins, notifyReply } = require("../notify");
 const { createRateLimit } = require("../rateLimit");
+const { getAnnotationKindId, getAnnotationColor } = require("../lib/annotationKinds");
 const r = express.Router();
 const commentLimit = createRateLimit({
   windowMs: 10 * 60 * 1000,
@@ -41,7 +42,7 @@ r.get("/:id", optionalAuth, (req, res) => {
     WHERE s.annotation_id=? ORDER BY s.created_at DESC
   `).all(req.params.id).map(s => ({
     id:s.id, annotationId:s.annotation_id, userId:s.user_id,
-    suggestedNote:s.suggested_note, suggestedColor:s.suggested_color,
+    suggestedNote:s.suggested_note, suggestedKind:s.suggested_kind, suggestedColor:s.suggested_color,
     reason:s.reason, status:s.status,
     username:s.username, displayName:s.display_name, avatarColor:s.avatar_color,
     resolverName:s.resolver_name, resolvedAt:s.resolved_at,
@@ -99,14 +100,18 @@ r.delete("/comments/:cid", requireAuth, (req, res) => {
 r.post("/:id/suggestions", requireAuth, suggestionLimit, (req, res) => {
   const ann = db.prepare("SELECT id FROM annotations WHERE id=?").get(req.params.id);
   if (!ann) return res.status(404).json({ error:"Annotation not found." });
-  const { suggestedNote, suggestedColor, reason } = req.body;
+  const { suggestedNote, suggestedColor, suggestedKind, reason } = req.body;
   if (!suggestedNote?.trim()) return res.status(400).json({ error:"Suggested text required." });
-  const result = db.prepare("INSERT INTO annotation_suggestions (annotation_id,user_id,suggested_note,suggested_color,reason) VALUES (?,?,?,?,?)")
-    .run(req.params.id, req.user.id, suggestedNote.trim(), suggestedColor??null, (reason||"").trim());
+  const nextKind = getAnnotationKindId(suggestedKind, suggestedColor);
+  const nextColor = suggestedColor === null || suggestedColor === undefined
+    ? null
+    : getAnnotationColor(suggestedKind, suggestedColor);
+  const result = db.prepare("INSERT INTO annotation_suggestions (annotation_id,user_id,suggested_note,suggested_kind,suggested_color,reason) VALUES (?,?,?,?,?,?)")
+    .run(req.params.id, req.user.id, suggestedNote.trim(), nextKind, nextColor, (reason||"").trim());
   const s = db.prepare("SELECT s.*,u.username,u.display_name,u.avatar_color FROM annotation_suggestions s JOIN users u ON s.user_id=u.id WHERE s.id=?").get(result.lastInsertRowid);
   notifyAdmins("suggestion", `${s.display_name} suggested an edit to annotation #${req.params.id}`, `/annotation/${req.params.id}`);
   res.json({ id:s.id, annotationId:s.annotation_id, userId:s.user_id,
-    suggestedNote:s.suggested_note, suggestedColor:s.suggested_color, reason:s.reason,
+    suggestedNote:s.suggested_note, suggestedKind:s.suggested_kind, suggestedColor:s.suggested_color, reason:s.reason,
     status:s.status, username:s.username, displayName:s.display_name, avatarColor:s.avatar_color,
     createdAt:s.created_at });
 });
@@ -117,7 +122,14 @@ r.post("/suggestions/:sid/accept", requireAdmin, (req, res) => {
   // Apply the suggested edit to the annotation
   const updates = ["note=?"];
   const vals = [s.suggested_note];
-  if (s.suggested_color !== null) { updates.push("color=?"); vals.push(s.suggested_color); }
+  const acceptedKind = getAnnotationKindId(s.suggested_kind, s.suggested_color);
+  const acceptedColor = getAnnotationColor(s.suggested_kind, s.suggested_color);
+  if (s.suggested_kind || s.suggested_color !== null) {
+    updates.push("kind=?");
+    vals.push(acceptedKind);
+    updates.push("color=?");
+    vals.push(acceptedColor);
+  }
   vals.push(s.annotation_id);
   db.prepare(`UPDATE annotations SET ${updates.join(",")} WHERE id=?`).run(...vals);
   db.prepare("UPDATE annotation_suggestions SET status='accepted', resolved_by=?, resolved_at=datetime('now') WHERE id=?").run(req.user.id, req.params.sid);
