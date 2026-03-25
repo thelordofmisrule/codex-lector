@@ -1860,6 +1860,15 @@ export default function ReaderPage() {
               Sources of Lucrece
             </button>
           )}
+          {work.category === "history" && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => navigate(`/genealogy?work=${encodeURIComponent(slug)}`)}
+              style={{ color:"var(--text-light)", fontSize:12, fontFamily:"var(--font-display)", letterSpacing:1 }}
+            >
+              Genealogy
+            </button>
+          )}
           {parsed.type === "play" && (
             <button
               className="btn btn-ghost btn-sm"

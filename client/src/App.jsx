@@ -23,6 +23,7 @@ const AdminAnalyticsPage = lazy(() => import("./pages/AdminAnalyticsPage"));
 const HowToPage = lazy(() => import("./pages/HowToPage"));
 const PlacesPage = lazy(() => import("./pages/PlacesPage"));
 const PeoplePage = lazy(() => import("./pages/PeoplePage"));
+const GenealogyPage = lazy(() => import("./pages/GenealogyPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const GalleryPage = lazy(() => import("./pages/GalleryPage"));
 const YearOfShakespearePage = lazy(() => import("./pages/YearOfShakespearePage"));
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="/layers" element={<LayersPage />} />
             <Route path="/places" element={<PlacesPage />} />
             <Route path="/people" element={<PeoplePage />} />
+            <Route path="/genealogy" element={<GenealogyPage />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/gallery" element={<GalleryPage />} />
             <Route path="/year-of-shakespeare" element={<YearOfShakespearePage />} />

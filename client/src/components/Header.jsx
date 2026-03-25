@@ -50,6 +50,7 @@ export default function Header() {
       id:"study",
       label:"Study",
       items:[
+        { to:"/genealogy", label:"Genealogy" },
         { to:"/people", label:"People" },
         { to:"/places", label:"Places" },
         { to:"/gallery", label:"Gallery" },

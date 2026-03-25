@@ -204,6 +204,7 @@ app.get("/sitemap.xml", (req, res) => {
     `<url><loc>${SITE_URL}/blog</loc><priority>0.8</priority></url>`,
     `<url><loc>${SITE_URL}/layers</loc><priority>0.7</priority></url>`,
     `<url><loc>${SITE_URL}/chat</loc><priority>0.7</priority></url>`,
+    `<url><loc>${SITE_URL}/genealogy</loc><priority>0.7</priority></url>`,
     `<url><loc>${SITE_URL}/people</loc><priority>0.7</priority></url>`,
     `<url><loc>${SITE_URL}/places</loc><priority>0.7</priority></url>`,
     `<url><loc>${SITE_URL}/gallery</loc><priority>0.7</priority></url>`,
@@ -476,6 +477,26 @@ if (process.env.NODE_ENV === "production") {
     <meta name="twitter:title" content="People in the Plays" />
     <meta name="twitter:description" content="${esc(desc)}" />
     <title>People in the Plays — ${SITE_NAME}</title>`;
+    res.send(renderHtml(meta));
+  });
+
+  app.get("/genealogy", (req, res) => {
+    const url = `${SITE_URL}/genealogy`;
+    const desc = "Follow the dynastic relationships behind Shakespeare's English histories, from King John to Henry VIII.";
+    const imageUrl = socialImageUrl("", "Genealogy of the English Kings", desc);
+    const meta = `
+    <meta name="description" content="${esc(desc)}" />
+    <link rel="canonical" href="${url}" />
+    ${verificationMeta()}
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Genealogy of the English Kings — ${SITE_NAME}" />
+    <meta property="og:description" content="${esc(desc)}" />
+    <meta property="og:url" content="${url}" />
+    <meta property="og:site_name" content="${SITE_NAME}" />
+    ${socialImageMeta(imageUrl, `Genealogy of the English Kings on ${SITE_NAME}`)}
+    <meta name="twitter:title" content="Genealogy of the English Kings" />
+    <meta name="twitter:description" content="${esc(desc)}" />
+    <title>Genealogy of the English Kings — ${SITE_NAME}</title>`;
     res.send(renderHtml(meta));
   });
 
