@@ -16,6 +16,7 @@ export default function Header() {
   const toast = useToast();
   const [showAuth, setShowAuth] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
+  const [openNavGroup, setOpenNavGroup] = useState("");
   const [menu, setMenu] = useState(false);
   const [changePw, setChangePw] = useState(false);
   const [curPw, setCurPw] = useState("");
@@ -38,20 +39,36 @@ export default function Header() {
       ? "rgba(10,13,11,0.96)"
       : "rgba(242,235,217,0.94)";
 
-  const links = [
+  const primaryLinks = [
     { to:"/", label:"Works" },
-    { to:"/people", label:"People" },
-    { to:"/places", label:"Places" },
-    { to:"/gallery", label:"Gallery" },
-    { to:"/chat", label:"Chat" },
+    { to:"/search", label:"Search" },
     { to:"/year-of-shakespeare", label:"Year" },
-    { to:"/how-to", label:"How To" },
-    { to:"/layers", label:"Layers" },
-    { to:"/forum", label:"Forum" },
-    { to:"/blog", label:"Blog" },
-    { to:"/search", label:"🔍" },
+    { to:"/chat", label:"Chat" },
   ];
+  const groupedLinks = [
+    {
+      id:"study",
+      label:"Study",
+      items:[
+        { to:"/people", label:"People" },
+        { to:"/places", label:"Places" },
+        { to:"/gallery", label:"Gallery" },
+        { to:"/layers", label:"Layers" },
+      ],
+    },
+    {
+      id:"community",
+      label:"Community",
+      items:[
+        { to:"/forum", label:"Forum" },
+        { to:"/blog", label:"Blog" },
+        { to:"/how-to", label:"How To" },
+      ],
+    },
+  ];
+  const mobileLinks = [...primaryLinks, ...groupedLinks.flatMap(group => group.items)];
   const active = to => to==="/" ? (loc.pathname==="/"||loc.pathname.startsWith("/read")) : loc.pathname.startsWith(to);
+  const groupActive = (group) => group.items.some(item => active(item.to));
 
   const submitPw = async () => {
     setPwMsg("");
@@ -128,6 +145,10 @@ export default function Header() {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+  useEffect(() => {
+    setOpenNavGroup("");
+    setShowMobileNav(false);
+  }, [loc.pathname]);
 
   const renderNavLabel = (label) => {
     const textLabel = label;
@@ -210,29 +231,84 @@ export default function Header() {
             </div>
           </div>
 
-          {!isMobile && <nav style={{ display:"flex", gap:2 }}>
-            {links.map(l => (
+          {!isMobile && <nav style={{ display:"flex", gap:2, alignItems:"center" }}>
+            {primaryLinks.map(l => (
               <button key={l.to} className="btn btn-ghost" onClick={()=>nav(l.to)} style={{
                 padding:"8px 14px", fontFamily:"var(--font-display)", fontSize:13,
                 color:active(l.to)?"var(--accent)":"var(--text-muted)", fontWeight:active(l.to)?600:400,
               }}>{renderNavLabel(l.label)}</button>
             ))}
+            {groupedLinks.map(group => {
+              const isOpen = openNavGroup === group.id;
+              const isActive = groupActive(group);
+              return (
+                <div key={group.id} style={{ position:"relative" }}>
+                  <button
+                    className="btn btn-ghost"
+                    onClick={()=>{
+                      setOpenNavGroup(isOpen ? "" : group.id);
+                      setMenu(false);
+                      setShowNotifs(false);
+                      setShowThemes(false);
+                    }}
+                    style={{
+                      padding:"8px 14px",
+                      fontFamily:"var(--font-display)",
+                      fontSize:13,
+                      color:isActive || isOpen ? "var(--accent)" : "var(--text-muted)",
+                      fontWeight:isActive || isOpen ? 600 : 400,
+                      display:"inline-flex",
+                      alignItems:"center",
+                      gap:6,
+                    }}
+                  >
+                    <span>{group.label}</span>
+                    <span style={{ fontSize:10, opacity:0.75 }}>▾</span>
+                  </button>
+                  {isOpen && <div onClick={()=>setOpenNavGroup("")} style={{ position:"fixed", inset:0, zIndex:199 }} />}
+                  {isOpen && (
+                    <div style={{ position:"absolute", top:42, left:0, minWidth:190, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, boxShadow:"0 8px 24px var(--shadow)", padding:8, zIndex:200 }}>
+                      {group.items.map(item => (
+                        <button
+                          key={item.to}
+                          className="btn btn-ghost"
+                          onClick={()=>{
+                            nav(item.to);
+                            setOpenNavGroup("");
+                          }}
+                          style={{
+                            width:"100%",
+                            textAlign:"left",
+                            padding:"8px 10px",
+                            fontSize:14,
+                            color:active(item.to) ? "var(--accent)" : "var(--text-muted)",
+                            fontWeight:active(item.to) ? 600 : 400,
+                          }}
+                        >
+                          {renderNavLabel(item.label)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </nav>}
 
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             {isMobile && (
               <div style={{ position:"relative" }}>
-                <button className="btn btn-ghost" aria-label="Toggle navigation menu" onClick={()=>{setShowMobileNav(!showMobileNav);setMenu(false);setShowNotifs(false);setShowThemes(false);}} style={{ fontSize:16, padding:"6px 10px" }}>
+                <button className="btn btn-ghost" aria-label="Toggle navigation menu" onClick={()=>{setShowMobileNav(!showMobileNav);setMenu(false);setShowNotifs(false);setShowThemes(false);setOpenNavGroup("");}} style={{ fontSize:16, padding:"6px 10px" }}>
                   ☰
                 </button>
                 {showMobileNav && <div onClick={()=>setShowMobileNav(false)} style={{ position:"fixed", inset:0, zIndex:199 }} />}
                 {showMobileNav && (
                   <div style={{ position:"absolute", top:42, right:0, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, boxShadow:"0 8px 24px var(--shadow)", minWidth:180, padding:8, zIndex:200 }}>
-                    {links.map(l => (
+                    {mobileLinks.map(l => (
                       <button key={l.to} className="btn btn-ghost" onClick={()=>{nav(l.to);setShowMobileNav(false);}} style={{
                         width:"100%", textAlign:"left", padding:"8px 10px", fontSize:14,
                         color:active(l.to)?"var(--accent)":"var(--text-muted)", fontWeight:active(l.to)?600:400,
-                      }}>{l.label === "🔍" ? "Search" : renderNavLabel(l.label)}</button>
+                      }}>{renderNavLabel(l.label)}</button>
                     ))}
                   </div>
                 )}
@@ -242,7 +318,7 @@ export default function Header() {
             {/* Notification bell */}
             {user && (
               <div style={{ position:"relative" }}>
-                <button className="btn btn-ghost" aria-label="Toggle notifications" onClick={()=>{setShowNotifs(!showNotifs);setMenu(false);setShowMobileNav(false);setShowThemes(false);}} title="Notifications" style={{
+                <button className="btn btn-ghost" aria-label="Toggle notifications" onClick={()=>{setShowNotifs(!showNotifs);setMenu(false);setShowMobileNav(false);setShowThemes(false);setOpenNavGroup("");}} title="Notifications" style={{
                   fontSize:18, padding:"6px 10px", position:"relative",
                 }}>
                   {themeMode === "eva" ? (
@@ -290,7 +366,7 @@ export default function Header() {
 
             {/* Theme picker */}
             <div style={{ position:"relative" }}>
-              <button className="btn btn-ghost" aria-label="Choose theme" onClick={()=>{setShowThemes(!showThemes);setMenu(false);setShowMobileNav(false);setShowNotifs(false);}} title={`Theme: ${currentTheme.label}`} style={{
+              <button className="btn btn-ghost" aria-label="Choose theme" onClick={()=>{setShowThemes(!showThemes);setMenu(false);setShowMobileNav(false);setShowNotifs(false);setOpenNavGroup("");}} title={`Theme: ${currentTheme.label}`} style={{
                 fontSize: currentTheme.id === "eva" ? 11 : 19,
                 padding:"6px 10px", borderRadius:6,
                 background: darkChrome ? "rgba(255,248,240,0.08)" : "rgba(0,0,0,0.05)",
@@ -327,12 +403,12 @@ export default function Header() {
             {user ? (
               <div style={{ position:"relative" }}>
                 {user.oauthAvatar ? (
-                  <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);setShowMobileNav(false);setShowThemes(false);}} style={{
+                  <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);setShowMobileNav(false);setShowThemes(false);setOpenNavGroup("");}} style={{
                     width:36, height:36, borderRadius:"50%", padding:0, border:"2px solid var(--accent)", overflow:"hidden",
                     display:"flex", alignItems:"center", justifyContent:"center", background:"var(--surface)",
                   }}><img src={user.oauthAvatar} alt="Profile avatar" style={{ width:"100%", height:"100%", objectFit:"cover" }} /></button>
                 ) : (
-                  <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);setShowMobileNav(false);setShowThemes(false);}} style={{
+                  <button className="btn" onClick={()=>{setMenu(!menu);setChangePw(false);setShowMobileNav(false);setShowThemes(false);setOpenNavGroup("");}} style={{
                     background:"var(--accent)", color:"var(--accent-contrast)", width:36, height:36, borderRadius:"50%",
                     display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:600, fontFamily:"var(--font-display)",
                   }}>{user.displayName?.[0]?.toUpperCase()||"?"}</button>
@@ -376,7 +452,7 @@ export default function Header() {
                 )}
               </div>
             ) : authReady ? (
-              <button className="btn btn-primary" onClick={()=>setShowAuth(true)} style={{ padding:"6px 16px", fontSize:13, fontFamily:"var(--font-display)" }}>Sign In</button>
+              <button className="btn btn-primary" onClick={()=>{setOpenNavGroup("");setShowAuth(true);}} style={{ padding:"6px 16px", fontSize:13, fontFamily:"var(--font-display)" }}>Sign In</button>
             ) : (
               <div style={{ width:78, height:34 }} aria-hidden="true" />
             )}
