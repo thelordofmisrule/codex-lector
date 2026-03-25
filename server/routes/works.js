@@ -9,6 +9,7 @@ const {
   matchesParsedQuery,
   parseSearchQuery,
 } = require("../lib/workSearch");
+const { buildWorkLookup, enrichWork, enrichWorks } = require("../lib/workCatalog");
 
 const r = express.Router();
 ensureSearchSchema(db);
@@ -264,7 +265,8 @@ function searchFallback(parsed, options) {
 
 // List (no content)
 r.get("/", (req, res) => {
-  res.json(db.prepare("SELECT id,slug,title,category,variant,authors,(content IS NOT NULL) as has_content FROM works ORDER BY category,title").all());
+  const works = db.prepare("SELECT id,slug,title,category,variant,authors,(content IS NOT NULL) as has_content FROM works ORDER BY category,title").all();
+  res.json(enrichWorks(works));
 });
 
 // Ranked text search across works
@@ -320,7 +322,7 @@ r.get("/search/text", (req, res) => {
 r.get("/:slug", (req, res) => {
   const w = db.prepare("SELECT * FROM works WHERE slug=?").get(req.params.slug);
   if (!w) return res.status(404).json({ error: "Not found." });
-  res.json(w);
+  res.json(enrichWork(w, buildWorkLookup()));
 });
 
 module.exports = r;

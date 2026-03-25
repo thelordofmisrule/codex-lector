@@ -52,6 +52,29 @@ function workPreferenceScore(work) {
   return 1;
 }
 
+function editionKeyForWork(work) {
+  const slug = String(work?.slug || "");
+  const category = String(work?.category || "");
+  const variant = String(work?.variant || "");
+  if (category === "first_folio" || slug.startsWith("f1-") || variant === "first-folio") return "first-folio";
+  if (category === "apocrypha" || slug.startsWith("apo-") || variant === "ps-apocrypha") return "apocrypha";
+  if (variant === "ps" || variant === "ps-poems") return "modern";
+  return "edition";
+}
+
+function editionLabelForWork(work) {
+  switch (editionKeyForWork(work)) {
+    case "first-folio":
+      return "First Folio";
+    case "apocrypha":
+      return "Apocrypha";
+    case "modern":
+      return "Modern";
+    default:
+      return String(work?.variant || "").trim() || "Edition";
+  }
+}
+
 function compareWorkPreference(left, right) {
   const scoreDiff = workPreferenceScore(left) - workPreferenceScore(right);
   if (scoreDiff !== 0) return scoreDiff;
@@ -114,15 +137,49 @@ function equivalentWorkSlugs(value, lookup = buildWorkLookup()) {
     .map((candidate) => candidate.slug);
 }
 
+function equivalentWorks(value, lookup = buildWorkLookup()) {
+  return equivalentWorkSlugs(value, lookup)
+    .map((slug) => lookup.bySlug.get(slug))
+    .filter(Boolean);
+}
+
+function enrichWork(work, lookup = buildWorkLookup()) {
+  if (!work) return null;
+  const familyWorks = equivalentWorks(work, lookup);
+  const primary = familyWorks[0] || work;
+  const editionLabel = editionLabelForWork(work);
+  return {
+    ...work,
+    editionKey: editionKeyForWork(work),
+    editionLabel,
+    familySlug: primary.slug,
+    familyTitle: primary.title,
+    familySize: familyWorks.length || 1,
+    hasAlternateEdition: familyWorks.length > 1,
+    isPrimaryEdition: primary.slug === work.slug,
+    selectorLabel: familyWorks.length > 1 ? `${work.title} — ${editionLabel}` : work.title,
+    familySelectorLabel: primary.title,
+  };
+}
+
+function enrichWorks(works, lookup = buildWorkLookup(works)) {
+  return (works || []).map((work) => enrichWork(work, lookup));
+}
+
 module.exports = {
   normalizeWorkRef,
   buildWorkAliases,
   listWorks,
   workPreferenceScore,
+  editionKeyForWork,
+  editionLabelForWork,
   compareWorkPreference,
   buildWorkLookup,
   resolveWork,
   resolveWorkSlugs,
   workRefsFromSlugs,
   equivalentWorkSlugs,
+  equivalentWorks,
+  enrichWork,
+  enrichWorks,
 };

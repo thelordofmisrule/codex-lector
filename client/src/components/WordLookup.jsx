@@ -371,7 +371,7 @@ export default function WordLookup({
                       Editorial Glossary
                     </div>
                     <div style={{ fontSize:12, color:"var(--text-light)" }}>
-                      Dictionary-style definitions live here. Longer passage-specific explanation still belongs in a `Gloss` annotation.
+                      Dictionary-style definitions live here. Longer passage-specific explanation still belongs in a Language note.
                     </div>
                   </div>
                   <button className="btn btn-secondary btn-sm" onClick={() => setEditorOpen((open) => !open)} style={{ flexShrink:0 }}>

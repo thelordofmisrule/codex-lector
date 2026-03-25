@@ -4,6 +4,7 @@ import { useAuth } from "../lib/AuthContext";
 import { gallery as galleryApi, works as worksApi } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
+import { buildPrimaryWorkOptions, getWorkFamilyTitle } from "../lib/workPresentation";
 
 function normalizeTagInput(tag) {
   const raw = String(tag || "").trim().replace(/^[\["']+|[\]"']+$/g, "");
@@ -63,6 +64,7 @@ function toggleSlug(list, slug) {
 
 function WorkChipPicker({ works, value, onChange, placeholder = "Add work association" }) {
   const selected = Array.isArray(value) ? value : [];
+  const optionWorks = buildPrimaryWorkOptions(works);
   return (
     <div style={{ display: "grid", gap: 8 }}>
       <select
@@ -75,14 +77,14 @@ function WorkChipPicker({ works, value, onChange, placeholder = "Add work associ
         }}
       >
         <option value="">{placeholder}</option>
-        {works.map((work) => (
-          <option key={work.slug} value={work.slug}>{work.title}</option>
+        {optionWorks.map((work) => (
+          <option key={work.slug} value={work.slug}>{getWorkFamilyTitle(work)}</option>
         ))}
       </select>
       {selected.length > 0 && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {selected.map((slug) => {
-            const work = works.find((entry) => entry.slug === slug);
+            const work = works.find((entry) => entry.slug === slug) || optionWorks.find((entry) => entry.slug === slug);
             return (
               <button
                 key={slug}
@@ -90,7 +92,7 @@ function WorkChipPicker({ works, value, onChange, placeholder = "Add work associ
                 className="btn btn-secondary btn-sm"
                 onClick={() => onChange(toggleSlug(selected, slug))}
               >
-                {work?.title || slug} ×
+                {work ? getWorkFamilyTitle(work) : slug} ×
               </button>
             );
           })}
@@ -232,7 +234,7 @@ export default function GalleryPage() {
   );
 
   const displayedWorks = useMemo(
-    () => works.length ? works : catalogWorks.map((work) => ({ workSlug: work.slug, workTitle: work.title })),
+    () => works.length ? works : buildPrimaryWorkOptions(catalogWorks).map((work) => ({ workSlug: work.slug, workTitle: getWorkFamilyTitle(work) })),
     [catalogWorks, works],
   );
 
@@ -401,8 +403,8 @@ export default function GalleryPage() {
                   }}
                 >
                   <option value="">Featured work</option>
-                  {catalogWorks.map((work) => (
-                    <option key={work.slug} value={work.slug}>{work.title}</option>
+                  {buildPrimaryWorkOptions(catalogWorks).map((work) => (
+                    <option key={work.slug} value={work.slug}>{getWorkFamilyTitle(work)}</option>
                   ))}
                 </select>
               </div>

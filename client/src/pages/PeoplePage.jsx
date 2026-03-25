@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { works as worksApi } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
 import { buildPeopleGraphFromXML, buildPeopleNetwork } from "../lib/peopleGraph";
+import { buildPrimaryWorkOptions, getWorkFamilyTitle } from "../lib/workPresentation";
 
 function statCard(label, value, note = "") {
   return (
@@ -668,7 +669,10 @@ export default function PeoplePage() {
     worksApi.list()
       .then((data) => {
         if (cancelled) return;
-        const playableWorks = (data || []).filter((item) => item.has_content && item.category !== "poetry");
+        const playableWorks = buildPrimaryWorkOptions(
+          data || [],
+          (item) => item.has_content && item.category !== "poetry" && item.category !== "first_folio",
+        );
         setWorks(playableWorks);
         setSelectedWorkSlug((prev) => {
           if (prev && playableWorks.some((item) => item.slug === prev)) return prev;
@@ -842,7 +846,7 @@ export default function PeoplePage() {
             disabled={!works.length}
           >
             {works.map((item) => (
-              <option key={item.slug} value={item.slug}>{item.title}</option>
+              <option key={item.slug} value={item.slug}>{getWorkFamilyTitle(item)}</option>
             ))}
           </select>
         </div>

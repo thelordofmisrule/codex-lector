@@ -10,17 +10,11 @@ import { findPlaceAwarenessMatch, warmPlaceAwarenessIndex } from "../lib/placeAw
 import { analyzeProsodyLine, parseProsodyScan } from "../lib/prosody";
 import { YEAR_OF_SHAKESPEARE_ROWS, buildReadingWaypoints, getCalendarRowsForWork } from "../lib/yearOfShakespeare";
 import { useFloatingCardPosition } from "../lib/floatingCard";
+import { ANNOTATION_KINDS as ANNOT_TYPES, DEFAULT_ANNOTATION_COLOR, getAnnotationKind } from "../lib/annotationKinds";
 import PlaceAwareness from "../components/PlaceAwareness";
 import QuoteCaptureModal from "../components/QuoteCaptureModal";
 import ThreadedComments from "../components/ThreadedComments";
 import WordLookup from "../components/WordLookup";
-
-const ANNOT_TYPES = [
-  { label:"Gloss", desc:"Define a word or phrase", cls:"hl-0", icon:"📖" },
-  { label:"Rhetoric", desc:"Rhetorical or poetic device", cls:"hl-1", icon:"🎭" },
-  { label:"Exegesis", desc:"Interpretation or analysis", cls:"hl-2", icon:"🔍" },
-  { label:"History", desc:"Historical context", cls:"hl-3", icon:"🏛" },
-];
 
 const PROSODY_MODES = [
   { id: "off", label: "Off" },
@@ -72,7 +66,7 @@ const DEFAULT_READER_VISIBILITY = {
   showGlobal: true,
   showPersonal: true,
   showWaypoints: true,
-  noteTypes: Object.fromEntries(ANNOT_TYPES.map((_, index) => [String(index), true])),
+  noteTypes: Object.fromEntries(ANNOT_TYPES.map((kind) => [String(kind.color), true])),
   layers: {},
 };
 
@@ -364,20 +358,20 @@ function ReaderVisibilityPanel({
             Note Types
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8 }}>
-            {ANNOT_TYPES.map((type, index) => (
+            {ANNOT_TYPES.map((type) => (
               <label key={type.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 10px", border: "1px solid var(--border-light)", borderRadius: 8 }}>
                 <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <input
                     type="checkbox"
-                    checked={isNoteTypeVisible(visibility, index)}
-                    onChange={(event) => onToggleType(index, event.target.checked)}
+                    checked={isNoteTypeVisible(visibility, type.color)}
+                    onChange={(event) => onToggleType(type.color, event.target.checked)}
                   />
                   <span>
                     <span style={{ display: "block", color: "var(--text)" }}>{type.icon} {type.label}</span>
                     <span style={{ fontSize: 12, color: "var(--text-light)" }}>{type.desc}</span>
                   </span>
                 </span>
-                <span style={{ fontSize: 12, color: "var(--text-light)" }}>{typeCounts[index] || 0}</span>
+                <span style={{ fontSize: 12, color: "var(--text-light)" }}>{typeCounts[type.color] || 0}</span>
               </label>
             ))}
           </div>
@@ -598,9 +592,8 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
   const [color, setColor] = useState(annot.color);
   const [isGlobalDraft, setIsGlobalDraft] = useState(!!annot.is_global);
   const editRef = useRef(null);
-  const type = ANNOT_TYPES[annot.color] || ANNOT_TYPES[0];
+  const type = getAnnotationKind(annot.color);
   const isLong = (annot.note || "").length > 60;
-  const borderColors = ["var(--gold-light)","var(--accent)","var(--success)","#7B6FAD"];
   const canModify = isAdmin || annot.user_id === userId;
   const isGlobal = !!annot.is_global;
   const cancelEdit = useCallback(() => {
@@ -615,11 +608,11 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
   if (editing) return (
     <div ref={editRef} style={{ padding:10, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:6, marginBottom:4 }}>
       <div style={{ display:"flex", gap:4, marginBottom:6, flexWrap:"wrap" }}>
-        {ANNOT_TYPES.map((t,i) => (
-          <button key={i} onClick={()=>setColor(i)} style={{
-            fontSize:11, padding:"3px 8px", borderRadius:4, border: i===color ? "1px solid var(--accent)" : "1px solid transparent",
-            background: i===color ? "var(--accent-faint)" : "transparent", cursor:"pointer", fontFamily:"var(--font-body)", color:"var(--text-muted)",
-          }}>{t.icon} {t.label}</button>
+        {ANNOT_TYPES.map((kind) => (
+          <button key={kind.id} onClick={()=>setColor(kind.color)} style={{
+            fontSize:11, padding:"3px 8px", borderRadius:4, border: kind.color===color ? "1px solid var(--accent)" : "1px solid transparent",
+            background: kind.color===color ? "var(--accent-faint)" : "transparent", cursor:"pointer", fontFamily:"var(--font-body)", color:"var(--text-muted)",
+          }}>{kind.icon} {kind.label}</button>
         ))}
       </div>
       {canPublishGlobal && (
@@ -639,13 +632,13 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
   return (
     <div className="reader-margin-annot" style={{
       fontSize: compact ? 13 : 14, lineHeight:1.6, padding: compact ? "4px 8px" : "6px 10px",
-      borderLeft:`3px solid ${borderColors[annot.color]||"var(--gold)"}`,
+      borderLeft:`3px solid ${type.accent || "var(--gold)"}`,
       color:"var(--text)", fontFamily:"var(--font-fell)",
       background:"var(--surface)", borderRadius:"0 6px 6px 0",
       cursor: isLong && !expanded ? "pointer" : "default",
     }} onClick={() => { if (isLong && !expanded) setExpanded(true); }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:2 }}>
-        <span style={{ fontSize:11, fontFamily:"var(--font-display)", letterSpacing:1, textTransform:"uppercase", color: borderColors[annot.color] || "var(--gold)" }}>
+        <span style={{ fontSize:11, fontFamily:"var(--font-display)", letterSpacing:1, textTransform:"uppercase", color: type.accent || "var(--gold)" }}>
           {type.icon} {type.label}
           {!isGlobal && <span style={{ marginLeft:4, opacity:0.6, fontSize:10 }}>· private</span>}
           {annot.author_name && isGlobal && <span style={{ marginLeft:4, opacity:0.5, fontSize:10, textTransform:"none", letterSpacing:0 }}>· {annot.author_name}</span>}
@@ -679,86 +672,229 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
   );
 }
 
-/* ─── Annotation tooltip ─── */
-function AnnotTooltip({ pos, onSave, onCancel, onCopyText, onOpenQuoteCapture, myLayers, draftKey, canPublishGlobal, canSave }) {
-  const tooltipRef = useRef(null);
-  const [note, setNote] = useState(() => draftKey ? (localStorage.getItem(`${draftKey}:note`) || "") : "");
-  const [color, setColor] = useState(() => draftKey ? (parseInt(localStorage.getItem(`${draftKey}:color`) || "0", 10) || 0) : 0);
-  const [layerId, setLayerId] = useState(() => draftKey ? (localStorage.getItem(`${draftKey}:layer`) || "") : "");
-  const [isGlobal, setIsGlobal] = useState(() => draftKey ? (localStorage.getItem(`${draftKey}:global`) === "1") : !!canPublishGlobal);
-  const floatingStyle = useFloatingCardPosition(tooltipRef, { x: pos.x, y: pos.y }, 320, [note, color, layerId, isGlobal, myLayers?.length || 0], 8);
-  useOutsideDismiss(tooltipRef, onCancel);
+function LineAnnotationMarker({ annotations, onClick }) {
+  if (!annotations?.length) return null;
+  const uniqueKinds = [...new Set(annotations.map((annot) => getAnnotationKind(annot.color).icon))].slice(0, 2);
+  return (
+    <button
+      type="button"
+      className="btn btn-ghost btn-sm"
+      onClick={onClick}
+      title={`${annotations.length} annotation${annotations.length === 1 ? "" : "s"} on this line`}
+      style={{
+        padding: "0 4px",
+        minHeight: 0,
+        lineHeight: 1.1,
+        color: "var(--accent)",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        border: "1px solid var(--border-light)",
+        borderRadius: 999,
+        background: "var(--surface)",
+      }}
+    >
+      <span style={{ fontSize: 10, letterSpacing: 1 }}>{uniqueKinds.join("")}</span>
+      <span style={{ fontSize: 10, fontFamily: "var(--font-display)", letterSpacing: 0.8 }}>{annotations.length}</span>
+    </button>
+  );
+}
+
+/* ─── Annotation popover ─── */
+function AnnotationPopover({
+  panel,
+  onClose,
+  onSave,
+  onCopyText,
+  onOpenQuoteCapture,
+  onComposeFromLine,
+  myLayers,
+  canPublishGlobal,
+  canSave,
+  userId,
+  isAdmin,
+  editAnnot,
+  deleteAnnot,
+  mobileSheet = false,
+}) {
+  const popoverRef = useRef(null);
+  const [note, setNote] = useState(() => panel?.mode === "compose" && panel?.draftKey ? (localStorage.getItem(`${panel.draftKey}:note`) || "") : "");
+  const [color, setColor] = useState(() => panel?.mode === "compose" && panel?.draftKey ? (parseInt(localStorage.getItem(`${panel.draftKey}:color`) || String(DEFAULT_ANNOTATION_COLOR), 10) || DEFAULT_ANNOTATION_COLOR) : DEFAULT_ANNOTATION_COLOR);
+  const [layerId, setLayerId] = useState(() => panel?.mode === "compose" && panel?.draftKey ? (localStorage.getItem(`${panel.draftKey}:layer`) || "") : "");
+  const [isGlobal, setIsGlobal] = useState(() => panel?.mode === "compose" && panel?.draftKey ? (localStorage.getItem(`${panel.draftKey}:global`) === "1") : !!canPublishGlobal);
+
+  useEffect(() => {
+    if (!panel || panel.mode !== "compose") return;
+    setNote(panel.draftKey ? (localStorage.getItem(`${panel.draftKey}:note`) || "") : "");
+    setColor(panel.draftKey ? (parseInt(localStorage.getItem(`${panel.draftKey}:color`) || String(DEFAULT_ANNOTATION_COLOR), 10) || DEFAULT_ANNOTATION_COLOR) : DEFAULT_ANNOTATION_COLOR);
+    setLayerId(panel.draftKey ? (localStorage.getItem(`${panel.draftKey}:layer`) || "") : "");
+    setIsGlobal(panel.draftKey ? (localStorage.getItem(`${panel.draftKey}:global`) === "1") : !!canPublishGlobal);
+  }, [canPublishGlobal, panel]);
+
+  const floatingStyle = useFloatingCardPosition(
+    popoverRef,
+    panel ? { x: panel.x, y: panel.y } : { x: 0, y: 0 },
+    360,
+    [panel?.mode, note, color, layerId, isGlobal, myLayers?.length || 0, panel?.annotations?.length || 0],
+    8,
+  );
+
+  if (!panel) return null;
+
   const setNoteDraft = (value) => {
     setNote(value);
-    if (draftKey) localStorage.setItem(`${draftKey}:note`, value);
+    if (panel.draftKey) localStorage.setItem(`${panel.draftKey}:note`, value);
   };
   const setColorDraft = (value) => {
     setColor(value);
-    if (draftKey) localStorage.setItem(`${draftKey}:color`, String(value));
+    if (panel.draftKey) localStorage.setItem(`${panel.draftKey}:color`, String(value));
   };
   const setLayerDraft = (value) => {
     setLayerId(value);
-    if (draftKey) localStorage.setItem(`${draftKey}:layer`, value);
+    if (panel.draftKey) localStorage.setItem(`${panel.draftKey}:layer`, value);
     if (value) {
       setIsGlobal(false);
-      if (draftKey) localStorage.setItem(`${draftKey}:global`, "0");
+      if (panel.draftKey) localStorage.setItem(`${panel.draftKey}:global`, "0");
     }
   };
   const setGlobalDraft = (value) => {
     setIsGlobal(value);
-    if (draftKey) localStorage.setItem(`${draftKey}:global`, value ? "1" : "0");
+    if (panel.draftKey) localStorage.setItem(`${panel.draftKey}:global`, value ? "1" : "0");
     if (value) {
       setLayerId("");
-      if (draftKey) localStorage.removeItem(`${draftKey}:layer`);
+      if (panel.draftKey) localStorage.removeItem(`${panel.draftKey}:layer`);
     }
   };
+
+  const panelStyle = mobileSheet
+    ? {
+        position: "fixed",
+        left: 12,
+        right: 12,
+        bottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
+        zIndex: 200,
+        maxHeight: "min(74vh, 620px)",
+        overflowY: "auto",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 18,
+        boxShadow: "0 -10px 36px var(--shadow)",
+        padding: "12px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
+      }
+    : {
+        position: "fixed",
+        top: floatingStyle.top,
+        left: floatingStyle.left,
+        zIndex: 200,
+        width: "min(360px, calc(100vw - 24px))",
+        maxHeight: floatingStyle.maxHeight,
+        overflowY: "auto",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 10,
+        boxShadow: "0 12px 40px var(--shadow)",
+        padding: 16,
+      };
+
+  const excerpt = String(panel.text || panel.lineText || "").trim();
+  const annotations = panel.annotations || [];
+
   return (
-      <div ref={tooltipRef} className="reader-annot-tooltip" style={{
-        position:"fixed", top:floatingStyle.top, left:floatingStyle.left,
-        background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:12,
-        boxShadow:"0 8px 24px var(--shadow)", width:"min(320px, calc(100vw - 24px))", maxHeight:floatingStyle.maxHeight, overflowY:"auto", zIndex:200,
-    }}>
-      <div style={{ fontSize:12, color:"var(--text-light)", marginBottom:6, fontStyle:"italic" }}>"{pos.text.slice(0,60)}{pos.text.length>60?"…":""}"</div>
-      {canSave ? (
-        <>
-          <div style={{ display:"flex", gap:4, marginBottom:6, flexWrap:"wrap" }}>
-            {ANNOT_TYPES.map((t,i) => (
-              <button key={i} onClick={()=>setColorDraft(i)} className="btn btn-sm" style={{
-                fontSize:11, border: i===color ? "2px solid var(--accent)" : "2px solid transparent",
-                background: i===color ? "var(--accent-faint)" : "var(--bg)",
-                color: i===color ? "var(--text)" : "var(--text-muted)",
-              }}>{t.icon} {t.label}</button>
-            ))}
+    <>
+      <div aria-hidden="true" onClick={onClose} style={{ position:"fixed", inset:0, zIndex:199 }} />
+      <div ref={popoverRef} className="reader-annot-tooltip" style={panelStyle}>
+        {mobileSheet && (
+          <div style={{ display:"flex", justifyContent:"center", marginBottom:10 }}>
+            <div style={{ width:42, height:4, borderRadius:999, background:"var(--border)" }} />
           </div>
-          <textarea className="input" value={note} onChange={e=>setNoteDraft(e.target.value)} placeholder="Your annotation…"
-            autoFocus style={{ minHeight:60, resize:"vertical", fontSize:14, lineHeight:1.6 }} />
-          {myLayers && myLayers.length > 0 && (
-            <div style={{ marginTop:6 }}>
-              <select className="input" value={layerId} onChange={e=>setLayerDraft(e.target.value)} style={{ fontSize:13, padding:"4px 8px" }}>
-                <option value="">No layer (private)</option>
-                {myLayers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
+        )}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8, marginBottom:10 }}>
+          <div>
+            <div style={{ fontSize:11, color:"var(--gold)", fontFamily:"var(--font-display)", letterSpacing:1.6, textTransform:"uppercase", marginBottom:2 }}>
+              {panel.mode === "compose" ? "New Annotation" : "Annotations"}
             </div>
-          )}
-          {canPublishGlobal && (
-            <label style={{ display:"flex", alignItems:"center", gap:8, marginTop:8, fontSize:12, color:"var(--text-light)" }}>
-              <input type="checkbox" checked={isGlobal} onChange={e=>setGlobalDraft(e.target.checked)} />
-              Publish as site-wide note
-            </label>
-          )}
-        </>
-      ) : (
-        <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.6, marginBottom:8 }}>
-          You can still copy this passage or export it as a quote card. Sign in if you want to annotate it.
+            <div style={{ fontFamily:"var(--font-display)", fontSize:18, color:"var(--accent)", lineHeight:1.2 }}>
+              {panel.lineNumber ? `Line ${panel.lineNumber}` : "Selected Passage"}
+            </div>
+          </div>
+          <button aria-label="Close annotation panel" onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:18, color:"var(--text-light)", padding:"0 4px" }}>✕</button>
         </div>
-      )}
-      <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
-        {canSave && <button className="btn btn-primary btn-sm" onClick={()=>note.trim()&&onSave(note.trim(),color,layerId||null,isGlobal)}>Save</button>}
-        <button className="btn btn-secondary btn-sm" onClick={() => onOpenQuoteCapture?.(pos)}>Quote Card</button>
-        <button className="btn btn-secondary btn-sm" onClick={() => onCopyText?.(pos.text)}>Copy Text</button>
-        <button className="btn btn-secondary btn-sm" onClick={onCancel}>{canSave ? "Cancel" : "Close"}</button>
+
+        {excerpt && (
+          <div style={{ fontSize:12, color:"var(--text-light)", marginBottom:10, fontStyle:"italic", ...preservedAnnotationTextStyle }}>
+            {quotedExcerpt(excerpt, 120)}
+          </div>
+        )}
+
+        {panel.mode === "compose" ? (
+          <>
+            {canSave ? (
+              <>
+                <div style={{ display:"flex", gap:4, marginBottom:6, flexWrap:"wrap" }}>
+                  {ANNOT_TYPES.map((kind) => (
+                    <button key={kind.id} onClick={()=>setColorDraft(kind.color)} className="btn btn-sm" style={{
+                      fontSize:11,
+                      border: kind.color === color ? "2px solid var(--accent)" : "2px solid transparent",
+                      background: kind.color === color ? "var(--accent-faint)" : "var(--bg)",
+                      color: kind.color === color ? "var(--text)" : "var(--text-muted)",
+                    }}>{kind.icon} {kind.label}</button>
+                  ))}
+                </div>
+                <textarea className="input" value={note} onChange={e=>setNoteDraft(e.target.value)} placeholder="Your note…"
+                  autoFocus style={{ minHeight:70, resize:"vertical", fontSize:14, lineHeight:1.6 }} />
+                {myLayers && myLayers.length > 0 && (
+                  <div style={{ marginTop:6 }}>
+                    <select className="input" value={layerId} onChange={e=>setLayerDraft(e.target.value)} style={{ fontSize:13, padding:"4px 8px" }}>
+                      <option value="">No layer (private)</option>
+                      {myLayers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                    </select>
+                  </div>
+                )}
+                {canPublishGlobal && (
+                  <label style={{ display:"flex", alignItems:"center", gap:8, marginTop:8, fontSize:12, color:"var(--text-light)" }}>
+                    <input type="checkbox" checked={isGlobal} onChange={e=>setGlobalDraft(e.target.checked)} />
+                    Publish as site-wide note
+                  </label>
+                )}
+              </>
+            ) : (
+              <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.6, marginBottom:8 }}>
+                You can still copy this passage or export it as a quote card. Sign in if you want to annotate it.
+              </div>
+            )}
+            <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
+              {canSave && <button className="btn btn-primary btn-sm" onClick={() => note.trim() && onSave(note.trim(), color, layerId || null, isGlobal)}>Save</button>}
+              <button className="btn btn-secondary btn-sm" onClick={() => onOpenQuoteCapture?.(panel)}>Quote Card</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => onCopyText?.(panel.text || panel.lineText || "")}>Copy Text</button>
+              <button className="btn btn-secondary btn-sm" onClick={onClose}>{canSave ? "Cancel" : "Close"}</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ display:"grid", gap:8, marginBottom:12 }}>
+              {annotations.map((annot) => (
+                <MarginAnnot
+                  key={annot.id}
+                  annot={annot}
+                  userId={userId}
+                  isAdmin={isAdmin}
+                  canPublishGlobal={canPublishGlobal}
+                  onEdit={editAnnot}
+                  onDelete={deleteAnnot}
+                  compact={annotations.length > 1}
+                />
+              ))}
+            </div>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              {canSave && <button className="btn btn-primary btn-sm" onClick={onComposeFromLine}>New Note</button>}
+              <button className="btn btn-secondary btn-sm" onClick={() => onOpenQuoteCapture?.(panel)}>Quote Card</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => onCopyText?.(panel.lineText || "")}>Copy Text</button>
+              <button className="btn btn-secondary btn-sm" onClick={onClose}>Close</button>
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -986,17 +1122,36 @@ function ProsodyEditor({ draft, onClose, onSave, onDelete }) {
   );
 }
 
-function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, lineNum, showNum, isBookmarked, prosodyMode, prosodyOverride, onOpenProsodyNote, onOpenProsodyEditor, onLookupTap }) {
+function AnnotatedLine({ lineId, text, annotsByLine, showAnnots, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, lineNum, showNum, isBookmarked, prosodyMode, prosodyOverride, onOpenProsodyNote, onOpenProsodyEditor, onLookupTap, onOpenAnnotationPanel }) {
   const lineAnnots = showAnnots ? (annotsByLine[lineId] || []) : [];
   const hasProsodyNote = !!(prosodyOverride?.noteBody || prosodyOverride?.noteTitle);
   const showProsodyTools = prosodyMode && prosodyMode !== "off";
+  const hasVisibleAnnotations = lineAnnots.length > 0;
   return (
     <div className="reader-annotated-line" data-lineid={lineId} id={lineId} style={{ display:"flex", gap:12, alignItems:"flex-start", position:"relative" }}>
-      <div className="reader-line-meta" style={{ width:40, textAlign:"right", flexShrink:0, fontSize:"0.75em", color:"var(--text-light)", fontFamily:"var(--font-mono)", userSelect:"none", paddingTop:2, position:"relative", display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4 }}>
+      <div className="reader-line-meta" style={{ width:52, textAlign:"right", flexShrink:0, fontSize:"0.75em", color:"var(--text-light)", fontFamily:"var(--font-mono)", userSelect:"none", paddingTop:2, position:"relative", display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4 }}>
         <div style={{ position:"relative", width:"100%" }}>
           {showNum && lineNum}
           {isBookmarked && <span style={{ position:"absolute", right:-4, top:0, fontSize:14 }} title="Bookmark">🔖</span>}
         </div>
+        {hasVisibleAnnotations && (
+          <LineAnnotationMarker
+            annotations={lineAnnots}
+            onClick={(event) => {
+              event.stopPropagation();
+              const rect = event.currentTarget.getBoundingClientRect();
+              onOpenAnnotationPanel?.({
+                mode: "line",
+                x: rect.left + (rect.width / 2),
+                y: rect.bottom,
+                lineId,
+                lineNumber: lineNum,
+                lineText: text,
+                annotations: lineAnnots,
+              });
+            }}
+          />
+        )}
         {showProsodyTools && hasProsodyNote && (
           <button
             className="btn btn-ghost btn-sm"
@@ -1019,23 +1174,29 @@ function AnnotatedLine({ lineId, text, annots, annotsByLine, showAnnots, userId,
         )}
       </div>
       <div style={{ flex:1 }}>
-        <div className="reader-line-text" onClick={onLookupTap} style={{ fontFamily:"var(--font-fell)", whiteSpace:"normal" }}>
+        <div
+          className="reader-line-text"
+          onClick={onLookupTap}
+          style={{
+            fontFamily:"var(--font-fell)",
+            whiteSpace:"normal",
+            textDecorationLine: hasVisibleAnnotations ? "underline" : "none",
+            textDecorationStyle: hasVisibleAnnotations ? "dotted" : "solid",
+            textDecorationColor: hasVisibleAnnotations ? "var(--gold-light)" : "transparent",
+            textUnderlineOffset: hasVisibleAnnotations ? 4 : 0,
+          }}
+        >
           {showProsodyTools
             ? <ProsodyLineText text={text} mode={prosodyMode} override={prosodyOverride} />
             : text}
         </div>
       </div>
-      {lineAnnots.length > 0 && (
-        <div className="annot-margin reader-annot-margin" style={{ width:260, flexShrink:0, display:"flex", flexDirection:"column", gap:4 }}>
-          {lineAnnots.map(a => <MarginAnnot key={a.id} annot={a} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} onEdit={editAnnot} onDelete={deleteAnnot} compact={lineAnnots.length>1} />)}
-        </div>
-      )}
     </div>
   );
 }
 
 /* ─── Play view ─── */
-function PlayView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, bookmark, showWaypoints, waypointsByIndex, onLookupTap }) {
+function PlayView({ data, showAnnots, annotsByLine, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, bookmark, showWaypoints, waypointsByIndex, onLookupTap, onOpenAnnotationPanel }) {
   let lineNum = 0;
   let readingIndex = 0;
   return (
@@ -1065,9 +1226,10 @@ function PlayView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, can
                 const waypoint = showWaypoints ? waypointsByIndex[readingIndex] : null;
                 return (
                   <div key={lineId}>
-                    <AnnotatedLine lineId={lineId} text={line.text} annots={annots} annotsByLine={annotsByLine}
+                    <AnnotatedLine lineId={lineId} text={line.text} annotsByLine={annotsByLine}
                       showAnnots={showAnnots} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot}
-                      lineNum={lineNum} showNum={hasXmlN || lineNum%5===0} isBookmarked={bookmark===lineId} prosodyMode="off" onLookupTap={(event) => onLookupTap?.(event, lineId)} />
+                      lineNum={lineNum} showNum={hasXmlN || lineNum%5===0} isBookmarked={bookmark===lineId} prosodyMode="off" onLookupTap={(event) => onLookupTap?.(event, lineId)}
+                      onOpenAnnotationPanel={onOpenAnnotationPanel} />
                     {waypoint && <ReadingWaypointMarker waypoint={waypoint} />}
                   </div>
                 );
@@ -1084,7 +1246,6 @@ function PlayView({ data, annots, showAnnots, annotsByLine, userId, isAdmin, can
 /* ─── Poetry view ─── */
 function PoetryView({
   data,
-  annots,
   showAnnots,
   annotsByLine,
   userId,
@@ -1100,6 +1261,7 @@ function PoetryView({
   showWaypoints,
   waypointsByIndex,
   onLookupTap,
+  onOpenAnnotationPanel,
 }) {
   let lineNum = 0;
   let readingIndex = 0;
@@ -1117,7 +1279,7 @@ function PoetryView({
             const waypoint = showWaypoints ? waypointsByIndex[readingIndex] : null;
             return (
               <div key={lineId}>
-                <AnnotatedLine lineId={lineId} text={line.text} annots={annots} annotsByLine={annotsByLine}
+                <AnnotatedLine lineId={lineId} text={line.text} annotsByLine={annotsByLine}
                   showAnnots={showAnnots} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot}
                   lineNum={lineNum}
                   showNum={hasXmlN || lineNum%5===0||lineNum===1}
@@ -1127,6 +1289,7 @@ function PoetryView({
                   onOpenProsodyNote={onOpenProsodyNote}
                   onOpenProsodyEditor={onOpenProsodyEditor}
                   onLookupTap={(event) => onLookupTap?.(event, lineId)}
+                  onOpenAnnotationPanel={onOpenAnnotationPanel}
                 />
                 {waypoint && <ReadingWaypointMarker waypoint={waypoint} />}
               </div>
@@ -1153,7 +1316,7 @@ export default function ReaderPage() {
   const [annots, setAnnots] = useState([]);
   const [disc, setDisc] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tooltip, setTooltip] = useState(null);
+  const [annotationPanel, setAnnotationPanel] = useState(null);
   const [fontSize, setFontSize] = useState(() => {
     const raw = parseInt(localStorage.getItem("codex-font-size") || "20", 10);
     return Number.isFinite(raw) ? Math.min(28, Math.max(14, raw)) : 20;
@@ -1260,10 +1423,10 @@ export default function ReaderPage() {
         e.preventDefault();
         setBookmarkHere();
       } else if (e.key === "Escape") {
-        if (wordLookup || tooltip || placeAwareness || quoteCapture || prosodyNote || prosodyEditor || showVisibilityPanel) {
+        if (wordLookup || annotationPanel || placeAwareness || quoteCapture || prosodyNote || prosodyEditor || showVisibilityPanel) {
           e.preventDefault();
           setWordLookup(null);
-          setTooltip(null);
+          setAnnotationPanel(null);
           setPlaceAwareness(null);
           setQuoteCapture(null);
           setProsodyNote(null);
@@ -1275,7 +1438,7 @@ export default function ReaderPage() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigate, user, wordLookup, tooltip, placeAwareness, quoteCapture, prosodyNote, prosodyEditor, showVisibilityPanel, slug, getCurrentViewportLineNumber]);
+  }, [navigate, user, wordLookup, annotationPanel, placeAwareness, quoteCapture, prosodyNote, prosodyEditor, showVisibilityPanel, slug, getCurrentViewportLineNumber]);
 
   useEffect(() => {
     setShowVisibilityPanel(false);
@@ -1381,7 +1544,7 @@ export default function ReaderPage() {
         const match = await findPlaceAwarenessMatch(text);
         if (selectionLookupRef.current !== lookupToken) return;
         if (match) {
-          setTooltip(null);
+          setAnnotationPanel(null);
           setWordLookup(null);
           setPlaceAwareness({
             placeSlug: match.slug,
@@ -1413,7 +1576,15 @@ export default function ReaderPage() {
     }
 
     setWordLookup(null);
-    setTooltip({ x:rect.left+rect.width/2, y:rect.bottom, text, lineId, endLineId });
+    setAnnotationPanel({
+      mode: "compose",
+      x: rect.left + (rect.width / 2),
+      y: rect.bottom,
+      text,
+      lineId,
+      endLineId,
+      draftKey: `draft:annot:${slug}`,
+    });
   }, []);
 
   const handleMobileLookupTap = useCallback(async (event, lineId) => {
@@ -1434,7 +1605,7 @@ export default function ReaderPage() {
       const match = await findPlaceAwarenessMatch(tappedText);
       if (selectionLookupRef.current !== lookupToken) return;
       if (match) {
-        setTooltip(null);
+        setAnnotationPanel(null);
         setWordLookup(null);
         setPlaceAwareness({
           placeSlug: match.slug,
@@ -1464,18 +1635,19 @@ export default function ReaderPage() {
     const endLineId = selection?.endLineId || startLineId;
     const citation = buildSelectionCitation(parsed, lineMetaIndex, startLineId, endLineId);
     setQuoteCapture({
-      text: selection?.text || "",
+      text: selection?.text || selection?.lineText || "",
       title: parsed.title || work.title,
       author: "William Shakespeare",
       citation,
     });
-    setTooltip(null);
+    setAnnotationPanel(null);
     window.getSelection()?.removeAllRanges();
   }, [lineMetaIndex, parsed, work?.title]);
 
   const saveAnnot = async (note, color, layerId, isGlobal) => {
     try {
-      const a = await annotsApi.create({ workId:work.id, lineId:tooltip.lineId, note, color, selectedText:tooltip.text, isGlobal });
+      if (!annotationPanel) return;
+      const a = await annotsApi.create({ workId:work.id, lineId:annotationPanel.lineId, note, color, selectedText:annotationPanel.text, isGlobal });
       let nextAnnot = a;
       if (layerId) {
         await layersApi.addAnnotation(layerId, a.id).catch(()=>{});
@@ -1496,14 +1668,14 @@ export default function ReaderPage() {
       console.error("Save annotation failed:", e);
       toast?.error(e.message || "Could not save annotation.");
     }
-    setTooltip(null);
+    setAnnotationPanel(null);
     window.getSelection()?.removeAllRanges();
   };
   const copySelectedText = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
       toast?.success("Selected text copied.");
-      setTooltip(null);
+      setAnnotationPanel(null);
       window.getSelection()?.removeAllRanges();
     } catch {
       toast?.error("Could not copy selected text.");
@@ -1649,13 +1821,13 @@ export default function ReaderPage() {
     </div>
   );
 
-  const editionLabel = work.variant === "first-folio"
+  const editionLabel = work.editionLabel || (work.variant === "first-folio"
     ? "First Folio"
     : work.variant === "ps"
-      ? "Modern Edition"
+      ? "Modern"
       : work.variant === "ps-apocrypha"
         ? "Apocrypha"
-        : work.variant || "Edition";
+        : work.variant || "Edition");
   const layerCatalogById = Object.fromEntries((layerCatalog || []).map((layer) => [String(layer.id), layer]));
   const typeCounts = {};
   const layerCounts = {};
@@ -1724,7 +1896,7 @@ export default function ReaderPage() {
 
   return (
     <div className="animate-in reader-page" onMouseUp={handleSelect}
-      style={{ maxWidth: showAnnots ? 1020 : 740, margin:"0 auto", padding:"40px 24px 100px", fontSize, lineHeight:1.85, transition:"max-width 0.3s" }}>
+      style={{ maxWidth: 840, margin:"0 auto", padding:"40px 24px 100px", fontSize, lineHeight:1.85 }}>
 
       {showReaderHint && (
         <div style={{ marginBottom:18, padding:"14px 16px", background:"var(--surface)", border:"1px solid var(--border-light)", borderRadius:10 }}>
@@ -1920,7 +2092,6 @@ export default function ReaderPage() {
       {parsed.type === "poetry"
         ? <PoetryView
             data={parsed}
-            annots={annots}
             showAnnots={showAnnots}
             annotsByLine={annotsByLine}
             userId={userId}
@@ -1936,21 +2107,39 @@ export default function ReaderPage() {
             onLookupTap={handleMobileLookupTap}
             showWaypoints={readerVisibility.showWaypoints !== false}
             waypointsByIndex={waypointsByIndex}
+            onOpenAnnotationPanel={setAnnotationPanel}
           />
-        : <PlayView data={parsed} annots={annots} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} />
+        : <PlayView data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={setAnnotationPanel} />
       }
 
-      {tooltip && (
-        <AnnotTooltip
-          pos={tooltip}
+      {annotationPanel && (
+        <AnnotationPopover
+          panel={annotationPanel}
+          onClose={() => { setAnnotationPanel(null); window.getSelection()?.removeAllRanges(); }}
           onSave={saveAnnot}
           onCopyText={copySelectedText}
           onOpenQuoteCapture={openQuoteCapture}
-          onCancel={()=>{setTooltip(null);window.getSelection()?.removeAllRanges();}}
+          onComposeFromLine={() => setAnnotationPanel((prev) => {
+            if (!prev) return prev;
+            return {
+              mode: "compose",
+              x: prev.x,
+              y: prev.y,
+              text: prev.lineText || prev.text || "",
+              lineId: prev.lineId,
+              endLineId: prev.lineId,
+              lineNumber: prev.lineNumber,
+              draftKey: `draft:annot:${slug}`,
+            };
+          })}
           myLayers={myLayers}
-          draftKey={`draft:annot:${slug}`}
           canPublishGlobal={canPublishGlobal}
           canSave={!!user}
+          userId={userId}
+          isAdmin={isAdmin}
+          editAnnot={editAnnot}
+          deleteAnnot={deleteAnnot}
+          mobileSheet={isMobileViewport}
         />
       )}
       {wordLookup && (
@@ -1964,11 +2153,14 @@ export default function ReaderPage() {
           searchHref={`/search?${new URLSearchParams({ q: wordLookup.word, work: slug }).toString()}`}
           onClose={()=>{setWordLookup(null);window.getSelection()?.removeAllRanges();}}
           onAnnotate={user ? () => {
-            setTooltip({
+            setAnnotationPanel({
+              mode: "compose",
               x:wordLookup.position.x,
               y:wordLookup.position.y,
               text:wordLookup.selectedText || wordLookup.word,
               lineId:wordLookup.lineId || "u",
+              endLineId: wordLookup.lineId || "u",
+              draftKey: `draft:annot:${slug}`,
             });
             setWordLookup(null);
           } : undefined}
@@ -1985,11 +2177,14 @@ export default function ReaderPage() {
           mobileSheet={isMobileViewport}
           onClose={()=>{setPlaceAwareness(null);window.getSelection()?.removeAllRanges();}}
           onAnnotate={user ? () => {
-            setTooltip({
+            setAnnotationPanel({
+              mode: "compose",
               x:placeAwareness.position.x,
               y:placeAwareness.position.y,
               text:placeAwareness.selectionText,
               lineId:placeAwareness.lineId || "u",
+              endLineId: placeAwareness.endLineId || placeAwareness.lineId || "u",
+              draftKey: `draft:annot:${slug}`,
             });
             setPlaceAwareness(null);
           } : undefined}

@@ -8,13 +8,8 @@ import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import { parsePlayShakespeareXML } from "../lib/textParser";
 import { preservedAnnotationTextStyle, quotedExcerpt, quotedText, smartenAnnotationText } from "../lib/annotationFormat";
-
-const ANNOT_TYPES = [
-  { label:"Gloss", icon:"📖", color:"var(--gold-light)" },
-  { label:"Rhetoric", icon:"🎭", color:"var(--accent)" },
-  { label:"Exegesis", icon:"🔍", color:"var(--success)" },
-  { label:"History", icon:"🏛", color:"#7B6FAD" },
-];
+import { ANNOTATION_KINDS as ANNOT_TYPES, getAnnotationKind } from "../lib/annotationKinds";
+import { getWorkEditionOptionLabel } from "../lib/workPresentation";
 
 function fmt(iso) { try { return new Date(iso).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}); } catch { return ""; } }
 
@@ -53,6 +48,11 @@ function flattenWorkLines(parsed) {
 
 function inferParallelSlug(sourceSlug, sourceTitle, allWorks) {
   if (!sourceSlug || !allWorks.length) return "";
+  const sourceWork = allWorks.find((work) => work.slug === sourceSlug);
+  if (sourceWork?.familySlug) {
+    const familyMatch = allWorks.find((work) => work.familySlug === sourceWork.familySlug && work.slug !== sourceWork.slug);
+    if (familyMatch) return familyMatch.slug;
+  }
   const has = new Set(allWorks.map(w => w.slug));
   if (sourceSlug.startsWith("f1-")) {
     const modern = sourceSlug.slice(3);
@@ -61,7 +61,7 @@ function inferParallelSlug(sourceSlug, sourceTitle, allWorks) {
     const folio = `f1-${sourceSlug}`;
     if (has.has(folio)) return folio;
   }
-  const src = allWorks.find(w => w.slug === sourceSlug);
+  const src = sourceWork;
   if (!src) return "";
   const targetVariant = src.variant === "first-folio" ? "ps" : "first-folio";
   const byTitle = allWorks.find(w => w.variant === targetVariant && normalizeText(w.title) === normalizeText(sourceTitle || src.title));
@@ -148,7 +148,7 @@ export default function AnnotationDetailPage() {
   if (!data) return <div style={{padding:60,textAlign:"center",color:"var(--danger)"}}>Annotation not found.</div>;
 
   const { annotation: ann, comments, suggestions } = data;
-  const type = ANNOT_TYPES[ann.color] || ANNOT_TYPES[0];
+  const type = getAnnotationKind(ann.color);
   const copyPageLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -280,11 +280,11 @@ export default function AnnotationDetailPage() {
 
       {/* Annotation card */}
       <div style={{
-        padding:"20px 24px", borderLeft:"4px solid", borderLeftColor: type.color,
+        padding:"20px 24px", borderLeft:"4px solid", borderLeftColor: type.accent,
         background:"var(--surface)", borderRadius:"0 8px 8px 0", marginBottom:28,
       }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-          <span style={{ fontSize:12, fontFamily:"var(--font-display)", letterSpacing:2, textTransform:"uppercase", color:type.color }}>
+          <span style={{ fontSize:12, fontFamily:"var(--font-display)", letterSpacing:2, textTransform:"uppercase", color:type.accent }}>
             {type.icon} {type.label}
           </span>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -333,10 +333,10 @@ export default function AnnotationDetailPage() {
                 Suggest an Edit
               </div>
               <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
-                {ANNOT_TYPES.map((t,i) => (
-                  <button key={i} onClick={()=>setSugColor(i)} className="btn btn-sm" style={{
-                    fontSize:12, border: i===sugColor ? "2px solid var(--accent)" : "2px solid transparent",
-                    background: i===sugColor ? "var(--accent-faint)" : "var(--bg)",
+                {ANNOT_TYPES.map((t) => (
+                  <button key={t.id} onClick={()=>setSugColor(t.color)} className="btn btn-sm" style={{
+                    fontSize:12, border: t.color===sugColor ? "2px solid var(--accent)" : "2px solid transparent",
+                    background: t.color===sugColor ? "var(--accent-faint)" : "var(--bg)",
                   }}>{t.icon} {t.label}</button>
                 ))}
               </div>
@@ -372,7 +372,7 @@ export default function AnnotationDetailPage() {
               }}>
                 <option value="">Select target edition…</option>
                 {allWorks.filter(w => w.slug !== ann.work_slug).sort((a,b)=>a.title.localeCompare(b.title)).map(w => (
-                  <option key={w.slug} value={w.slug}>{w.title} ({w.variant})</option>
+                  <option key={w.slug} value={w.slug}>{getWorkEditionOptionLabel(w)}</option>
                 ))}
               </select>
               {parallelBusy && <div style={{ color:"var(--text-light)", fontSize:13 }}>Searching target edition…</div>}

@@ -5,6 +5,7 @@ import { places as placesApi, works as worksApi } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import PlacesMap from "../components/PlacesMap";
+import { buildPrimaryWorkOptions, getWorkFamilyTitle } from "../lib/workPresentation";
 
 function prettyCategory(cat) {
   return String(cat || "")
@@ -49,7 +50,7 @@ function normalizeCsvList(raw) {
 }
 
 function sortedWorks(works) {
-  return [...works].sort((a, b) => a.title.localeCompare(b.title));
+  return [...works].sort((a, b) => getWorkFamilyTitle(a).localeCompare(getWorkFamilyTitle(b)));
 }
 
 function toggleSlug(list, slug) {
@@ -60,7 +61,7 @@ function toggleSlug(list, slug) {
 
 function WorkSlugPicker({ works, value, onChange, placeholder = "Associate works" }) {
   const selected = Array.isArray(value) ? value : [];
-  const orderedWorks = sortedWorks(works);
+  const orderedWorks = sortedWorks(buildPrimaryWorkOptions(works));
   return (
     <div style={{ display: "grid", gap: 8 }}>
       <select
@@ -75,14 +76,14 @@ function WorkSlugPicker({ works, value, onChange, placeholder = "Associate works
         <option value="">{placeholder}</option>
         {orderedWorks.map((work) => (
           <option key={work.slug} value={work.slug}>
-            {work.title}
+            {getWorkFamilyTitle(work)}
           </option>
         ))}
       </select>
       {selected.length > 0 && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {selected.map((slug) => {
-            const work = orderedWorks.find((entry) => entry.slug === slug);
+            const work = works.find((entry) => entry.slug === slug) || orderedWorks.find((entry) => entry.slug === slug);
             return (
               <button
                 key={slug}
@@ -90,7 +91,7 @@ function WorkSlugPicker({ works, value, onChange, placeholder = "Associate works
                 className="btn btn-secondary btn-sm"
                 onClick={() => onChange(toggleSlug(selected, slug))}
               >
-                {work?.title || slug} ×
+                {work ? getWorkFamilyTitle(work) : slug} ×
               </button>
             );
           })}
@@ -408,9 +409,10 @@ export default function PlacesPage() {
   }, [places]);
 
   const selectedWork = works.find(work => work.slug === workFilter);
+  const primaryWorks = useMemo(() => buildPrimaryWorkOptions(works), [works]);
   const workTitleBySlug = useMemo(() => {
     const map = {};
-    works.forEach(work => { map[work.slug] = work.title; });
+    works.forEach(work => { map[work.slug] = getWorkFamilyTitle(work); });
     return map;
   }, [works]);
   const mapLink = showAllMap ? mapLinkUrlForPlaces(visiblePlaces) : mapLinkUrl(selectedPlace);
@@ -681,8 +683,8 @@ export default function PlacesPage() {
       <div className="places-filter-bar" style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
         <select className="input" value={workFilter} onChange={e => setWorkFilter(e.target.value)} style={{ minWidth: 240 }}>
           <option value="">All Works</option>
-          {[...works].sort((a, b) => a.title.localeCompare(b.title)).map(work => (
-            <option key={work.slug} value={work.slug}>{work.title}</option>
+          {primaryWorks.map(work => (
+            <option key={work.slug} value={work.slug}>{getWorkFamilyTitle(work)}</option>
           ))}
         </select>
         <select className="input" value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ minWidth: 180 }}>
@@ -739,7 +741,7 @@ export default function PlacesPage() {
                   {showAllMap
                     ? "Browsing all filtered locations"
                     : selectedWork
-                      ? `Focused by selection · ${selectedWork.title}`
+                      ? `Focused by selection · ${getWorkFamilyTitle(selectedWork)}`
                       : "Focused by selection"}
                 </div>
               </div>

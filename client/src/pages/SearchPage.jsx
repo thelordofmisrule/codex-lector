@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { works as api } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
+import { getWorkEditionOptionLabel } from "../lib/workPresentation";
 
 const CATEGORY_OPTIONS = [
   { value: "all", label: "All Categories" },
@@ -259,7 +260,7 @@ export default function SearchPage() {
             <select className="input" value={workSlug} onChange={(e) => setWorkSlug(e.target.value)}>
               <option value="">Choose a work...</option>
               {works.map((work) => (
-                <option key={work.slug} value={work.slug}>{work.title}</option>
+                <option key={work.slug} value={work.slug}>{getWorkEditionOptionLabel(work)}</option>
               ))}
             </select>
           ) : (

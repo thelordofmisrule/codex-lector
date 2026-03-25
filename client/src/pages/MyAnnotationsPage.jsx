@@ -5,13 +5,7 @@ import { annotations as api } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import { preservedAnnotationTextStyle, quotedExcerpt, smartenAnnotationText } from "../lib/annotationFormat";
-
-const ANNOT_TYPES = [
-  { label:"Gloss", icon:"📖", color:"var(--gold-light)" },
-  { label:"Rhetoric", icon:"🎭", color:"var(--accent)" },
-  { label:"Exegesis", icon:"🔍", color:"var(--success)" },
-  { label:"History", icon:"🏛", color:"#7B6FAD" },
-];
+import { ANNOTATION_KINDS as ANNOT_TYPES, getAnnotationKind } from "../lib/annotationKinds";
 
 function fmt(iso) { try { return new Date(iso).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}); } catch { return ""; } }
 
@@ -87,8 +81,8 @@ export default function MyAnnotationsPage() {
         </div>
         <div style={{ display:"flex", gap:4 }}>
           <button className={`btn btn-sm ${filterType===null?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterType(null)} style={{ fontSize:12 }}>All</button>
-          {ANNOT_TYPES.map((t,i) => (
-            <button key={i} className={`btn btn-sm ${filterType===i?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterType(filterType===i?null:i)} style={{ fontSize:12 }}>
+          {ANNOT_TYPES.map((t) => (
+            <button key={t.id} className={`btn btn-sm ${filterType===t.color?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterType(filterType===t.color?null:t.color)} style={{ fontSize:12 }}>
               {t.icon}
             </button>
           ))}
@@ -112,15 +106,15 @@ export default function MyAnnotationsPage() {
               <span style={{ fontSize:12, color:"var(--text-light)", marginLeft:8, fontWeight:400 }}>({group.annots.length})</span>
             </h2>
             {group.annots.map(a => {
-              const type = ANNOT_TYPES[a.color] || ANNOT_TYPES[0];
+              const type = getAnnotationKind(a.color);
               return (
                 <div key={a.id} style={{
                   padding:"10px 14px", marginBottom:6, borderRadius:6,
-                  borderLeft:`3px solid ${type.color}`,
+                  borderLeft:`3px solid ${type.accent}`,
                   background:"var(--surface)", border:"1px solid var(--border-light)",
                 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
-                    <span style={{ fontSize:11, fontFamily:"var(--font-display)", letterSpacing:1, textTransform:"uppercase", color:type.color }}>
+                    <span style={{ fontSize:11, fontFamily:"var(--font-display)", letterSpacing:1, textTransform:"uppercase", color:type.accent }}>
                       {type.icon} {type.label}
                       {a.is_global ? <span style={{ marginLeft:4, opacity:0.5, fontSize:10 }}>· global</span> : <span style={{ marginLeft:4, opacity:0.5, fontSize:10 }}>· private</span>}
                     </span>
