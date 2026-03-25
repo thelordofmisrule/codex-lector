@@ -429,6 +429,7 @@ export default function Header() {
                     <button className="btn btn-ghost" onClick={()=>{nav(`/profile/${user.username}`);setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>👤 My Profile</button>
                     <button className="btn btn-ghost" onClick={()=>{nav("/my-annotations");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>📖 My Annotations</button>
                     <button className="btn btn-ghost" onClick={()=>{nav("/my-bookmarks");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>🔖 My Bookmarks</button>
+                    <button className="btn btn-ghost" onClick={()=>{nav("/my-research");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>🗂️ My Research</button>
                     <button className="btn btn-ghost" onClick={()=>{nav("/my-library");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>📊 My Library</button>
                     <button className="btn btn-ghost" onClick={()=>{nav("/layers");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>📚 Annotation Layers</button>
                     {user.isAdmin && (

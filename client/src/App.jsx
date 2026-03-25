@@ -14,6 +14,7 @@ const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const MyAnnotationsPage = lazy(() => import("./pages/MyAnnotationsPage"));
 const MyBookmarksPage = lazy(() => import("./pages/MyBookmarksPage"));
 const MyLibraryPage = lazy(() => import("./pages/MyLibraryPage"));
+const MyResearchPage = lazy(() => import("./pages/MyResearchPage"));
 const LayersPage = lazy(() => import("./pages/LayersPage"));
 const LayerDetailPage = lazy(() => import("./pages/LayerDetailPage"));
 const AnnotationDetailPage = lazy(() => import("./pages/AnnotationDetailPage"));
@@ -56,6 +57,7 @@ export default function App() {
             <Route path="/my-annotations" element={<MyAnnotationsPage />} />
             <Route path="/my-bookmarks" element={<MyBookmarksPage />} />
             <Route path="/my-library" element={<MyLibraryPage />} />
+            <Route path="/my-research" element={<MyResearchPage />} />
             <Route path="/layers" element={<LayersPage />} />
             <Route path="/places" element={<PlacesPage />} />
             <Route path="/people" element={<PeoplePage />} />

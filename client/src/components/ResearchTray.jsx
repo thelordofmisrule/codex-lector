@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import ReaderOverlayShell from "./ReaderOverlayShell";
 
 const ITEM_META = {
@@ -21,6 +22,7 @@ export default function ResearchTray({
   onRemoveItem,
   onClear,
   onCopyItem,
+  fullPageHref = "",
 }) {
   const sortedItems = useMemo(
     () => [...(Array.isArray(items) ? items : [])].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))),
@@ -99,9 +101,16 @@ export default function ResearchTray({
             })}
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border-light)" }}>
-            <div style={{ fontSize: 12, color: "var(--text-light)" }}>
-              {sortedItems.length} saved item{sortedItems.length === 1 ? "" : "s"}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border-light)", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ fontSize: 12, color: "var(--text-light)" }}>
+                {sortedItems.length} saved item{sortedItems.length === 1 ? "" : "s"}
+              </div>
+              {fullPageHref && (
+                <Link to={fullPageHref} className="btn btn-secondary btn-sm" onClick={onClose}>
+                  Open Full Tray
+                </Link>
+              )}
             </div>
             <button className="btn btn-ghost btn-sm" onClick={onClear} style={{ color: "var(--text-light)" }}>
               Clear Tray

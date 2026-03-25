@@ -27,6 +27,7 @@ export default function HowToPage() {
   const readerTools = [
     ["Layers & Overlays", "Toggle site-wide notes, your notes, note types, subscribed layers, waypoints, and poem prosody without changing pages."],
     ["Research Tray", "Keep a working set of pinned words, places, notes, and passages while you read."],
+    ["My Research", "Open your saved tray as a searchable page when you want to review what you have collected across works."],
     ["Quote Capture", "Turn a passage into a shareable quote card, with citation and optional artwork."],
     ["Place Awareness", "Surface place notes and citations directly from the text when a selection matches a place entry."],
   ];

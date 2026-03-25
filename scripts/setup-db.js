@@ -183,6 +183,27 @@ db.exec(`
     UNIQUE(user_id, work_id)
   );
 
+  CREATE TABLE IF NOT EXISTS research_tray_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    item_type TEXT NOT NULL,
+    title TEXT DEFAULT '',
+    subtitle TEXT DEFAULT '',
+    excerpt TEXT DEFAULT '',
+    href TEXT DEFAULT '',
+    work_slug TEXT DEFAULT '',
+    work_title TEXT DEFAULT '',
+    line_id TEXT DEFAULT '',
+    line_number INTEGER DEFAULT 0,
+    copy_text TEXT DEFAULT '',
+    dedupe_key TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, dedupe_key)
+  );
+  CREATE INDEX IF NOT EXISTS idx_research_tray_items_user_updated
+    ON research_tray_items(user_id, updated_at DESC);
+
   CREATE TABLE IF NOT EXISTS annotation_layers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id),
@@ -504,6 +525,25 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS bookmarks (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(user_id, work_id)
 )`); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS research_tray_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  item_type TEXT NOT NULL,
+  title TEXT DEFAULT '',
+  subtitle TEXT DEFAULT '',
+  excerpt TEXT DEFAULT '',
+  href TEXT DEFAULT '',
+  work_slug TEXT DEFAULT '',
+  work_title TEXT DEFAULT '',
+  line_id TEXT DEFAULT '',
+  line_number INTEGER DEFAULT 0,
+  copy_text TEXT DEFAULT '',
+  dedupe_key TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, dedupe_key)
+)`); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_research_tray_items_user_updated ON research_tray_items(user_id, updated_at DESC)"); } catch {}
 try { db.exec("ALTER TABLE annotations ADD COLUMN layer_id INTEGER REFERENCES annotation_layers(id)"); } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS annotation_layers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

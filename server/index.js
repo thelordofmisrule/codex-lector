@@ -71,6 +71,7 @@ app.use("/api/discussions", require("./routes/discussions"));
 app.use("/api/forum", require("./routes/forum"));
 app.use("/api/blog", require("./routes/blog"));
 app.use("/api/bookmarks", require("./routes/bookmarks"));
+app.use("/api/research-tray", require("./routes/researchTray"));
 app.use("/api/layers", require("./routes/layers"));
 app.use("/api/progress", require("./routes/progress"));
 app.use("/api/words", require("./routes/words"));

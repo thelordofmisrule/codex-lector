@@ -47,6 +47,13 @@ export const bookmarks = {
   set:(s,lineId,lineText)=>req(`/bookmarks/${s}`,{method:"POST",body:JSON.stringify({lineId,lineText})}),
   remove:s=>req(`/bookmarks/${s}`,{method:"DELETE"}),
 };
+export const researchTray = {
+  list:(q="")=>req(`/research-tray${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  upsert:data=>req("/research-tray",{method:"POST",body:JSON.stringify(data)}),
+  importAll:items=>req("/research-tray/import",{method:"POST",body:JSON.stringify({items})}),
+  remove:id=>req(`/research-tray/${id}`,{method:"DELETE"}),
+  clear:()=>req("/research-tray",{method:"DELETE"}),
+};
 export const annotationDetail = {
   get:id=>req(`/annotation-detail/${id}`),
   postComment:(id,body,parentId)=>req(`/annotation-detail/${id}/comments`,{method:"POST",body:JSON.stringify({body,parentId})}),

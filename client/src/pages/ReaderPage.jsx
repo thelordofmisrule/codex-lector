@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
-import { works as worksApi, annotations as annotsApi, discussions as discApi, bookmarks as bmApi, progress as progApi, layers as layersApi, analytics as analyticsApi, prosody as prosodyApi } from "../lib/api";
+import { works as worksApi, annotations as annotsApi, discussions as discApi, bookmarks as bmApi, progress as progApi, researchTray as researchTrayApi, layers as layersApi, analytics as analyticsApi, prosody as prosodyApi } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import { parsePlayShakespeareXML } from "../lib/textParser";
@@ -1360,6 +1360,7 @@ export default function ReaderPage() {
   const [showVisibilityPanel, setShowVisibilityPanel] = useState(false);
   const [showResearchTray, setShowResearchTray] = useState(false);
   const [researchTrayItems, setResearchTrayItems] = useState(loadResearchTray);
+  const [researchTrayScope, setResearchTrayScope] = useState(() => user ? "remote" : "local");
   const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== "undefined" ? window.innerWidth < MOBILE_READER_BREAKPOINT : false);
   const [prosodyMode, setProsodyMode] = useState(() => {
     const raw = localStorage.getItem("codex-prosody-mode");
@@ -1396,8 +1397,40 @@ export default function ReaderPage() {
   }, [readerVisibility]);
 
   useEffect(() => {
-    saveResearchTray(researchTrayItems);
-  }, [researchTrayItems]);
+    if (researchTrayScope === "local") saveResearchTray(researchTrayItems);
+  }, [researchTrayItems, researchTrayScope]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateResearchTray = async () => {
+      if (!user) {
+        setResearchTrayScope("local");
+        setResearchTrayItems(loadResearchTray());
+        return;
+      }
+
+      try {
+        setResearchTrayScope("remote");
+        const localItems = loadResearchTray();
+        const rows = localItems.length
+          ? await researchTrayApi.importAll(localItems)
+          : await researchTrayApi.list();
+        if (localItems.length) clearResearchTray();
+        if (!cancelled) setResearchTrayItems(rows);
+      } catch {
+        if (!cancelled) {
+          setResearchTrayItems([]);
+          toast?.error("Could not load your research tray.");
+        }
+      }
+    };
+
+    hydrateResearchTray();
+    return () => {
+      cancelled = true;
+    };
+  }, [toast, user]);
 
   useEffect(() => {
     const updateViewport = () => setIsMobileViewport(window.innerWidth < MOBILE_READER_BREAKPOINT);
@@ -1680,11 +1713,20 @@ export default function ReaderPage() {
     window.getSelection()?.removeAllRanges();
   }, [lineMetaIndex, parsed, work?.title]);
 
-  const addResearchItem = useCallback((item) => {
-    setResearchTrayItems((prev) => upsertResearchTrayItem(prev, item));
-    setShowResearchTray(true);
-    toast?.success("Saved to research tray.");
-  }, [toast]);
+  const addResearchItem = useCallback(async (item) => {
+    try {
+      if (user) {
+        const saved = await researchTrayApi.upsert(item);
+        setResearchTrayItems((prev) => [saved, ...prev.filter((entry) => entry.dedupeKey !== saved.dedupeKey)]);
+      } else {
+        setResearchTrayItems((prev) => upsertResearchTrayItem(prev, item));
+      }
+      setShowResearchTray(true);
+      toast?.success("Saved to research tray.");
+    } catch (e) {
+      toast?.error(e.message || "Could not save to research tray.");
+    }
+  }, [toast, user]);
 
   const saveToResearchTray = useCallback((payload) => {
     const workTitle = parsed?.title || work?.title || slug;
@@ -1805,9 +1847,34 @@ export default function ReaderPage() {
       danger: true,
     });
     if (!ok) return;
-    setResearchTrayItems(clearResearchTray());
-    toast?.success("Research tray cleared.");
-  }, [confirm, researchTrayItems.length, toast]);
+    try {
+      if (user) {
+        await researchTrayApi.clear();
+        setResearchTrayItems([]);
+      } else {
+        setResearchTrayItems(clearResearchTray());
+      }
+      toast?.success("Research tray cleared.");
+    } catch (e) {
+      toast?.error(e.message || "Could not clear research tray.");
+    }
+  }, [confirm, researchTrayItems.length, toast, user]);
+
+  const removeResearchTrayEntry = useCallback(async (itemId) => {
+    if (!itemId) return;
+    const previous = researchTrayItems;
+    if (user) {
+      setResearchTrayItems((prev) => prev.filter((item) => item.id !== itemId));
+      try {
+        await researchTrayApi.remove(itemId);
+      } catch (e) {
+        setResearchTrayItems(previous);
+        toast?.error(e.message || "Could not remove research item.");
+      }
+      return;
+    }
+    setResearchTrayItems((prev) => removeResearchTrayItem(prev, itemId));
+  }, [researchTrayItems, toast, user]);
 
   const saveAnnot = async (note, color, layerId, isGlobal) => {
     try {
@@ -2189,10 +2256,11 @@ export default function ReaderPage() {
         open={showResearchTray}
         items={researchTrayItems}
         mobileSheet={isMobileViewport}
+        fullPageHref={user ? "/my-research" : ""}
         onClose={() => setShowResearchTray(false)}
         onOpenItem={openResearchTrayItem}
         onCopyItem={copyResearchTrayItem}
-        onRemoveItem={(itemId) => setResearchTrayItems((prev) => removeResearchTrayItem(prev, itemId))}
+        onRemoveItem={removeResearchTrayEntry}
         onClear={clearResearchTrayItems}
       />
 
