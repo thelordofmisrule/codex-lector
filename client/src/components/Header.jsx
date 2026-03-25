@@ -54,6 +54,7 @@ export default function Header() {
         { to:"/people", label:"People" },
         { to:"/places", label:"Places" },
         { to:"/gallery", label:"Gallery" },
+        ...(user ? [{ to:"/my-research", label:"My Research" }] : []),
         { to:"/layers", label:"Layers" },
       ],
     },
