@@ -13,6 +13,9 @@ const MAP_WIDTH = 3400;
 const MAP_HEIGHT = 1320;
 const NODE_WIDTH = 164;
 const NODE_HEIGHT = 64;
+const MIN_ZOOM = 0.45;
+const MAX_ZOOM = 1.5;
+const DEFAULT_ZOOM = 0.7;
 
 function statCard(label, value, note = "") {
   return (
@@ -119,12 +122,19 @@ function DetailList({ label, items }) {
   );
 }
 
+function clampZoom(value) {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+}
+
 function GenealogyMap({
   nodes,
   edges,
   selectedNodeId,
   selectedWork,
   showContext,
+  zoom,
+  onZoomChange,
+  onResetZoom,
   onSelectNode,
 }) {
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) || null;
@@ -166,21 +176,49 @@ function GenealogyMap({
                 : `${getHistoryPlayTitle(selectedWork)} only, without contextual ancestors or descendants.`}
           </div>
         </div>
-        {selectedNode && (
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => onSelectNode("")}
-            style={{ color: "var(--text-light)" }}
-          >
-            Clear Focus
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <button className="btn btn-secondary btn-sm" onClick={() => onZoomChange(clampZoom(zoom - 0.1))}>
+            −
           </button>
-        )}
+          <div style={{ minWidth: 58, textAlign: "center", fontSize: 12, color: "var(--text-light)", fontFamily: "var(--font-display)", letterSpacing: 1 }}>
+            {Math.round(zoom * 100)}%
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={() => onZoomChange(clampZoom(zoom + 0.1))}>
+            +
+          </button>
+          <input
+            type="range"
+            min={MIN_ZOOM}
+            max={MAX_ZOOM}
+            step="0.05"
+            value={zoom}
+            onChange={(event) => onZoomChange(clampZoom(Number(event.target.value) || DEFAULT_ZOOM))}
+            style={{ width: 120 }}
+          />
+          <button className="btn btn-ghost btn-sm" onClick={onResetZoom} style={{ color: "var(--text-light)" }}>
+            Fit
+          </button>
+          {selectedNode && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => onSelectNode("")}
+              style={{ color: "var(--text-light)" }}
+            >
+              Clear Focus
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ overflow: "auto", maxHeight: 760 }}>
         <svg
           viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
-          style={{ display: "block", width: MAP_WIDTH, height: MAP_HEIGHT, background: "radial-gradient(circle at top, rgba(201,168,76,0.07), transparent 32%)" }}
+          style={{
+            display: "block",
+            width: `${Math.round(MAP_WIDTH * zoom)}px`,
+            height: `${Math.round(MAP_HEIGHT * zoom)}px`,
+            background: "radial-gradient(circle at top, rgba(201,168,76,0.07), transparent 32%)",
+          }}
         >
           {edges.map((edge) => {
             const source = nodes.find((node) => node.id === edge.source);
@@ -215,6 +253,8 @@ function GenealogyMap({
               : (selectedWork !== "all" && showContext && !isInPlay);
             const opacity = faded ? 0.28 : 1;
             const lines = String(node.displayName || node.name).split("\n");
+            const lineGap = 18;
+            const startY = (NODE_HEIGHT / 2) - ((lines.length - 1) * lineGap) / 2;
             return (
               <g
                 key={node.id}
@@ -234,16 +274,23 @@ function GenealogyMap({
                 {!isInPlay && selectedWork !== "all" && showContext && (
                   <rect width={NODE_WIDTH} height={NODE_HEIGHT} rx="14" fill="rgba(255,255,255,0.22)" />
                 )}
-                <text x={14} y={lines.length > 1 ? 26 : 32} fill={house.text} fontSize="18" fontFamily="var(--font-display)">
-                  {lines[0]}
+                <text
+                  x={NODE_WIDTH / 2}
+                  y={startY}
+                  fill={house.text}
+                  fontSize="18"
+                  fontFamily="var(--font-display)"
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                >
+                  {lines.map((line, index) => (
+                    <tspan key={`${node.id}-${index}`} x={NODE_WIDTH / 2} dy={index === 0 ? 0 : lineGap}>
+                      {line}
+                    </tspan>
+                  ))}
                 </text>
-                {lines[1] && (
-                  <text x={14} y={46} fill={house.text} fontSize="18" fontFamily="var(--font-display)">
-                    {lines[1]}
-                  </text>
-                )}
-                <text x={NODE_WIDTH - 12} y={16} textAnchor="end" fill={house.text} fontSize="10" opacity="0.86" fontFamily="var(--font-display)" letterSpacing="1.2">
-                  {house.label.toUpperCase().replace(" / ", " ")}
+                <text x={NODE_WIDTH - 12} y={16} textAnchor="end" fill={house.text} fontSize="9.5" opacity="0.86" fontFamily="var(--font-display)" letterSpacing="1.1">
+                  {house.shortLabel.toUpperCase()}
                 </text>
               </g>
             );
@@ -257,6 +304,7 @@ function GenealogyMap({
 export default function GenealogyPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedNodeId, setSelectedNodeId] = useState("");
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
 
   const selectedWork = searchParams.get("work") || "all";
   const showContext = searchParams.get("context") !== "0";
@@ -301,6 +349,10 @@ export default function GenealogyPage() {
     const firstMatch = HISTORY_GENEALOGY_NODES.find((node) => node.workSlugs.includes(selectedWork));
     setSelectedNodeId(firstMatch?.id || "");
   }, [selectedWork]);
+
+  useEffect(() => {
+    setZoom(DEFAULT_ZOOM);
+  }, [selectedWork, showContext]);
 
   const selectedParents = useMemo(
     () => (selectedNode ? (relationIndex.childToParents.get(selectedNode.id) || []).map((id) => nodesById.get(id)).filter(Boolean) : []),
@@ -423,6 +475,9 @@ export default function GenealogyPage() {
         selectedNodeId={selectedNodeId}
         selectedWork={selectedWork}
         showContext={showContext}
+        zoom={zoom}
+        onZoomChange={setZoom}
+        onResetZoom={() => setZoom(DEFAULT_ZOOM)}
         onSelectNode={setSelectedNodeId}
       />
 

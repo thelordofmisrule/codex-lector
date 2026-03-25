@@ -12,13 +12,13 @@ export const HISTORY_GENEALOGY_PLAYS = [
 ];
 
 export const HISTORY_GENEALOGY_HOUSES = {
-  angevin: { label: "Angevin / Early Plantagenet", fill: "#7a2e1e", stroke: "#5f2012", text: "#fff8f0" },
-  plantagenet: { label: "Plantagenet", fill: "#8b3e2f", stroke: "#642619", text: "#fff8f0" },
-  lancaster: { label: "Lancaster", fill: "#b17f18", stroke: "#7d590f", text: "#fff8f0" },
-  york: { label: "York", fill: "#375d93", stroke: "#27436b", text: "#f7fbff" },
-  tudor: { label: "Tudor", fill: "#376a43", stroke: "#23452b", text: "#f3fbf4" },
-  foreign: { label: "Marriage / Foreign House", fill: "#79658f", stroke: "#5d4b70", text: "#f8f2ff" },
-  context: { label: "Context Figure", fill: "#6c6257", stroke: "#4f473f", text: "#fffaf1" },
+  angevin: { label: "Angevin / Early Plantagenet", shortLabel: "Angevin", fill: "#7a2e1e", stroke: "#5f2012", text: "#fff8f0" },
+  plantagenet: { label: "Plantagenet", shortLabel: "Plantagenet", fill: "#8b3e2f", stroke: "#642619", text: "#fff8f0" },
+  lancaster: { label: "Lancaster", shortLabel: "Lancaster", fill: "#b17f18", stroke: "#7d590f", text: "#fff8f0" },
+  york: { label: "York", shortLabel: "York", fill: "#375d93", stroke: "#27436b", text: "#f7fbff" },
+  tudor: { label: "Tudor", shortLabel: "Tudor", fill: "#376a43", stroke: "#23452b", text: "#f3fbf4" },
+  foreign: { label: "Marriage / Foreign House", shortLabel: "Marriage", fill: "#79658f", stroke: "#5d4b70", text: "#f8f2ff" },
+  context: { label: "Context Figure", shortLabel: "Context", fill: "#6c6257", stroke: "#4f473f", text: "#fffaf1" },
 };
 
 export const HISTORY_GENEALOGY_REGNAL_LINE = [
@@ -553,4 +553,3 @@ export const HISTORY_GENEALOGY_EDGES = [
 export function getHistoryPlayTitle(slug) {
   return HISTORY_GENEALOGY_PLAYS.find((play) => play.slug === slug)?.title || slug;
 }
-
