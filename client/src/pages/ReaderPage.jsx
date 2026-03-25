@@ -8,11 +8,13 @@ import { parsePlayShakespeareXML } from "../lib/textParser";
 import { preservedAnnotationTextStyle, quotedExcerpt, smartenAnnotationText } from "../lib/annotationFormat";
 import { findPlaceAwarenessMatch, warmPlaceAwarenessIndex } from "../lib/placeAwareness";
 import { analyzeProsodyLine, parseProsodyScan } from "../lib/prosody";
+import { clearResearchTray, loadResearchTray, removeResearchTrayItem, saveResearchTray, upsertResearchTrayItem } from "../lib/researchTray";
 import { YEAR_OF_SHAKESPEARE_ROWS, buildReadingWaypoints, getCalendarRowsForWork } from "../lib/yearOfShakespeare";
 import { ANNOTATION_KINDS as ANNOT_TYPES, DEFAULT_ANNOTATION_COLOR, getAnnotationColor, getAnnotationKind, getAnnotationKindId } from "../lib/annotationKinds";
 import PlaceAwareness from "../components/PlaceAwareness";
 import QuoteCaptureModal from "../components/QuoteCaptureModal";
 import ReaderOverlayShell from "../components/ReaderOverlayShell";
+import ResearchTray from "../components/ResearchTray";
 import ThreadedComments from "../components/ThreadedComments";
 import WordLookup from "../components/WordLookup";
 
@@ -199,6 +201,19 @@ function buildSelectionCitation(data, lineMetaIndex, startLineId, endLineId) {
 
   if (start.lineNum === end.lineNum) return `line ${start.lineNum}`;
   return `lines ${start.lineNum}-${end.lineNum}`;
+}
+
+function lineHrefForWork(workSlug, lineNumber) {
+  if (!workSlug) return "";
+  if (lineNumber > 0) return `/read/${workSlug}?line=${lineNumber}`;
+  return `/read/${workSlug}`;
+}
+
+function compactExcerpt(text, limit = 180) {
+  const value = String(text || "").trim().replace(/\s+/g, " ");
+  if (!value) return "";
+  if (value.length <= limit) return value;
+  return `${value.slice(0, limit - 1).trimEnd()}…`;
 }
 
 function extractWordAtOffset(text, offset) {
@@ -585,7 +600,7 @@ function ReadingWaypointMarker({ waypoint }) {
 }
 
 /* ─── Margin annotation ─── */
-function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelete, compact }) {
+function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelete, onSaveToTray, compact }) {
   const [editing, setEditing] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [note, setNote] = useState(annot.note);
@@ -688,10 +703,24 @@ function MarginAnnot({ annot, userId, isAdmin, canPublishGlobal, onEdit, onDelet
         </button>
       )}
       <div style={{ marginTop:4, borderTop:"1px solid var(--border-light)", paddingTop:4 }}>
-        <Link to={`/annotation/${annot.id}`} style={{ fontSize:11, color:"var(--text-light)", fontFamily:"var(--font-display)", letterSpacing:1, textDecoration:"none" }}
-          onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"} onMouseLeave={e=>e.currentTarget.style.color="var(--text-light)"}>
-          DISCUSS →
-        </Link>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+          <Link to={`/annotation/${annot.id}`} style={{ fontSize:11, color:"var(--text-light)", fontFamily:"var(--font-display)", letterSpacing:1, textDecoration:"none" }}
+            onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"} onMouseLeave={e=>e.currentTarget.style.color="var(--text-light)"}>
+            DISCUSS →
+          </Link>
+          {onSaveToTray && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                onSaveToTray({ type: "annotation", annotation: annot });
+              }}
+              style={{ fontSize:11, color:"var(--text-light)", padding:"0 4px" }}
+            >
+              Save to Tray
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -731,6 +760,7 @@ function AnnotationPopover({
   onClose,
   onSave,
   onCopyText,
+  onSaveToTray,
   onOpenQuoteCapture,
   onComposeFromLine,
   myLayers,
@@ -881,6 +911,7 @@ function AnnotationPopover({
             )}
             <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
               {canSave && <button className="btn btn-primary btn-sm" onClick={() => note.trim() && onSave(note.trim(), color, layerId || null, isGlobal)}>Save</button>}
+              <button className="btn btn-secondary btn-sm" onClick={() => onSaveToTray?.({ type: "passage", panel })}>Save to Tray</button>
               <button className="btn btn-secondary btn-sm" onClick={() => onOpenQuoteCapture?.(panel)}>Quote Card</button>
               <button className="btn btn-secondary btn-sm" onClick={() => onCopyText?.(panel.text || panel.lineText || "")}>Copy Text</button>
               <button className="btn btn-secondary btn-sm" onClick={onClose}>{canSave ? "Cancel" : "Close"}</button>
@@ -898,12 +929,14 @@ function AnnotationPopover({
                   canPublishGlobal={canPublishGlobal}
                   onEdit={editAnnot}
                   onDelete={deleteAnnot}
+                  onSaveToTray={onSaveToTray}
                   compact={annotations.length > 1}
                 />
               ))}
             </div>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
               {canSave && <button className="btn btn-primary btn-sm" onClick={onComposeFromLine}>New Note</button>}
+              <button className="btn btn-secondary btn-sm" onClick={() => onSaveToTray?.({ type: "passage", panel })}>Save to Tray</button>
               <button className="btn btn-secondary btn-sm" onClick={() => onOpenQuoteCapture?.(panel)}>Quote Card</button>
               <button className="btn btn-secondary btn-sm" onClick={() => onCopyText?.(panel.lineText || "")}>Copy Text</button>
               <button className="btn btn-secondary btn-sm" onClick={onClose}>Close</button>
@@ -1325,6 +1358,8 @@ export default function ReaderPage() {
   const [showReaderHint, setShowReaderHint] = useState(() => localStorage.getItem("codex-reader-hint-dismissed") !== "true");
   const [readerVisibility, setReaderVisibility] = useState(loadReaderVisibility);
   const [showVisibilityPanel, setShowVisibilityPanel] = useState(false);
+  const [showResearchTray, setShowResearchTray] = useState(false);
+  const [researchTrayItems, setResearchTrayItems] = useState(loadResearchTray);
   const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== "undefined" ? window.innerWidth < MOBILE_READER_BREAKPOINT : false);
   const [prosodyMode, setProsodyMode] = useState(() => {
     const raw = localStorage.getItem("codex-prosody-mode");
@@ -1359,6 +1394,10 @@ export default function ReaderPage() {
   useEffect(() => {
     localStorage.setItem("codex-reader-visibility", JSON.stringify(readerVisibility));
   }, [readerVisibility]);
+
+  useEffect(() => {
+    saveResearchTray(researchTrayItems);
+  }, [researchTrayItems]);
 
   useEffect(() => {
     const updateViewport = () => setIsMobileViewport(window.innerWidth < MOBILE_READER_BREAKPOINT);
@@ -1418,7 +1457,7 @@ export default function ReaderPage() {
         e.preventDefault();
         setBookmarkHere();
       } else if (e.key === "Escape") {
-        if (wordLookup || annotationPanel || placeAwareness || quoteCapture || prosodyNote || prosodyEditor || showVisibilityPanel) {
+        if (wordLookup || annotationPanel || placeAwareness || quoteCapture || prosodyNote || prosodyEditor || showVisibilityPanel || showResearchTray) {
           e.preventDefault();
           setWordLookup(null);
           setAnnotationPanel(null);
@@ -1427,16 +1466,18 @@ export default function ReaderPage() {
           setProsodyNote(null);
           setProsodyEditor(null);
           setShowVisibilityPanel(false);
+          setShowResearchTray(false);
           window.getSelection()?.removeAllRanges();
         }
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigate, user, wordLookup, annotationPanel, placeAwareness, quoteCapture, prosodyNote, prosodyEditor, showVisibilityPanel, slug, getCurrentViewportLineNumber]);
+  }, [navigate, user, wordLookup, annotationPanel, placeAwareness, quoteCapture, prosodyNote, prosodyEditor, showVisibilityPanel, showResearchTray, slug, getCurrentViewportLineNumber]);
 
   useEffect(() => {
     setShowVisibilityPanel(false);
+    setShowResearchTray(false);
   }, [slug]);
 
   useEffect(() => {
@@ -1638,6 +1679,135 @@ export default function ReaderPage() {
     setAnnotationPanel(null);
     window.getSelection()?.removeAllRanges();
   }, [lineMetaIndex, parsed, work?.title]);
+
+  const addResearchItem = useCallback((item) => {
+    setResearchTrayItems((prev) => upsertResearchTrayItem(prev, item));
+    setShowResearchTray(true);
+    toast?.success("Saved to research tray.");
+  }, [toast]);
+
+  const saveToResearchTray = useCallback((payload) => {
+    const workTitle = parsed?.title || work?.title || slug;
+
+    if (payload?.type === "passage") {
+      const panel = payload.panel || annotationPanel;
+      if (!panel) return;
+      const startLineId = panel.lineId || "";
+      const endLineId = panel.endLineId || startLineId;
+      const citation = buildSelectionCitation(parsed, lineMetaIndex, startLineId, endLineId);
+      const lineMeta = lineMetaIndex[startLineId] || {};
+      const text = String(panel.text || panel.lineText || "").trim();
+      if (!text) return;
+      addResearchItem({
+        type: "passage",
+        title: "Passage",
+        subtitle: [workTitle, citation].filter(Boolean).join(" · "),
+        excerpt: compactExcerpt(text, 220),
+        href: lineHrefForWork(slug, lineMeta.lineNum || panel.lineNumber || 0),
+        workSlug: slug,
+        workTitle,
+        lineId: startLineId,
+        lineNumber: lineMeta.lineNum || panel.lineNumber || 0,
+        copyText: text,
+        dedupeKey: `passage:${slug}:${startLineId}:${compactExcerpt(text, 80)}`,
+      });
+      return;
+    }
+
+    if (payload?.type === "annotation") {
+      const annot = payload.annotation;
+      if (!annot) return;
+      const lineMeta = lineMetaIndex[annot.line_id] || {};
+      const kind = getAnnotationKind(annot.kind, annot.color);
+      addResearchItem({
+        type: "annotation",
+        title: `${kind.label} note`,
+        subtitle: [workTitle, lineMeta.lineNum ? `line ${lineMeta.lineNum}` : ""].filter(Boolean).join(" · "),
+        excerpt: compactExcerpt(annot.note, 220),
+        href: `/annotation/${annot.id}`,
+        workSlug: slug,
+        workTitle,
+        lineId: annot.line_id || "",
+        lineNumber: lineMeta.lineNum || 0,
+        copyText: annot.note,
+        dedupeKey: `annotation:${annot.id}`,
+      });
+      return;
+    }
+
+    if (payload?.type === "word" && wordLookup) {
+      const lineMeta = lineMetaIndex[wordLookup.lineId || ""] || {};
+      const definition = String(payload.definition || "").trim();
+      const label = payload.displayWord || wordLookup.selectedText || wordLookup.word;
+      addResearchItem({
+        type: "word",
+        title: label,
+        subtitle: [workTitle, lineMeta.lineNum ? `line ${lineMeta.lineNum}` : "Word lookup"].filter(Boolean).join(" · "),
+        excerpt: compactExcerpt(definition || lineMeta.text || "", 220),
+        href: lineHrefForWork(slug, lineMeta.lineNum || 0),
+        workSlug: slug,
+        workTitle,
+        lineId: wordLookup.lineId || "",
+        lineNumber: lineMeta.lineNum || 0,
+        copyText: definition ? `${label}\n\n${definition}` : label,
+        dedupeKey: `word:${slug}:${wordLookup.lineId || ""}:${payload.headword || wordLookup.word}`,
+      });
+      return;
+    }
+
+    if (payload?.type === "place" && placeAwareness) {
+      const place = payload.place;
+      if (!place) return;
+      addResearchItem({
+        type: "place",
+        title: place.name || placeAwareness.selectionText,
+        subtitle: [workTitle, place.modernCountry || place.placeType || "Place"].filter(Boolean).join(" · "),
+        excerpt: compactExcerpt(place.description || place.historicalNote || "", 220),
+        href: `/places?place=${encodeURIComponent(placeAwareness.placeSlug)}&work=${encodeURIComponent(slug)}`,
+        workSlug: slug,
+        workTitle,
+        lineId: placeAwareness.lineId || "",
+        lineNumber: lineMetaIndex[placeAwareness.lineId || ""]?.lineNum || 0,
+        copyText: `${place.name || placeAwareness.selectionText}${place.description ? `\n\n${place.description}` : ""}`,
+        dedupeKey: `place:${placeAwareness.placeSlug}:${slug}`,
+      });
+    }
+  }, [addResearchItem, annotationPanel, lineMetaIndex, parsed, placeAwareness, slug, work?.title, wordLookup]);
+
+  const openResearchTrayItem = useCallback((item) => {
+    setShowResearchTray(false);
+    if (item.type !== "annotation" && item.workSlug === slug && item.lineId) {
+      const node = document.getElementById(item.lineId);
+      if (node) {
+        node.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+    }
+    if (item.href) navigate(item.href);
+  }, [navigate, slug]);
+
+  const copyResearchTrayItem = useCallback(async (item) => {
+    try {
+      await navigator.clipboard.writeText(item.copyText || item.excerpt || item.title || "");
+      toast?.success("Tray item copied.");
+    } catch {
+      toast?.error("Could not copy tray item.");
+    }
+  }, [toast]);
+
+  const clearResearchTrayItems = useCallback(async () => {
+    if (!researchTrayItems.length) return;
+    const ok = await confirm({
+      title: "Clear Research Tray",
+      message: "Remove all saved items from your research tray?",
+      confirmText: "Clear",
+      cancelText: "Cancel",
+      danger: true,
+    });
+    if (!ok) return;
+    setResearchTrayItems(clearResearchTray());
+    toast?.success("Research tray cleared.");
+  }, [confirm, researchTrayItems.length, toast]);
 
   const saveAnnot = async (note, color, layerId, isGlobal) => {
     try {
@@ -1937,10 +2107,23 @@ export default function ReaderPage() {
 
           <button
             className={`btn btn-sm ${showVisibilityPanel ? "btn-primary" : "btn-secondary"}`}
-            onClick={() => setShowVisibilityPanel((value) => !value)}
+            onClick={() => {
+              setShowResearchTray(false);
+              setShowVisibilityPanel((value) => !value);
+            }}
             style={{ fontFamily:"var(--font-display)", letterSpacing:1 }}
           >
             Layers & Overlays
+          </button>
+          <button
+            className={`btn btn-sm ${showResearchTray ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => {
+              setShowVisibilityPanel(false);
+              setShowResearchTray((value) => !value);
+            }}
+            style={{ fontFamily:"var(--font-display)", letterSpacing:1 }}
+          >
+            Research Tray{researchTrayItems.length ? ` (${researchTrayItems.length})` : ""}
           </button>
 
           {/* Bookmark controls */}
@@ -2001,6 +2184,17 @@ export default function ReaderPage() {
           />
         </>
       )}
+
+      <ResearchTray
+        open={showResearchTray}
+        items={researchTrayItems}
+        mobileSheet={isMobileViewport}
+        onClose={() => setShowResearchTray(false)}
+        onOpenItem={openResearchTrayItem}
+        onCopyItem={copyResearchTrayItem}
+        onRemoveItem={(itemId) => setResearchTrayItems((prev) => removeResearchTrayItem(prev, itemId))}
+        onClear={clearResearchTrayItems}
+      />
 
       {/* Bookmark resume banner */}
       {bookmark && (
@@ -2124,6 +2318,7 @@ export default function ReaderPage() {
           onClose={() => { setAnnotationPanel(null); window.getSelection()?.removeAllRanges(); }}
           onSave={saveAnnot}
           onCopyText={copySelectedText}
+          onSaveToTray={saveToResearchTray}
           onOpenQuoteCapture={openQuoteCapture}
           onComposeFromLine={() => setAnnotationPanel((prev) => {
             if (!prev) return prev;
@@ -2158,6 +2353,7 @@ export default function ReaderPage() {
           mobileSheet={isMobileViewport}
           searchHref={`/search?${new URLSearchParams({ q: wordLookup.word, work: slug }).toString()}`}
           onClose={()=>{setWordLookup(null);window.getSelection()?.removeAllRanges();}}
+          onSaveToTray={(payload) => saveToResearchTray({ type: "word", ...payload })}
           onAnnotate={user ? () => {
             setAnnotationPanel({
               mode: "compose",
@@ -2182,6 +2378,7 @@ export default function ReaderPage() {
           position={placeAwareness.position}
           mobileSheet={isMobileViewport}
           onClose={()=>{setPlaceAwareness(null);window.getSelection()?.removeAllRanges();}}
+          onSaveToTray={(payload) => saveToResearchTray({ type: "place", ...payload })}
           onAnnotate={user ? () => {
             setAnnotationPanel({
               mode: "compose",

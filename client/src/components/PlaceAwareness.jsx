@@ -8,7 +8,7 @@ function metadataBits(place) {
   return [place.placeType, place.modernCountry].filter(Boolean).join(" · ");
 }
 
-export default function PlaceAwareness({ placeSlug, workSlug, initialPlace, matchedTerm, selectionText, position, onClose, onAnnotate, mobileSheet = false }) {
+export default function PlaceAwareness({ placeSlug, workSlug, initialPlace, matchedTerm, selectionText, position, onClose, onAnnotate, onSaveToTray, mobileSheet = false }) {
   const toast = useToast();
   const [data, setData] = useState(() => initialPlace ? { place: initialPlace, citations: [] } : null);
   const [loading, setLoading] = useState(true);
@@ -146,6 +146,18 @@ export default function PlaceAwareness({ placeSlug, workSlug, initialPlace, matc
           >
             Open Place Card
           </Link>
+          {onSaveToTray && place && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => onSaveToTray({
+                place,
+                citations,
+              })}
+              style={{ width:"100%", color:"var(--text)" }}
+            >
+              Save to Tray
+            </button>
+          )}
           {onAnnotate && (
             <button
               className="btn btn-secondary btn-sm"

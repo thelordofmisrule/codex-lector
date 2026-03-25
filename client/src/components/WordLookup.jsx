@@ -64,6 +64,7 @@ export default function WordLookup({
   position,
   onClose,
   onAnnotate,
+  onSaveToTray,
   mobileSheet = false,
   searchHref = "",
 }) {
@@ -422,7 +423,7 @@ export default function WordLookup({
           </>
         )}
 
-        {(onAnnotate || mobileSheet) && (
+        {(onAnnotate || mobileSheet || onSaveToTray) && (
           <div style={{ marginTop:12, paddingTop:10, borderTop:"1px solid var(--border-light)", display:"grid", gap:8 }}>
             {onAnnotate && (
               <button
@@ -431,6 +432,20 @@ export default function WordLookup({
                 style={{ width:"100%", color:"var(--text)" }}
               >
                 Annotate this word
+              </button>
+            )}
+            {onSaveToTray && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => onSaveToTray({
+                  headword: data?.gloss?.headword || sanitizeTerm(word),
+                  displayWord,
+                  definition: data?.gloss?.definition || "",
+                  sourceLabel: data?.gloss?.sourceLabel || "",
+                })}
+                style={{ width:"100%", color:"var(--text)" }}
+              >
+                Save to Tray
               </button>
             )}
             {mobileSheet && (
