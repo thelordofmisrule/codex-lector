@@ -88,6 +88,37 @@
   --font-eva-readout: 'Share Tech Mono', 'JetBrains Mono', monospace;
 }
 
+/* ─── GWERN Theme ─────────────────────────── */
+[data-theme="gwern"] {
+  --bg: #F4F4F1;
+  --bg-dark: #ECECE7;
+  --bg-darker: #E1E0D9;
+  --surface: #FAFAF8;
+  --surface-hover: #F0F0EC;
+  --text: #1C1C1B;
+  --text-muted: #424242;
+  --text-light: #75756F;
+  --accent: #2757A5;
+  --accent-light: #4775BE;
+  --accent-faint: rgba(39,87,165,0.08);
+  --accent-border: rgba(39,87,165,0.18);
+  --gold: #3E688D;
+  --gold-light: #628CB5;
+  --gold-faint: rgba(62,104,141,0.08);
+  --border: #D7D6CE;
+  --border-light: #E8E7E0;
+  --shadow: rgba(23,23,21,0.08);
+  --success: #2E6A51;
+  --danger: #A33A2D;
+  --code-bg: #ECECE8;
+  --accent-contrast: #F8FBFF;
+  --gold-contrast: #F8FBFF;
+  --font-body: Georgia, 'Palatino Linotype', 'Book Antiqua', serif;
+  --font-display: Georgia, 'Palatino Linotype', 'Book Antiqua', serif;
+  --font-fell: Georgia, 'Palatino Linotype', 'Book Antiqua', serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
 * { margin:0; padding:0; box-sizing:border-box; }
 
 body {
@@ -104,6 +135,13 @@ body {
     linear-gradient(180deg, rgba(167,255,46,0.04), transparent 24%),
     repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 4px),
     linear-gradient(135deg, #0F1511 0%, #0A0F0D 52%, #1B150D 100%);
+  background-attachment: fixed;
+}
+
+[data-theme="gwern"] body {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.68), rgba(255,255,255,0.68)),
+    linear-gradient(180deg, #F7F7F3 0%, #F1F1ED 100%);
   background-attachment: fixed;
 }
 
@@ -182,6 +220,10 @@ a:hover { text-decoration:underline; }
 [data-theme="eva"] .hl-1 { background:rgba(255,106,0,0.14); border-bottom-color:var(--accent-light); }
 [data-theme="eva"] .hl-2 { background:rgba(121,255,105,0.14); border-bottom-color:#79FF69; }
 [data-theme="eva"] .hl-3 { background:rgba(255,73,101,0.14); border-bottom-color:#FF4965; }
+[data-theme="gwern"] .hl-0 { background:rgba(98,140,181,0.14); border-bottom-color:var(--gold-light); }
+[data-theme="gwern"] .hl-1 { background:rgba(39,87,165,0.12); border-bottom-color:var(--accent-light); }
+[data-theme="gwern"] .hl-2 { background:rgba(46,106,81,0.12); border-bottom-color:var(--success); }
+[data-theme="gwern"] .hl-3 { background:rgba(163,58,45,0.1); border-bottom-color:var(--danger); }
 
 .tudor-rule { text-align:center;margin:32px 0;color:var(--border);font-size:18px;letter-spacing:8px; }
 .tudor-rule::before { content:"❧ ❦ ❧"; }
@@ -257,6 +299,58 @@ a:hover { text-decoration:underline; }
 }
 [data-theme="eva"] .spinner {
   border-top-color: var(--gold-light);
+}
+[data-theme="gwern"] a {
+  color: var(--accent);
+  text-underline-offset: 0.12em;
+  text-decoration-thickness: 1px;
+}
+[data-theme="gwern"] .btn {
+  border-radius: 3px;
+  letter-spacing: 0.01em;
+  box-shadow: none;
+}
+[data-theme="gwern"] .btn-primary {
+  background: rgba(39,87,165,0.08);
+  color: var(--accent);
+  border: 1px solid rgba(39,87,165,0.18);
+}
+[data-theme="gwern"] .btn-primary:hover {
+  background: rgba(39,87,165,0.14);
+}
+[data-theme="gwern"] .btn-secondary {
+  background: rgba(255,255,255,0.72);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+[data-theme="gwern"] .btn-ghost {
+  color: var(--accent);
+}
+[data-theme="gwern"] .input {
+  border-radius: 3px;
+  background: rgba(255,255,255,0.78);
+}
+[data-theme="gwern"] .input:focus {
+  box-shadow: 0 0 0 2px rgba(39,87,165,0.09);
+}
+[data-theme="gwern"] .tag-chip {
+  border-radius: 3px;
+  background: rgba(39,87,165,0.04);
+}
+[data-theme="gwern"] .admin-badge {
+  border-color: rgba(39,87,165,0.18);
+  background: rgba(39,87,165,0.06);
+  color: var(--accent);
+}
+[data-theme="gwern"] .spinner {
+  border-top-color: var(--accent);
+}
+[data-theme="gwern"] .eva-brand-word {
+  letter-spacing: 0.03em !important;
+}
+[data-theme="gwern"] .eva-brand-subword {
+  color: var(--text-light) !important;
+  letter-spacing: 0.14em !important;
 }
 [data-theme="eva"] .eva-brand-word {
   font-family: var(--font-display) !important;
@@ -370,8 +464,31 @@ a:hover { text-decoration:underline; }
   font-style: normal;
 }
 
+[data-theme="gwern"] .rich-text,
+[data-theme="gwern"] .rich-text p,
+[data-theme="gwern"] .rich-text li,
+[data-theme="gwern"] .rich-text blockquote {
+  font-family: var(--font-body);
+}
+
+[data-theme="gwern"] .rich-text p {
+  text-align: left;
+}
+
+[data-theme="gwern"] .rich-text blockquote {
+  background: rgba(39,87,165,0.035);
+  border-left-color: var(--accent);
+  border-radius: 0 3px 3px 0;
+  font-style: normal;
+  color: var(--text-muted);
+}
+
 [data-theme="eva"] .reader-page {
   letter-spacing: 0.02em;
+}
+
+[data-theme="gwern"] .reader-page {
+  letter-spacing: 0;
 }
 
 [data-theme="eva"] .reader-page .reader-line-text,
@@ -381,8 +498,19 @@ a:hover { text-decoration:underline; }
   font-family: var(--font-body) !important;
 }
 
+[data-theme="gwern"] .reader-page .reader-line-text,
+[data-theme="gwern"] .reader-page .reader-dramatis-body,
+[data-theme="gwern"] .reader-page .reader-margin-annot,
+[data-theme="gwern"] .reader-page .reader-annot-tooltip {
+  font-family: var(--font-body) !important;
+}
+
 [data-theme="eva"] .reader-page .reader-line-text {
   letter-spacing: 0.025em;
+}
+
+[data-theme="gwern"] .reader-page .reader-line-text {
+  letter-spacing: 0;
 }
 
 [data-theme="eva"] .reader-page .reader-scene-heading,
@@ -404,6 +532,24 @@ a:hover { text-decoration:underline; }
 [data-theme="eva"] .reader-page .reader-stage-direction,
 [data-theme="eva"] .reader-page .reader-byline {
   color: var(--gold-light) !important;
+}
+
+[data-theme="gwern"] .reader-page .reader-act-heading,
+[data-theme="gwern"] .reader-page .reader-speaker,
+[data-theme="gwern"] .reader-page .reader-summary {
+  font-family: var(--font-mono) !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase;
+}
+
+[data-theme="gwern"] .reader-page .reader-stage-direction,
+[data-theme="gwern"] .reader-page .reader-byline,
+[data-theme="gwern"] .reader-page .reader-note {
+  color: var(--text-light) !important;
+}
+
+[data-theme="gwern"] .home-title {
+  letter-spacing: 0.03em !important;
 }
 
 .reader-prosody {

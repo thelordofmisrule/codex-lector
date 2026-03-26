@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 import { auth as api } from "./api";
 
 const Ctx = createContext(null);
-const THEMES = new Set(["light", "dark", "eva"]);
+const THEMES = new Set(["light", "dark", "eva", "gwern"]);
 
 function initialThemeMode() {
   const stored = localStorage.getItem("codex-theme");

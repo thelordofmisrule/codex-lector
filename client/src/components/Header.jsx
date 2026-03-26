@@ -9,6 +9,7 @@ const THEME_OPTIONS = [
   { id:"light", label:"Light", icon:"☀️", note:"Parchment and candlelight" },
   { id:"dark", label:"Dark", icon:"🌙", note:"Night reading" },
   { id:"eva", label:"Evangelion GUI", icon:"GUI", note:"NERV command deck" },
+  { id:"gwern", label:"GWERN", icon:"GW", note:"Dense essays and cool paper" },
 ];
 
 export default function Header() {
@@ -37,6 +38,8 @@ export default function Header() {
     ? "rgba(26,22,18,0.95)"
     : themeMode === "eva"
       ? "rgba(10,13,11,0.96)"
+      : themeMode === "gwern"
+        ? "rgba(247,247,245,0.97)"
       : "rgba(242,235,217,0.94)";
 
   const primaryLinks = [
@@ -369,12 +372,12 @@ export default function Header() {
             {/* Theme picker */}
             <div style={{ position:"relative" }}>
               <button className="btn btn-ghost" aria-label="Choose theme" onClick={()=>{setShowThemes(!showThemes);setMenu(false);setShowMobileNav(false);setShowNotifs(false);setOpenNavGroup("");}} title={`Theme: ${currentTheme.label}`} style={{
-                fontSize: currentTheme.id === "eva" ? 11 : 19,
+                fontSize: currentTheme.id === "eva" || currentTheme.id === "gwern" ? 11 : 19,
                 padding:"6px 10px", borderRadius:6,
                 background: darkChrome ? "rgba(255,248,240,0.08)" : "rgba(0,0,0,0.05)",
                 border:"1px solid var(--border-light)",
-                minWidth:44, fontFamily: currentTheme.id === "eva" ? "var(--font-display)" : undefined,
-                letterSpacing: currentTheme.id === "eva" ? 1.2 : 0,
+                minWidth:44, fontFamily: currentTheme.id === "eva" || currentTheme.id === "gwern" ? "var(--font-display)" : undefined,
+                letterSpacing: currentTheme.id === "eva" || currentTheme.id === "gwern" ? 1.2 : 0,
               }}>
                 {currentTheme.icon}
               </button>
@@ -392,8 +395,8 @@ export default function Header() {
                       }}
                     >
                       <span style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
-                        <span style={{ fontFamily:"var(--font-display)", fontSize:13, letterSpacing: option.id === "eva" ? 0.8 : 0 }}>{option.label}</span>
-                        <span style={{ fontSize: option.id === "eva" ? 11 : 16, fontFamily: option.id === "eva" ? "var(--font-display)" : undefined }}>{option.icon}</span>
+                        <span style={{ fontFamily:"var(--font-display)", fontSize:13, letterSpacing: option.id === "eva" || option.id === "gwern" ? 0.8 : 0 }}>{option.label}</span>
+                        <span style={{ fontSize: option.id === "eva" || option.id === "gwern" ? 11 : 16, fontFamily: option.id === "eva" || option.id === "gwern" ? "var(--font-display)" : undefined }}>{option.icon}</span>
                       </span>
                       <span style={{ display:"block", fontSize:11, color:"var(--text-light)", marginTop:2 }}>{option.note}</span>
                     </button>
