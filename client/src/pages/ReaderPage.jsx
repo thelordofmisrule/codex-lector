@@ -25,6 +25,7 @@ const PROSODY_MODES = [
 ];
 
 const MOBILE_READER_BREAKPOINT = 860;
+const DESKTOP_PINNED_INSPECTOR_SPACE = 412;
 
 const WORK_PRINT_DOWNLOADS = {
   "the rape of lucrece": [
@@ -758,6 +759,7 @@ function LineAnnotationMarker({ annotations, onClick }) {
 function AnnotationPopover({
   panel,
   onClose,
+  onTogglePin,
   onSave,
   onCopyText,
   onSaveToTray,
@@ -771,6 +773,7 @@ function AnnotationPopover({
   editAnnot,
   deleteAnnot,
   mobileSheet = false,
+  pinned = false,
 }) {
   const [note, setNote] = useState(() => panel?.mode === "compose" && panel?.draftKey ? (localStorage.getItem(`${panel.draftKey}:note`) || "") : "");
   const [color, setColor] = useState(() => panel?.mode === "compose" && panel?.draftKey ? (parseInt(localStorage.getItem(`${panel.draftKey}:color`) || String(DEFAULT_ANNOTATION_COLOR), 10) || DEFAULT_ANNOTATION_COLOR) : DEFAULT_ANNOTATION_COLOR);
@@ -829,6 +832,7 @@ function AnnotationPopover({
       position={{ x: panel.x, y: panel.y }}
       onClose={onClose}
       mobileSheet={mobileSheet}
+      pinned={pinned}
       desktopWidth={360}
       deps={[panel?.mode, note, color, layerId, isGlobal, myLayers?.length || 0, panel?.annotations?.length || 0]}
       className="reader-annot-tooltip"
@@ -842,7 +846,19 @@ function AnnotationPopover({
               {panel.lineNumber ? `Line ${panel.lineNumber}` : "Selected Passage"}
             </div>
           </div>
-          <button aria-label="Close annotation panel" onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:18, color:"var(--text-light)", padding:"0 4px" }}>✕</button>
+          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+            {!mobileSheet && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={onTogglePin}
+                style={{ color:"var(--text-light)", padding:"2px 6px", fontSize:11 }}
+              >
+                {pinned ? "Unpin" : "Pin"}
+              </button>
+            )}
+            <button aria-label="Close annotation panel" onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:18, color:"var(--text-light)", padding:"0 4px" }}>✕</button>
+          </div>
         </div>
 
         {excerpt && (
@@ -965,13 +981,15 @@ function ProsodyLineText({ text, mode, override }) {
   );
 }
 
-function ProsodyNoteTooltip({ note, onClose, onEdit }) {
+function ProsodyNoteTooltip({ note, onClose, onEdit, onTogglePin, pinned = false, mobileSheet = false }) {
   if (!note) return null;
   const override = note.override || {};
   return (
     <ReaderOverlayShell
       position={note.position}
       onClose={onClose}
+      mobileSheet={mobileSheet}
+      pinned={pinned}
       desktopWidth={300}
       className="reader-prosody-note-tooltip"
       style={{ padding: 14 }}
@@ -986,7 +1004,19 @@ function ProsodyNoteTooltip({ note, onClose, onEdit }) {
             {override.noteTitle || "Meter note"}
           </div>
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ color: "var(--text-light)" }}>✕</button>
+        <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+          {!mobileSheet && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={onTogglePin}
+              style={{ color:"var(--text-light)", padding:"2px 6px", fontSize:11 }}
+            >
+              {pinned ? "Unpin" : "Pin"}
+            </button>
+          )}
+          <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ color: "var(--text-light)" }}>✕</button>
+        </div>
       </div>
       <div style={{ fontSize: 12, color: "var(--text-light)", marginBottom: 8 }}>
         Line {note.lineNumber}
@@ -1006,7 +1036,7 @@ function ProsodyNoteTooltip({ note, onClose, onEdit }) {
   );
 }
 
-function ProsodyEditor({ draft, onClose, onSave, onDelete }) {
+function ProsodyEditor({ draft, onClose, onSave, onDelete, onTogglePin, pinned = false, mobileSheet = false }) {
   const display = getProsodyDisplay(draft.lineText, draft.override);
   const [scanText, setScanText] = useState(display.scanText);
   const [stressPattern, setStressPattern] = useState(display.stressPattern);
@@ -1049,6 +1079,8 @@ function ProsodyEditor({ draft, onClose, onSave, onDelete }) {
     <ReaderOverlayShell
       position={draft.position}
       onClose={onClose}
+      mobileSheet={mobileSheet}
+      pinned={pinned}
       desktopWidth={380}
       className="reader-prosody-editor"
       deps={[draft.lineKey, scanText, stressPattern, noteTitle, noteBody, error]}
@@ -1062,7 +1094,19 @@ function ProsodyEditor({ draft, onClose, onSave, onDelete }) {
             Line {draft.lineNumber}
           </div>
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ color: "var(--text-light)" }}>✕</button>
+        <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+          {!mobileSheet && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={onTogglePin}
+              style={{ color:"var(--text-light)", padding:"2px 6px", fontSize:11 }}
+            >
+              {pinned ? "Unpin" : "Pin"}
+            </button>
+          )}
+          <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ color: "var(--text-light)" }}>✕</button>
+        </div>
       </div>
 
       <div style={{ color: "var(--text-muted)", fontStyle: "italic", marginBottom: 10, lineHeight: 1.5 }}>
@@ -1369,12 +1413,15 @@ export default function ReaderPage() {
   const [prosodyOverrides, setProsodyOverrides] = useState({});
   const [prosodyNote, setProsodyNote] = useState(null);
   const [prosodyEditor, setProsodyEditor] = useState(null);
+  const [readerInspectorPinned, setReaderInspectorPinned] = useState(false);
   const progressRef = useRef({ maxLine:0, total:0, slug:null });
   const trackedSlugRef = useRef("");
   const selectionLookupRef = useRef(0);
   const parsed = work?.content ? parsePlayShakespeareXML(work.content, work.title, work.category) : null;
   const lineMetaIndex = parsed ? buildLineMetaIndex(parsed) : {};
   const resumeLine = Math.max(0, parseInt(new URLSearchParams(location.search).get("line") || "0", 10) || 0);
+  const hasActiveReaderInspector = !!(annotationPanel || wordLookup || placeAwareness || prosodyNote || prosodyEditor);
+  const usePinnedReaderInspector = !isMobileViewport && readerInspectorPinned && hasActiveReaderInspector;
   const copyPageLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -1438,6 +1485,57 @@ export default function ReaderPage() {
     return () => window.removeEventListener("resize", updateViewport);
   }, []);
 
+  const closeReaderInspector = useCallback((clearSelection = true) => {
+    setWordLookup(null);
+    setAnnotationPanel(null);
+    setPlaceAwareness(null);
+    setProsodyNote(null);
+    setProsodyEditor(null);
+    if (clearSelection) {
+      window.getSelection()?.removeAllRanges();
+    }
+  }, []);
+
+  const openAnnotationInspector = useCallback((nextPanel) => {
+    setWordLookup(null);
+    setPlaceAwareness(null);
+    setProsodyNote(null);
+    setProsodyEditor(null);
+    setAnnotationPanel(nextPanel);
+  }, []);
+
+  const openWordInspector = useCallback((nextLookup) => {
+    setAnnotationPanel(null);
+    setPlaceAwareness(null);
+    setProsodyNote(null);
+    setProsodyEditor(null);
+    setWordLookup(nextLookup);
+  }, []);
+
+  const openPlaceInspector = useCallback((nextPlace) => {
+    setAnnotationPanel(null);
+    setWordLookup(null);
+    setProsodyNote(null);
+    setProsodyEditor(null);
+    setPlaceAwareness(nextPlace);
+  }, []);
+
+  const openProsodyNoteInspector = useCallback((nextNote) => {
+    setAnnotationPanel(null);
+    setWordLookup(null);
+    setPlaceAwareness(null);
+    setProsodyEditor(null);
+    setProsodyNote(nextNote);
+  }, []);
+
+  const openProsodyEditorInspector = useCallback((nextEditor) => {
+    setAnnotationPanel(null);
+    setWordLookup(null);
+    setPlaceAwareness(null);
+    setProsodyNote(null);
+    setProsodyEditor(nextEditor);
+  }, []);
+
   const getCurrentViewportLineNumber = useCallback(() => {
     const lines = document.querySelectorAll("[data-lineid]");
     if (!lines.length) return 1;
@@ -1492,26 +1590,22 @@ export default function ReaderPage() {
       } else if (e.key === "Escape") {
         if (wordLookup || annotationPanel || placeAwareness || quoteCapture || prosodyNote || prosodyEditor || showVisibilityPanel || showResearchTray) {
           e.preventDefault();
-          setWordLookup(null);
-          setAnnotationPanel(null);
-          setPlaceAwareness(null);
+          closeReaderInspector();
           setQuoteCapture(null);
-          setProsodyNote(null);
-          setProsodyEditor(null);
           setShowVisibilityPanel(false);
           setShowResearchTray(false);
-          window.getSelection()?.removeAllRanges();
         }
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigate, user, wordLookup, annotationPanel, placeAwareness, quoteCapture, prosodyNote, prosodyEditor, showVisibilityPanel, showResearchTray, slug, getCurrentViewportLineNumber]);
+  }, [navigate, user, wordLookup, annotationPanel, placeAwareness, quoteCapture, prosodyNote, prosodyEditor, showVisibilityPanel, showResearchTray, slug, getCurrentViewportLineNumber, closeReaderInspector]);
 
   useEffect(() => {
     setShowVisibilityPanel(false);
     setShowResearchTray(false);
-  }, [slug]);
+    closeReaderInspector(false);
+  }, [closeReaderInspector, slug]);
 
   useEffect(() => {
     setLoading(true);
@@ -1613,9 +1707,7 @@ export default function ReaderPage() {
         const match = await findPlaceAwarenessMatch(text);
         if (selectionLookupRef.current !== lookupToken) return;
         if (match) {
-          setAnnotationPanel(null);
-          setWordLookup(null);
-          setPlaceAwareness({
+          openPlaceInspector({
             placeSlug: match.slug,
             initialPlace: match.place,
             matchedTerm: match.matchedTerm,
@@ -1631,11 +1723,9 @@ export default function ReaderPage() {
       }
     }
 
-    setPlaceAwareness(null);
-
     // Single word with no spaces → word lookup (works for everyone)
     if (!text.includes(" ") && text.length < 30) {
-      setWordLookup({
+      openWordInspector({
         word:text.toLowerCase().replace(/[^a-z']/g,""),
         selectedText:text,
         lineId,
@@ -1644,8 +1734,7 @@ export default function ReaderPage() {
       return;
     }
 
-    setWordLookup(null);
-    setAnnotationPanel({
+    openAnnotationInspector({
       mode: "compose",
       x: rect.left + (rect.width / 2),
       y: rect.bottom,
@@ -1654,7 +1743,7 @@ export default function ReaderPage() {
       endLineId,
       draftKey: `draft:annot:${slug}`,
     });
-  }, []);
+  }, [openAnnotationInspector, openPlaceInspector, openWordInspector, slug]);
 
   const handleMobileLookupTap = useCallback(async (event, lineId) => {
     if (!isMobileViewport) return;
@@ -1674,9 +1763,7 @@ export default function ReaderPage() {
       const match = await findPlaceAwarenessMatch(tappedText);
       if (selectionLookupRef.current !== lookupToken) return;
       if (match) {
-        setAnnotationPanel(null);
-        setWordLookup(null);
-        setPlaceAwareness({
+        openPlaceInspector({
           placeSlug: match.slug,
           initialPlace: match.place,
           matchedTerm: match.matchedTerm,
@@ -1690,14 +1777,13 @@ export default function ReaderPage() {
       // Ignore place lookup failures and fall back to standard word lookup.
     }
 
-    setPlaceAwareness(null);
-    setWordLookup({
+    openWordInspector({
       word: normalizedWord,
       selectedText: tappedText,
       lineId,
       position,
     });
-  }, [isMobileViewport]);
+  }, [isMobileViewport, openPlaceInspector, openWordInspector]);
 
   const openQuoteCapture = useCallback((selection) => {
     const startLineId = selection?.lineId || "";
@@ -1956,8 +2042,7 @@ export default function ReaderPage() {
     const override = prosodyOverrides[lineKey];
     if (!override || (!override.noteBody && !override.noteTitle)) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    setProsodyEditor(null);
-    setProsodyNote({
+    openProsodyNoteInspector({
       override,
       lineKey,
       lineText,
@@ -1969,8 +2054,7 @@ export default function ReaderPage() {
   const openProsodyEditor = (event, lineKey, lineText, lineNumber) => {
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
-    setProsodyNote(null);
-    setProsodyEditor({
+    openProsodyEditorInspector({
       override: prosodyOverrides[lineKey] || null,
       lineKey,
       lineText,
@@ -2139,7 +2223,17 @@ export default function ReaderPage() {
 
   return (
     <div className="animate-in reader-page" onMouseUp={handleSelect}
-      style={{ maxWidth: 840, margin:"0 auto", padding:"40px 24px 100px", fontSize, lineHeight:1.85 }}>
+      style={{
+        maxWidth: usePinnedReaderInspector ? 1220 : 840,
+        margin:"0 auto",
+        paddingTop:40,
+        paddingBottom:100,
+        paddingLeft:24,
+        paddingRight: usePinnedReaderInspector ? `min(${DESKTOP_PINNED_INSPECTOR_SPACE}px, calc(50vw - 8px))` : 24,
+        fontSize,
+        lineHeight:1.85,
+        transition:"max-width 160ms ease, padding-right 160ms ease",
+      }}>
 
       {showReaderHint && (
         <div style={{ marginBottom:18, padding:"14px 16px", background:"var(--surface)", border:"1px solid var(--border-light)", borderRadius:10 }}>
@@ -2375,15 +2469,16 @@ export default function ReaderPage() {
             onLookupTap={handleMobileLookupTap}
             showWaypoints={readerVisibility.showWaypoints !== false}
             waypointsByIndex={waypointsByIndex}
-            onOpenAnnotationPanel={setAnnotationPanel}
+            onOpenAnnotationPanel={openAnnotationInspector}
           />
-        : <PlayView data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={setAnnotationPanel} />
+        : <PlayView data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={openAnnotationInspector} />
       }
 
       {annotationPanel && (
         <AnnotationPopover
           panel={annotationPanel}
           onClose={() => { setAnnotationPanel(null); window.getSelection()?.removeAllRanges(); }}
+          onTogglePin={() => setReaderInspectorPinned((value) => !value)}
           onSave={saveAnnot}
           onCopyText={copySelectedText}
           onSaveToTray={saveToResearchTray}
@@ -2409,6 +2504,7 @@ export default function ReaderPage() {
           editAnnot={editAnnot}
           deleteAnnot={deleteAnnot}
           mobileSheet={isMobileViewport}
+          pinned={usePinnedReaderInspector}
         />
       )}
       {wordLookup && (
@@ -2419,11 +2515,13 @@ export default function ReaderPage() {
           lineId={wordLookup.lineId || ""}
           position={wordLookup.position}
           mobileSheet={isMobileViewport}
+          pinned={usePinnedReaderInspector}
           searchHref={`/search?${new URLSearchParams({ q: wordLookup.word, work: slug }).toString()}`}
+          onTogglePin={() => setReaderInspectorPinned((value) => !value)}
           onClose={()=>{setWordLookup(null);window.getSelection()?.removeAllRanges();}}
           onSaveToTray={(payload) => saveToResearchTray({ type: "word", ...payload })}
           onAnnotate={user ? () => {
-            setAnnotationPanel({
+            openAnnotationInspector({
               mode: "compose",
               x:wordLookup.position.x,
               y:wordLookup.position.y,
@@ -2432,7 +2530,6 @@ export default function ReaderPage() {
               endLineId: wordLookup.lineId || "u",
               draftKey: `draft:annot:${slug}`,
             });
-            setWordLookup(null);
           } : undefined}
         />
       )}
@@ -2445,10 +2542,12 @@ export default function ReaderPage() {
           workSlug={slug}
           position={placeAwareness.position}
           mobileSheet={isMobileViewport}
+          pinned={usePinnedReaderInspector}
+          onTogglePin={() => setReaderInspectorPinned((value) => !value)}
           onClose={()=>{setPlaceAwareness(null);window.getSelection()?.removeAllRanges();}}
           onSaveToTray={(payload) => saveToResearchTray({ type: "place", ...payload })}
           onAnnotate={user ? () => {
-            setAnnotationPanel({
+            openAnnotationInspector({
               mode: "compose",
               x:placeAwareness.position.x,
               y:placeAwareness.position.y,
@@ -2457,7 +2556,6 @@ export default function ReaderPage() {
               endLineId: placeAwareness.endLineId || placeAwareness.lineId || "u",
               draftKey: `draft:annot:${slug}`,
             });
-            setPlaceAwareness(null);
           } : undefined}
         />
       )}
@@ -2472,15 +2570,17 @@ export default function ReaderPage() {
         <ProsodyNoteTooltip
           note={prosodyNote}
           onClose={() => setProsodyNote(null)}
+          onTogglePin={() => setReaderInspectorPinned((value) => !value)}
+          pinned={usePinnedReaderInspector}
+          mobileSheet={isMobileViewport}
           onEdit={isAdmin ? () => {
-            setProsodyEditor({
+            openProsodyEditorInspector({
               override: prosodyNote.override,
               lineKey: prosodyNote.lineKey,
               lineText: prosodyNote.lineText,
               lineNumber: prosodyNote.lineNumber,
               position: prosodyNote.position,
             });
-            setProsodyNote(null);
           } : undefined}
         />
       )}
@@ -2490,6 +2590,9 @@ export default function ReaderPage() {
           onClose={() => setProsodyEditor(null)}
           onSave={saveProsodyOverride}
           onDelete={deleteProsodyOverride}
+          onTogglePin={() => setReaderInspectorPinned((value) => !value)}
+          pinned={usePinnedReaderInspector}
+          mobileSheet={isMobileViewport}
         />
       )}
       <ThreadedComments comments={disc} onPost={postComment} onEdit={editComment} onDelete={deleteComment} label="Discussion" draftKey={`work:${slug}:discussion`} />

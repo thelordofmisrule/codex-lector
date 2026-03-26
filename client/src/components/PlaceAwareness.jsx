@@ -8,7 +8,20 @@ function metadataBits(place) {
   return [place.placeType, place.modernCountry].filter(Boolean).join(" · ");
 }
 
-export default function PlaceAwareness({ placeSlug, workSlug, initialPlace, matchedTerm, selectionText, position, onClose, onAnnotate, onSaveToTray, mobileSheet = false }) {
+export default function PlaceAwareness({
+  placeSlug,
+  workSlug,
+  initialPlace,
+  matchedTerm,
+  selectionText,
+  position,
+  onClose,
+  onTogglePin,
+  onAnnotate,
+  onSaveToTray,
+  mobileSheet = false,
+  pinned = false,
+}) {
   const toast = useToast();
   const [data, setData] = useState(() => initialPlace ? { place: initialPlace, citations: [] } : null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +62,7 @@ export default function PlaceAwareness({ placeSlug, workSlug, initialPlace, matc
       position={position}
       onClose={onClose}
       mobileSheet={mobileSheet}
+      pinned={pinned}
       desktopWidth={380}
       deps={[loading, !!place, citations.length, matchedTerm, selectionText]}
       style={{ fontSize: 14 }}
@@ -62,7 +76,19 @@ export default function PlaceAwareness({ placeSlug, workSlug, initialPlace, matc
               {place?.name || selectionText}
             </div>
           </div>
-          <button aria-label="Close place awareness" onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:18, color:"var(--text-light)", padding:"0 4px" }}>✕</button>
+          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+            {!mobileSheet && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={onTogglePin}
+                style={{ color:"var(--text-light)", padding:"2px 6px", fontSize:11 }}
+              >
+                {pinned ? "Unpin" : "Pin"}
+              </button>
+            )}
+            <button aria-label="Close place awareness" onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:18, color:"var(--text-light)", padding:"0 4px" }}>✕</button>
+          </div>
         </div>
 
         {matchedTerm && matchedTerm !== place?.name && (

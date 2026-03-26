@@ -5,8 +5,12 @@ export default function ReaderOverlayShell({
   position,
   onClose,
   mobileSheet = false,
+  pinned = false,
   desktopWidth = 360,
   desktopMargin = 12,
+  pinnedTop = 24,
+  pinnedRight = 24,
+  pinnedBottom = 88,
   maxMobileHeight = "min(74vh, 620px)",
   style = {},
   deps = [],
@@ -14,6 +18,7 @@ export default function ReaderOverlayShell({
   children,
 }) {
   const cardRef = useRef(null);
+  const pinnedDesktop = pinned && !mobileSheet;
   const floatingStyle = useFloatingCardPosition(
     cardRef,
     position || { x: 0, y: 0 },
@@ -37,6 +42,21 @@ export default function ReaderOverlayShell({
         boxShadow: "0 -10px 36px var(--shadow)",
         padding: "12px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
       }
+    : pinnedDesktop
+      ? {
+          position: "fixed",
+          top: pinnedTop,
+          right: pinnedRight,
+          bottom: pinnedBottom,
+          zIndex: 160,
+          width: `min(${desktopWidth}px, calc(100vw - 24px))`,
+          overflowY: "auto",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: 14,
+          boxShadow: "0 18px 48px var(--shadow)",
+          padding: 16,
+        }
     : {
         position: "fixed",
         top: floatingStyle.top,
@@ -54,7 +74,9 @@ export default function ReaderOverlayShell({
 
   return (
     <>
-      <div aria-hidden="true" onClick={onClose} style={{ position:"fixed", inset:0, zIndex:199 }} />
+      {!pinnedDesktop && (
+        <div aria-hidden="true" onClick={onClose} style={{ position:"fixed", inset:0, zIndex:199 }} />
+      )}
       <div ref={cardRef} className={className} style={{ ...panelStyle, ...style }}>
         {mobileSheet && (
           <div style={{ display:"flex", justifyContent:"center", marginBottom:10 }}>

@@ -63,9 +63,11 @@ export default function WordLookup({
   lineId = "",
   position,
   onClose,
+  onTogglePin,
   onAnnotate,
   onSaveToTray,
   mobileSheet = false,
+  pinned = false,
   searchHref = "",
 }) {
   const toast = useToast();
@@ -222,6 +224,7 @@ export default function WordLookup({
       position={position}
       onClose={onClose}
       mobileSheet={mobileSheet}
+      pinned={pinned}
       desktopWidth={360}
       maxMobileHeight="min(72vh, 560px)"
       deps={[loading, !!data?.gloss, data?.examples?.length || 0, data?.frequency?.length || 0, editorOpen, activeScope, saving]}
@@ -229,7 +232,19 @@ export default function WordLookup({
     >
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <span style={{ fontFamily:"var(--font-display)", fontSize:20, color:"var(--accent)", letterSpacing:1 }}>{displayWord}</span>
-          <button aria-label="Close word lookup" onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:18, color:"var(--text-light)", padding:"0 4px" }}>✕</button>
+          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+            {!mobileSheet && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={onTogglePin}
+                style={{ color:"var(--text-light)", padding:"2px 6px", fontSize:11 }}
+              >
+                {pinned ? "Unpin" : "Pin"}
+              </button>
+            )}
+            <button aria-label="Close word lookup" onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:18, color:"var(--text-light)", padding:"0 4px" }}>✕</button>
+          </div>
         </div>
 
         {loading ? (
