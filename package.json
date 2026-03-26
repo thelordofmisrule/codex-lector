@@ -22,7 +22,8 @@
     "import-lucrece-notes": "node scripts/import-lucrece-annotations.js",
     "validate-places-enrichment": "node scripts/validate-places-enrichment.js",
     "build-words": "node scripts/build-word-index.js",
-    "build-search": "node scripts/rebuild-search-index.js"
+    "build-search": "node scripts/rebuild-search-index.js",
+    "build-semantic-search": "node scripts/rebuild-semantic-search.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",

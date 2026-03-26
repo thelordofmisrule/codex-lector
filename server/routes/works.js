@@ -1,6 +1,8 @@
 const express = require("express");
 const db = require("../db");
 const { ensureSearchSchema } = require("../lib/workSearchIndex");
+const { cosineSimilarity, ensureSemanticSearchSchema, getSemanticSearchStatus } = require("../lib/semanticSearchIndex");
+const { embedTexts } = require("../lib/semanticEmbeddings");
 const {
   buildFtsQuery,
   buildSearchSnippet,
@@ -13,6 +15,7 @@ const { buildWorkLookup, enrichWork, enrichWorks } = require("../lib/workCatalog
 
 const r = express.Router();
 ensureSearchSchema(db);
+ensureSemanticSearchSchema(db);
 
 function clampInt(value, min, max, fallback) {
   const parsed = parseInt(value, 10);
@@ -263,6 +266,138 @@ function searchFallback(parsed, options) {
   };
 }
 
+function selectSemanticChunks(chunkType, options = {}) {
+  const conditions = ["chunk_type = ?", "embedding IS NOT NULL"];
+  const params = [chunkType];
+
+  if (options.workSlug) {
+    conditions.push("work_slug = ?");
+    params.push(options.workSlug);
+  }
+  if (options.category && options.category !== "all") {
+    conditions.push("category = ?");
+    params.push(options.category);
+  }
+
+  return db.prepare(`
+    SELECT *
+    FROM semantic_search_chunks
+    WHERE ${conditions.join(" AND ")}
+  `).all(...params);
+}
+
+function formatSemanticRow(row, score) {
+  return {
+    id: row.id,
+    slug: row.work_slug,
+    title: row.work_title,
+    category: row.category,
+    variant: row.variant,
+    lineNumber: row.line_start,
+    lineEndNumber: row.line_end,
+    displayLineNumber: row.display_line_start,
+    displayEndLineNumber: row.display_line_end,
+    lineText: row.chunk_text,
+    snippet: row.chunk_text,
+    prevText: "",
+    nextText: "",
+    speaker: row.speaker,
+    actLabel: "",
+    sceneLabel: "",
+    sectionLabel: row.label,
+    locationLabel: row.location_label || row.label,
+    score,
+    semantic: true,
+  };
+}
+
+async function searchSemantic(query, options) {
+  const status = getSemanticSearchStatus(db);
+  if (!status.configured || !status.indexed) {
+    return {
+      available: false,
+      totalMatches: 0,
+      totalWorks: 0,
+      showingMatches: 0,
+      results: [],
+      reason: !status.configured
+        ? "Semantic search is not configured on this server."
+        : "Semantic search has not been indexed yet.",
+    };
+  }
+
+  const { workSlug, category, limit, perWork } = options;
+  const queryVector = (await embedTexts([query]))[0] || [];
+  if (!queryVector.length) {
+    return {
+      available: false,
+      totalMatches: 0,
+      totalWorks: 0,
+      showingMatches: 0,
+      results: [],
+      reason: "Could not generate a semantic embedding for that query.",
+    };
+  }
+
+  let queryNorm = 0;
+  for (const value of queryVector) queryNorm += value * value;
+  queryNorm = Math.sqrt(queryNorm) || 1;
+
+  const scopeRows = selectSemanticChunks("scope", { workSlug, category });
+  const scoredScopes = scopeRows
+    .map((row) => ({ row, score: cosineSimilarity(queryVector, queryNorm, row.embedding, row.embedding_norm) }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.max(limit * 2, workSlug ? 10 : 16));
+
+  if (!scoredScopes.length) {
+    return {
+      available: true,
+      totalMatches: 0,
+      totalWorks: 0,
+      showingMatches: 0,
+      results: [],
+    };
+  }
+
+  const allowedScopes = new Set(scoredScopes.map((entry) => `${entry.row.work_slug}::${entry.row.scope_key}`));
+  const workSlugs = [...new Set(scoredScopes.map((entry) => entry.row.work_slug))];
+  const placeholders = workSlugs.map(() => "?").join(",");
+  const passageRows = db.prepare(`
+    SELECT *
+    FROM semantic_search_chunks
+    WHERE chunk_type='passage'
+      AND embedding IS NOT NULL
+      AND work_slug IN (${placeholders})
+  `).all(...workSlugs);
+
+  const scoredPassages = passageRows
+    .filter((row) => allowedScopes.has(`${row.work_slug}::${row.scope_key}`))
+    .map((row) => ({ row, score: cosineSimilarity(queryVector, queryNorm, row.embedding, row.embedding_norm) }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((a, b) => b.score - a.score);
+
+  const matchCounts = new Map();
+  scoredPassages.forEach(({ row }) => {
+    matchCounts.set(row.work_slug, (matchCounts.get(row.work_slug) || 0) + 1);
+  });
+
+  const grouped = buildGroupedResults(
+    scoredPassages.map(({ row, score }) => formatSemanticRow(row, score)),
+    matchCounts,
+    limit,
+    perWork
+  );
+
+  return {
+    available: true,
+    totalMatches: scoredPassages.length,
+    totalWorks: matchCounts.size,
+    showingMatches: grouped.showingMatches,
+    results: grouped.results,
+  };
+}
+
 // List (no content)
 r.get("/", (req, res) => {
   const works = db.prepare("SELECT id,slug,title,category,variant,authors,(content IS NOT NULL) as has_content FROM works ORDER BY category,title").all();
@@ -316,6 +451,51 @@ r.get("/search/text", (req, res) => {
     indexed: response.indexed,
     results: response.results,
   });
+});
+
+r.get("/search/semantic", async (req, res) => {
+  const startedAt = Date.now();
+  const query = String(req.query.q || "").trim();
+  const semanticStatus = getSemanticSearchStatus(db);
+  if (query.length < 3) {
+    return res.json({
+      query,
+      work: "",
+      category: "all",
+      totalMatches: 0,
+      totalWorks: 0,
+      showingMatches: 0,
+      tookMs: 0,
+      semantic: true,
+      available: semanticStatus.configured && semanticStatus.indexed,
+      results: [],
+    });
+  }
+
+  const workSlug = String(req.query.work || "").trim();
+  const category = String(req.query.category || "all").trim() || "all";
+  const limit = clampInt(req.query.limit, 6, 60, workSlug ? 18 : 24);
+  const perWork = clampInt(req.query.perWork, 1, 8, workSlug ? 6 : 4);
+
+  try {
+    const response = await searchSemantic(query, { workSlug, category, limit, perWork });
+    return res.json({
+      query,
+      work: workSlug,
+      category,
+      totalMatches: response.totalMatches,
+      totalWorks: response.totalWorks,
+      showingMatches: response.showingMatches,
+      tookMs: Date.now() - startedAt,
+      semantic: true,
+      available: response.available,
+      reason: response.reason || "",
+      results: response.results,
+    });
+  } catch (error) {
+    console.error("Semantic search failed:", error);
+    return res.status(503).json({ error: error.message || "Semantic search failed." });
+  }
 });
 
 // Single work with content

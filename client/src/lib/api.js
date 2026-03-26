@@ -33,6 +33,15 @@ export const works = {
     if (opts.perWork) params.set("perWork", String(opts.perWork));
     return req(`/works/search/text?${params.toString()}`);
   },
+  searchSemantic:(q, opts={})=>{
+    const params = new URLSearchParams();
+    params.set("q", q);
+    if (opts.workSlug) params.set("work", opts.workSlug);
+    if (opts.category && opts.category !== "all") params.set("category", opts.category);
+    if (opts.limit) params.set("limit", String(opts.limit));
+    if (opts.perWork) params.set("perWork", String(opts.perWork));
+    return req(`/works/search/semantic?${params.toString()}`);
+  },
 };
 export const annotations = {
   forWork:(s,filter)=>req(`/annotations/${s}${filter?`?filter=${filter}`:""}`),

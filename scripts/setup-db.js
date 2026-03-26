@@ -8,6 +8,8 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const { ensureSearchSchema, rebuildSearchIndex } = require("../server/lib/workSearchIndex");
+const { ensureSemanticSearchSchema, rebuildSemanticSearchIndex } = require("../server/lib/semanticSearchIndex");
+const { getSemanticEmbeddingConfig } = require("../server/lib/semanticEmbeddings");
 const { GLOSSARY_SEED, GLOSSARY_OVERRIDE_SEED } = require("../server/data/glossarySeed");
 const { normalizeGlossaryTerm } = require("../server/lib/glossary");
 const { compareWorkPreference } = require("../server/lib/workCatalog");
@@ -1240,6 +1242,7 @@ if (bootstrapAdminPassword && !admin) {
 }
 
 ensureSearchSchema(db);
+ensureSemanticSearchSchema(db);
 const searchCodeSignature = digestParts([
   digestFile(path.join(__dirname, "..", "server", "lib", "workSearch.js")),
   digestFile(path.join(__dirname, "..", "server", "lib", "workSearchIndex.js")),
@@ -1269,5 +1272,51 @@ if (shouldRebuildSearch) {
   console.log(`Search index ready: ${searchSummary.lines} searchable lines across ${searchSummary.works} works.${searchSummary.ftsEnabled ? " FTS enabled." : " FTS unavailable; using fallback search."}`);
 }
 
-console.log("Database setup complete.");
-db.close();
+const semanticConfig = getSemanticEmbeddingConfig();
+const semanticCodeSignature = digestParts([
+  digestFile(path.join(__dirname, "..", "server", "lib", "semanticEmbeddings.js")),
+  digestFile(path.join(__dirname, "..", "server", "lib", "semanticSearchChunks.js")),
+  digestFile(path.join(__dirname, "..", "server", "lib", "semanticSearchIndex.js")),
+]);
+const semanticStateSignature = digestParts([
+  "semantic-search-v1",
+  String(searchInputState.works || 0),
+  String(searchInputState.max_fetched_at || ""),
+  semanticCodeSignature,
+  semanticConfig.model,
+  String(semanticConfig.dimensions),
+]);
+const semanticStateKey = "semantic_search_signature";
+const storedSemanticSignature = getSetupState.get(semanticStateKey)?.value || "";
+const indexedSemanticChunks = Number(db.prepare("SELECT COUNT(*) AS count FROM semantic_search_chunks").get().count || 0);
+const shouldRebuildSemantic = (
+  semanticConfig.available
+  && (
+    storedSemanticSignature !== semanticStateSignature
+    || (Number(searchInputState.works || 0) > 0 && indexedSemanticChunks === 0)
+  )
+);
+
+if (shouldRebuildSemantic) {
+  rebuildSemanticSearchIndex(db, { logger: console })
+    .then((summary) => {
+      if (!summary.skipped) {
+        setSetupState.run(semanticStateKey, semanticStateSignature);
+        console.log(`Semantic search ready: ${summary.chunks} chunks across ${summary.works} works (${summary.model}, ${summary.dimensions}d).`);
+      }
+      console.log("Database setup complete.");
+      db.close();
+    })
+    .catch((error) => {
+      console.warn(`Semantic search rebuild skipped: ${error.message}`);
+      console.log("Database setup complete.");
+      db.close();
+    });
+} else {
+  if (!semanticConfig.available && indexedSemanticChunks === 0) {
+    console.log("Semantic search not configured. Set OPENAI_API_KEY to build semantic embeddings.");
+  }
+
+  console.log("Database setup complete.");
+  db.close();
+}

@@ -786,6 +786,7 @@ function AnnotationPopover({
   onTogglePin,
   onSave,
   onCopyText,
+  onSemanticSearch,
   onSaveToTray,
   onOpenQuoteCapture,
   onComposeFromLine,
@@ -952,6 +953,7 @@ function AnnotationPopover({
             <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
               {canSave && <button className="btn btn-primary btn-sm" onClick={() => note.trim() && onSave(note.trim(), color, layerId || null, isGlobal)}>Save</button>}
               <button className="btn btn-secondary btn-sm" onClick={() => onSaveToTray?.({ type: "passage", panel })}>Save to Tray</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => onSemanticSearch?.(panel.text || panel.lineText || "")}>Similar Passage</button>
               <button className="btn btn-secondary btn-sm" onClick={() => onOpenQuoteCapture?.(panel)}>Quote Card</button>
               <button className="btn btn-secondary btn-sm" onClick={() => onCopyText?.(panel.text || panel.lineText || "")}>Copy Text</button>
               <button className="btn btn-secondary btn-sm" onClick={onClose}>{canSave ? "Cancel" : "Close"}</button>
@@ -977,6 +979,7 @@ function AnnotationPopover({
             <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
               {canSave && <button className="btn btn-primary btn-sm" onClick={onComposeFromLine}>New Note</button>}
               <button className="btn btn-secondary btn-sm" onClick={() => onSaveToTray?.({ type: "passage", panel })}>Save to Tray</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => onSemanticSearch?.(panel.lineText || panel.text || "")}>Similar Passage</button>
               <button className="btn btn-secondary btn-sm" onClick={() => onOpenQuoteCapture?.(panel)}>Quote Card</button>
               <button className="btn btn-secondary btn-sm" onClick={() => onCopyText?.(panel.lineText || "")}>Copy Text</button>
               <button className="btn btn-secondary btn-sm" onClick={onClose}>Close</button>
@@ -1852,6 +1855,22 @@ export default function ReaderPage() {
     window.getSelection()?.removeAllRanges();
   }, [lineMetaIndex, parsed, work?.title]);
 
+  const openSemanticPassageSearch = useCallback((text) => {
+    const trimmed = String(text || "").trim();
+    if (trimmed.length < 3) {
+      toast?.error("Select a longer passage for semantic search.");
+      return;
+    }
+    navigate(`/search?${new URLSearchParams({
+      mode: "semantic",
+      q: trimmed,
+      originWork: slug,
+      returnLine: String(getCurrentViewportLineNumber()),
+    }).toString()}`);
+    setAnnotationPanel(null);
+    window.getSelection()?.removeAllRanges();
+  }, [getCurrentViewportLineNumber, navigate, slug, toast]);
+
   const addResearchItem = useCallback(async (item) => {
     try {
       if (user) {
@@ -2534,6 +2553,7 @@ export default function ReaderPage() {
           onTogglePin={() => setReaderInspectorPinned((value) => !value)}
           onSave={saveAnnot}
           onCopyText={copySelectedText}
+          onSemanticSearch={openSemanticPassageSearch}
           onSaveToTray={saveToResearchTray}
           onOpenQuoteCapture={openQuoteCapture}
           onComposeFromLine={() => setAnnotationPanel((prev) => {

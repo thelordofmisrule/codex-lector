@@ -73,7 +73,13 @@ function Metadata({ match }) {
   const bits = [];
   if (match.locationLabel) bits.push(match.locationLabel);
   if (match.speaker) bits.push(match.speaker);
-  if (match.displayLineNumber) bits.push(`Line ${match.displayLineNumber}`);
+  if (match.displayLineNumber) {
+    bits.push(
+      match.displayEndLineNumber && match.displayEndLineNumber !== match.displayLineNumber
+        ? `Lines ${match.displayLineNumber}-${match.displayEndLineNumber}`
+        : `Line ${match.displayLineNumber}`
+    );
+  }
   return (
     <div style={{ fontSize: 11, color: "var(--text-light)", marginBottom: 6, fontFamily: "var(--font-display)", letterSpacing: 1.1, textTransform: "uppercase" }}>
       {bits.join(" · ")}
@@ -110,6 +116,7 @@ export default function SearchPage() {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [mode, setMode] = useState(() => params.get("mode") === "semantic" ? "semantic" : "text");
   const [scope, setScope] = useState(() => (params.get("work") ? "work" : "all"));
   const [workSlug, setWorkSlug] = useState(() => params.get("work") || "");
   const [category, setCategory] = useState(() => params.get("category") || "all");
@@ -133,10 +140,12 @@ export default function SearchPage() {
     const nextWork = nextParams.get("work") || "";
     const nextCategory = nextParams.get("category") || "all";
     const nextExact = nextParams.get("exact") === "1";
+    const nextMode = nextParams.get("mode") === "semantic" ? "semantic" : "text";
     const nextReturnLine = Math.max(0, parseInt(nextParams.get("returnLine") || "0", 10) || 0);
     const nextOrigin = nextParams.get("originWork") || ((nextReturnLine && nextWork) ? nextWork : "");
 
     setQuery(nextQuery);
+    setMode(nextMode);
     setWorkSlug(nextWork);
     setCategory(nextCategory);
     setExact(nextExact);
@@ -144,7 +153,7 @@ export default function SearchPage() {
     setOriginWorkSlug(nextOrigin);
     setScope(nextWork ? "work" : "all");
 
-    if (nextQuery.trim().length < 2) {
+    if (nextQuery.trim().length < (nextMode === "semantic" ? 3 : 2)) {
       setResults(null);
       setLoading(false);
       setError("");
@@ -155,10 +164,11 @@ export default function SearchPage() {
     setLoading(true);
     setError("");
 
-    api.searchText(nextQuery.trim(), {
+    const searchFn = nextMode === "semantic" ? api.searchSemantic : api.searchText;
+    searchFn(nextQuery.trim(), {
       workSlug: nextWork,
       category: nextWork ? "all" : nextCategory,
-      exact: nextExact,
+      exact: nextMode === "text" ? nextExact : false,
       limit: nextWork ? 18 : 24,
       perWork: nextWork ? 6 : 4,
     })
@@ -184,17 +194,18 @@ export default function SearchPage() {
 
   const submitSearch = () => {
     const trimmed = query.trim();
-    if (trimmed.length < 2) {
-      setError("Enter at least two characters.");
+    if (trimmed.length < (mode === "semantic" ? 3 : 2)) {
+      setError(mode === "semantic" ? "Enter at least three characters for semantic search." : "Enter at least two characters.");
       return;
     }
 
     const nextParams = new URLSearchParams();
     nextParams.set("q", trimmed);
+    if (mode === "semantic") nextParams.set("mode", "semantic");
 
     if (scope === "work" && workSlug) nextParams.set("work", workSlug);
     if (scope === "all" && category !== "all") nextParams.set("category", category);
-    if (exact) nextParams.set("exact", "1");
+    if (mode === "text" && exact) nextParams.set("exact", "1");
     if (returnLine) nextParams.set("returnLine", String(returnLine));
 
     const origin = originWorkSlug || ((scope === "work" && workSlug && returnLine) ? workSlug : "");
@@ -205,14 +216,20 @@ export default function SearchPage() {
 
   const totalMatches = results?.totalMatches || 0;
   const showingMatches = results?.showingMatches || 0;
-  const scopedDescription = scope === "work" && workSlug
-    ? "Search within a single work, with ranked line matches and surrounding context."
-    : "Search across the canon, grouped by work and ordered by the strongest matches first.";
+  const scopedDescription = mode === "semantic"
+    ? (scope === "work" && workSlug
+      ? "Find semantically similar passages within one work, ranked by embedding similarity rather than exact wording."
+      : "Find semantically similar passages across the canon, grouped by work and ordered by conceptual closeness.")
+    : (scope === "work" && workSlug
+      ? "Search within a single work, with ranked line matches and surrounding context."
+      : "Search across the canon, grouped by work and ordered by the strongest matches first.");
 
   return (
     <div className="animate-in" style={{ maxWidth: 980, margin: "0 auto", padding: "48px 24px 72px" }}>
       <div style={{ maxWidth: 760, marginBottom: 28 }}>
-        <h1 style={{ fontFamily: "var(--font-display)", fontSize: 28, letterSpacing: 2, marginBottom: 6 }}>Text Search</h1>
+        <h1 style={{ fontFamily: "var(--font-display)", fontSize: 28, letterSpacing: 2, marginBottom: 6 }}>
+          {mode === "semantic" ? "Semantic Passage Search" : "Text Search"}
+        </h1>
         <p style={{ fontFamily: "var(--font-fell)", fontStyle: "italic", color: "var(--text-muted)", fontSize: 15, lineHeight: 1.7, marginBottom: 18 }}>
           {scopedDescription}
         </p>
@@ -231,6 +248,20 @@ export default function SearchPage() {
       </div>
 
       <div style={{ background: "var(--surface)", border: "1px solid var(--border-light)", borderRadius: 14, padding: 18, marginBottom: 22 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          <button
+            className={`btn btn-sm ${mode === "text" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setMode("text")}
+          >
+            Text
+          </button>
+          <button
+            className={`btn btn-sm ${mode === "semantic" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setMode("semantic")}
+          >
+            Semantic
+          </button>
+        </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
           <button
             className={`btn btn-sm ${scope === "work" ? "btn-primary" : "btn-secondary"}`}
@@ -253,7 +284,9 @@ export default function SearchPage() {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submitSearch()}
             autoFocus
-            placeholder={exact ? 'Search an exact phrase...' : 'Enter a word, phrase, or quoted phrase...'}
+            placeholder={mode === "semantic"
+              ? "Describe a passage, theme, or paste a remembered excerpt..."
+              : (exact ? 'Search an exact phrase...' : 'Enter a word, phrase, or quoted phrase...')}
             style={{ width: "100%" }}
           />
           {scope === "work" ? (
@@ -273,26 +306,38 @@ export default function SearchPage() {
         </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-light)" }}>
-            <input type="checkbox" checked={exact} onChange={(e) => setExact(e.target.checked)} />
-            Exact phrase only
-          </label>
+          {mode === "text" ? (
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-light)" }}>
+              <input type="checkbox" checked={exact} onChange={(e) => setExact(e.target.checked)} />
+              Exact phrase only
+            </label>
+          ) : (
+            <div style={{ fontSize: 12, color: "var(--text-light)", lineHeight: 1.6 }}>
+              Semantic search is approximate and looks for conceptually similar passages.
+            </div>
+          )}
           <button className="btn btn-primary" onClick={submitSearch} disabled={loading || (scope === "work" && !workSlug)}>
             {loading ? "Searching..." : "Search"}
           </button>
         </div>
 
         <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-light)", lineHeight: 1.6 }}>
-          Tip: use quotation marks for a phrase such as <span style={{ color: "var(--accent)" }}>"to be or not to be"</span>.
+          {mode === "semantic"
+            ? <>Tip: try a remembered line, a prose description like <span style={{ color: "var(--accent)" }}>Tarquin arguing with himself before the rape</span>, or a thematic phrase such as <span style={{ color: "var(--accent)" }}>honor and shame after violence</span>.</>
+            : <>Tip: use quotation marks for a phrase such as <span style={{ color: "var(--accent)" }}>"to be or not to be"</span>.</>}
         </div>
       </div>
 
       {results && (
         <div style={{ fontSize: 14, color: "var(--text-light)", marginBottom: 16 }}>
-          {totalMatches > 0 ? (
+          {mode === "semantic" && results.available === false ? (
+            <>{results.reason || "Semantic search is not available on this server yet."}</>
+          ) : totalMatches > 0 ? (
             <>
-              Found {totalMatches} match{totalMatches === 1 ? "" : "es"} across {results.totalWorks} work{results.totalWorks === 1 ? "" : "s"} in {results.tookMs}ms.
-              {totalMatches > showingMatches ? ` Showing the top ${showingMatches}.` : ""}
+              {mode === "semantic"
+                ? <>Found semantic matches across {results.totalWorks} work{results.totalWorks === 1 ? "" : "s"} in {results.tookMs}ms. Showing the top {showingMatches}.</>
+                : <>Found {totalMatches} match{totalMatches === 1 ? "" : "es"} across {results.totalWorks} work{results.totalWorks === 1 ? "" : "s"} in {results.tookMs}ms.
+                  {totalMatches > showingMatches ? ` Showing the top ${showingMatches}.` : ""}</>}
             </>
           ) : (
             <>No matches for "{query}".</>
@@ -357,9 +402,11 @@ export default function SearchPage() {
         </div>
       )}
 
-      {results && !results.results?.length && !error && (
+      {results && !results.results?.length && !error && !(mode === "semantic" && results.available === false) && (
         <div style={{ background: "var(--surface)", border: "1px solid var(--border-light)", borderRadius: 12, padding: "18px 20px", color: "var(--text-muted)", lineHeight: 1.7 }}>
-          Try fewer words, turn off exact phrase search, or narrow to a single work if you are looking for a remembered passage.
+          {mode === "semantic"
+            ? "Try a fuller phrase, a remembered excerpt, or a more conceptually specific description."
+            : "Try fewer words, turn off exact phrase search, or narrow to a single work if you are looking for a remembered passage."}
         </div>
       )}
 
