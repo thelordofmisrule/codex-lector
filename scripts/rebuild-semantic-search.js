@@ -1,4 +1,5 @@
 const path = require("path");
+try { require("dotenv").config({ path: path.join(__dirname, "..", ".env") }); } catch {}
 const Database = require("better-sqlite3");
 const { rebuildSemanticSearchIndex } = require("../server/lib/semanticSearchIndex");
 

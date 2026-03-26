@@ -3,8 +3,9 @@
  * Creates the SQLite database schema for Codex Lector.
  * Supports PlayShakespeare XML editions: ps, first-folio, ps-apocrypha, ps-poems.
  */
-const Database = require("better-sqlite3");
 const path = require("path");
+try { require("dotenv").config({ path: path.join(__dirname, "..", ".env") }); } catch {}
+const Database = require("better-sqlite3");
 const fs = require("fs");
 const crypto = require("crypto");
 const { ensureSearchSchema, rebuildSearchIndex } = require("../server/lib/workSearchIndex");
