@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { works as worksApi, annotations as annotsApi, discussions as discApi, bookmarks as bmApi, progress as progApi, researchTray as researchTrayApi, layers as layersApi, analytics as analyticsApi, prosody as prosodyApi } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import { parsePlayShakespeareXML } from "../lib/textParser";
+import { buildPeopleGraphFromXML } from "../lib/peopleGraph";
 import { preservedAnnotationTextStyle, quotedExcerpt, smartenAnnotationText } from "../lib/annotationFormat";
 import { findPlaceAwarenessMatch, warmPlaceAwarenessIndex } from "../lib/placeAwareness";
 import { analyzeProsodyLine, parseProsodyScan } from "../lib/prosody";
@@ -63,6 +64,29 @@ function getWorkPrintDownloads(title, slug) {
   }
 
   return [];
+}
+
+function normalizeEntityTerm(text) {
+  return String(text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/['’`]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function entitySelectionCandidates(text) {
+  const raw = String(text || "").trim();
+  const candidates = new Set();
+  const normalized = normalizeEntityTerm(raw);
+  if (normalized) candidates.add(normalized);
+  if (/['’]s\b/i.test(raw)) {
+    const stripped = normalizeEntityTerm(raw.replace(/['’]s\b/gi, ""));
+    if (stripped) candidates.add(stripped);
+  }
+  return [...candidates];
 }
 
 const DEFAULT_READER_VISIBILITY = {
@@ -1418,7 +1442,23 @@ export default function ReaderPage() {
   const trackedSlugRef = useRef("");
   const selectionLookupRef = useRef(0);
   const parsed = work?.content ? parsePlayShakespeareXML(work.content, work.title, work.category) : null;
+  const peopleGraph = useMemo(() => {
+    if (!work?.content || parsed?.type !== "play") return null;
+    return buildPeopleGraphFromXML(work.content, work.title, work.category);
+  }, [parsed?.type, work?.category, work?.content, work?.title]);
   const lineMetaIndex = parsed ? buildLineMetaIndex(parsed) : {};
+  const peopleTermIndex = useMemo(() => {
+    const index = new Map();
+    for (const person of peopleGraph?.people || []) {
+      const values = [person.name, person.short, ...(person.aliases || [])];
+      for (const value of values) {
+        const normalized = normalizeEntityTerm(value);
+        if (!normalized || index.has(normalized)) continue;
+        index.set(normalized, person);
+      }
+    }
+    return index;
+  }, [peopleGraph]);
   const resumeLine = Math.max(0, parseInt(new URLSearchParams(location.search).get("line") || "0", 10) || 0);
   const hasActiveReaderInspector = !!(annotationPanel || wordLookup || placeAwareness || prosodyNote || prosodyEditor);
   const usePinnedReaderInspector = !isMobileViewport && readerInspectorPinned && hasActiveReaderInspector;
@@ -1535,6 +1575,15 @@ export default function ReaderPage() {
     setProsodyNote(null);
     setProsodyEditor(nextEditor);
   }, []);
+
+  const findCurrentWorkPersonMatch = useCallback((text) => {
+    const candidates = entitySelectionCandidates(text);
+    for (const candidate of candidates) {
+      const person = peopleTermIndex.get(candidate);
+      if (person) return person;
+    }
+    return null;
+  }, [peopleTermIndex]);
 
   const getCurrentViewportLineNumber = useCallback(() => {
     const lines = document.querySelectorAll("[data-lineid]");
@@ -1701,6 +1750,7 @@ export default function ReaderPage() {
     const endLineId = findClosestLineId(range.endContainer) || lineId;
     const position = { x:rect.left+rect.width/2, y:rect.bottom };
     const tokenCount = text.split(/\s+/).filter(Boolean).length;
+    const personMatch = findCurrentWorkPersonMatch(text);
 
     if (/[A-Za-z]/.test(text) && text.length <= 80 && tokenCount <= 5) {
       try {
@@ -1712,6 +1762,7 @@ export default function ReaderPage() {
             initialPlace: match.place,
             matchedTerm: match.matchedTerm,
             selectionText: text,
+            personMatch,
             lineId,
             endLineId,
             position,
@@ -1743,7 +1794,7 @@ export default function ReaderPage() {
       endLineId,
       draftKey: `draft:annot:${slug}`,
     });
-  }, [openAnnotationInspector, openPlaceInspector, openWordInspector, slug]);
+  }, [findCurrentWorkPersonMatch, openAnnotationInspector, openPlaceInspector, openWordInspector, slug]);
 
   const handleMobileLookupTap = useCallback(async (event, lineId) => {
     if (!isMobileViewport) return;
@@ -1758,6 +1809,7 @@ export default function ReaderPage() {
 
     const position = { x: event.clientX, y: event.currentTarget.getBoundingClientRect().bottom };
     const lookupToken = ++selectionLookupRef.current;
+    const personMatch = findCurrentWorkPersonMatch(tappedText);
 
     try {
       const match = await findPlaceAwarenessMatch(tappedText);
@@ -1768,6 +1820,7 @@ export default function ReaderPage() {
           initialPlace: match.place,
           matchedTerm: match.matchedTerm,
           selectionText: tappedText,
+          personMatch,
           lineId,
           position,
         });
@@ -1783,7 +1836,7 @@ export default function ReaderPage() {
       lineId,
       position,
     });
-  }, [isMobileViewport, openPlaceInspector, openWordInspector]);
+  }, [findCurrentWorkPersonMatch, isMobileViewport, openPlaceInspector, openWordInspector]);
 
   const openQuoteCapture = useCallback((selection) => {
     const startLineId = selection?.lineId || "";
@@ -2539,7 +2592,9 @@ export default function ReaderPage() {
           initialPlace={placeAwareness.initialPlace}
           matchedTerm={placeAwareness.matchedTerm}
           selectionText={placeAwareness.selectionText}
+          personMatch={placeAwareness.personMatch}
           workSlug={slug}
+          workTitle={parsed?.title || work?.title || ""}
           position={placeAwareness.position}
           mobileSheet={isMobileViewport}
           pinned={usePinnedReaderInspector}

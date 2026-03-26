@@ -11,9 +11,11 @@ function metadataBits(place) {
 export default function PlaceAwareness({
   placeSlug,
   workSlug,
+  workTitle = "",
   initialPlace,
   matchedTerm,
   selectionText,
+  personMatch,
   position,
   onClose,
   onTogglePin,
@@ -97,6 +99,17 @@ export default function PlaceAwareness({
           </div>
         )}
 
+        {personMatch && (
+          <div style={{ padding:"8px 12px", background:"var(--surface-hover)", borderRadius:6, marginBottom:10, borderLeft:"3px solid var(--accent)" }}>
+            <div style={{ fontSize:11, fontFamily:"var(--font-display)", letterSpacing:1, color:"var(--accent)", textTransform:"uppercase", marginBottom:2 }}>
+              Ambiguous Match
+            </div>
+            <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.55 }}>
+              This selection also matches a character in {workTitle || "this work"}: <strong style={{ color:"var(--text)" }}>{personMatch.name}</strong>. Use annotation if you mean the nobleman or title rather than the place.
+            </div>
+          </div>
+        )}
+
         {label && (
           <div style={{ fontSize:12, color:"var(--text-light)", textTransform:"capitalize", marginBottom:10 }}>
             {label}
@@ -164,6 +177,16 @@ export default function PlaceAwareness({
         )}
 
         <div style={{ marginTop:12, paddingTop:10, borderTop:"1px solid var(--border-light)", display:"grid", gap:8 }}>
+          {personMatch && workSlug && (
+            <Link
+              to={`/people?work=${encodeURIComponent(workSlug)}`}
+              onClick={onClose}
+              className="btn btn-secondary btn-sm"
+              style={{ width:"100%", textAlign:"center", color:"var(--text)", textDecoration:"none" }}
+            >
+              Open People Map
+            </Link>
+          )}
           <Link
             to={`/places?place=${encodeURIComponent(placeSlug)}${workSlug ? `&work=${encodeURIComponent(workSlug)}` : ""}`}
             onClick={onClose}
@@ -190,7 +213,7 @@ export default function PlaceAwareness({
               onClick={() => onAnnotate()}
               style={{ width:"100%", color:"var(--text)" }}
             >
-              Annotate this place
+              Annotate This Selection
             </button>
           )}
         </div>
