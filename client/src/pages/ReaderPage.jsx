@@ -787,6 +787,7 @@ function AnnotationPopover({
   onSave,
   onCopyText,
   onSemanticSearch,
+  canSemanticSearch = false,
   onSaveToTray,
   onOpenQuoteCapture,
   onComposeFromLine,
@@ -953,7 +954,7 @@ function AnnotationPopover({
             <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
               {canSave && <button className="btn btn-primary btn-sm" onClick={() => note.trim() && onSave(note.trim(), color, layerId || null, isGlobal)}>Save</button>}
               <button className="btn btn-secondary btn-sm" onClick={() => onSaveToTray?.({ type: "passage", panel })}>Save to Tray</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => onSemanticSearch?.(panel.text || panel.lineText || "")}>Similar Passage</button>
+              {canSemanticSearch && <button className="btn btn-secondary btn-sm" onClick={() => onSemanticSearch?.(panel.text || panel.lineText || "")}>Similar Passage</button>}
               <button className="btn btn-secondary btn-sm" onClick={() => onOpenQuoteCapture?.(panel)}>Quote Card</button>
               <button className="btn btn-secondary btn-sm" onClick={() => onCopyText?.(panel.text || panel.lineText || "")}>Copy Text</button>
               <button className="btn btn-secondary btn-sm" onClick={onClose}>{canSave ? "Cancel" : "Close"}</button>
@@ -979,7 +980,7 @@ function AnnotationPopover({
             <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
               {canSave && <button className="btn btn-primary btn-sm" onClick={onComposeFromLine}>New Note</button>}
               <button className="btn btn-secondary btn-sm" onClick={() => onSaveToTray?.({ type: "passage", panel })}>Save to Tray</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => onSemanticSearch?.(panel.lineText || panel.text || "")}>Similar Passage</button>
+              {canSemanticSearch && <button className="btn btn-secondary btn-sm" onClick={() => onSemanticSearch?.(panel.lineText || panel.text || "")}>Similar Passage</button>}
               <button className="btn btn-secondary btn-sm" onClick={() => onOpenQuoteCapture?.(panel)}>Quote Card</button>
               <button className="btn btn-secondary btn-sm" onClick={() => onCopyText?.(panel.lineText || "")}>Copy Text</button>
               <button className="btn btn-secondary btn-sm" onClick={onClose}>Close</button>
@@ -1405,7 +1406,7 @@ export default function ReaderPage() {
   const { slug } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, authReady } = useAuth();
   const { confirm } = useConfirm();
   const toast = useToast();
   const isAdmin = user?.isAdmin;
@@ -1441,6 +1442,7 @@ export default function ReaderPage() {
   const [prosodyNote, setProsodyNote] = useState(null);
   const [prosodyEditor, setProsodyEditor] = useState(null);
   const [readerInspectorPinned, setReaderInspectorPinned] = useState(false);
+  const [semanticSearchEnabled, setSemanticSearchEnabled] = useState(false);
   const progressRef = useRef({ maxLine:0, total:0, slug:null });
   const trackedSlugRef = useRef("");
   const selectionLookupRef = useRef(0);
@@ -1489,6 +1491,30 @@ export default function ReaderPage() {
   useEffect(() => {
     if (researchTrayScope === "local") saveResearchTray(researchTrayItems);
   }, [researchTrayItems, researchTrayScope]);
+
+  useEffect(() => {
+    if (!authReady) return undefined;
+    if (!user) {
+      setSemanticSearchEnabled(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    worksApi.semanticStatus()
+      .then((status) => {
+        if (cancelled) return;
+        setSemanticSearchEnabled(!!status?.available);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error(error);
+        setSemanticSearchEnabled(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2554,6 +2580,7 @@ export default function ReaderPage() {
           onSave={saveAnnot}
           onCopyText={copySelectedText}
           onSemanticSearch={openSemanticPassageSearch}
+          canSemanticSearch={semanticSearchEnabled}
           onSaveToTray={saveToResearchTray}
           onOpenQuoteCapture={openQuoteCapture}
           onComposeFromLine={() => setAnnotationPanel((prev) => {

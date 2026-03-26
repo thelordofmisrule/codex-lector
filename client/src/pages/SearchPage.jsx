@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { works as api } from "../lib/api";
+import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../lib/ToastContext";
 import { getWorkEditionOptionLabel } from "../lib/workPresentation";
 
@@ -110,6 +111,7 @@ export default function SearchPage() {
   const nav = useNavigate();
   const location = useLocation();
   const toast = useToast();
+  const { user, authReady } = useAuth();
 
   const params = new URLSearchParams(location.search);
   const [query, setQuery] = useState(() => params.get("q") || "");
@@ -124,6 +126,40 @@ export default function SearchPage() {
   const [originWorkSlug, setOriginWorkSlug] = useState(() => params.get("originWork") || "");
   const [returnLine, setReturnLine] = useState(() => Math.max(0, parseInt(params.get("returnLine") || "0", 10) || 0));
   const [works, setWorks] = useState([]);
+  const [semanticStatus, setSemanticStatus] = useState({ loaded: false, available: false, reason: "" });
+
+  useEffect(() => {
+    if (!authReady) return undefined;
+    if (!user) {
+      setSemanticStatus({ loaded: true, available: false, reason: "Semantic search requires sign-in." });
+      return undefined;
+    }
+
+    let cancelled = false;
+    setSemanticStatus((prev) => ({ ...prev, loaded: false }));
+    api.semanticStatus()
+      .then((status) => {
+        if (cancelled) return;
+        setSemanticStatus({
+          loaded: true,
+          available: !!status?.available,
+          reason: String(status?.reason || ""),
+        });
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        console.error(e);
+        setSemanticStatus({
+          loaded: true,
+          available: false,
+          reason: e.message || "Semantic search is not available right now.",
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, user]);
 
   useEffect(() => {
     api.list()
@@ -140,9 +176,13 @@ export default function SearchPage() {
     const nextWork = nextParams.get("work") || "";
     const nextCategory = nextParams.get("category") || "all";
     const nextExact = nextParams.get("exact") === "1";
-    const nextMode = nextParams.get("mode") === "semantic" ? "semantic" : "text";
+    const requestedMode = nextParams.get("mode") === "semantic" ? "semantic" : "text";
     const nextReturnLine = Math.max(0, parseInt(nextParams.get("returnLine") || "0", 10) || 0);
     const nextOrigin = nextParams.get("originWork") || ((nextReturnLine && nextWork) ? nextWork : "");
+    const wantsSemantic = requestedMode === "semantic";
+    if (wantsSemantic && !authReady) return undefined;
+    if (wantsSemantic && user && !semanticStatus.loaded) return undefined;
+    const nextMode = wantsSemantic && user && semanticStatus.available ? "semantic" : "text";
 
     setQuery(nextQuery);
     setMode(nextMode);
@@ -190,22 +230,25 @@ export default function SearchPage() {
     return () => {
       cancelled = true;
     };
-  }, [location.search, toast]);
+  }, [authReady, location.search, semanticStatus.available, semanticStatus.loaded, toast, user]);
+
+  const semanticEnabled = !!user && semanticStatus.available;
+  const activeMode = mode === "semantic" && semanticEnabled ? "semantic" : "text";
 
   const submitSearch = () => {
     const trimmed = query.trim();
-    if (trimmed.length < (mode === "semantic" ? 3 : 2)) {
-      setError(mode === "semantic" ? "Enter at least three characters for semantic search." : "Enter at least two characters.");
+    if (trimmed.length < (activeMode === "semantic" ? 3 : 2)) {
+      setError(activeMode === "semantic" ? "Enter at least three characters for semantic search." : "Enter at least two characters.");
       return;
     }
 
     const nextParams = new URLSearchParams();
     nextParams.set("q", trimmed);
-    if (mode === "semantic") nextParams.set("mode", "semantic");
+    if (activeMode === "semantic") nextParams.set("mode", "semantic");
 
     if (scope === "work" && workSlug) nextParams.set("work", workSlug);
     if (scope === "all" && category !== "all") nextParams.set("category", category);
-    if (mode === "text" && exact) nextParams.set("exact", "1");
+    if (activeMode === "text" && exact) nextParams.set("exact", "1");
     if (returnLine) nextParams.set("returnLine", String(returnLine));
 
     const origin = originWorkSlug || ((scope === "work" && workSlug && returnLine) ? workSlug : "");
@@ -216,7 +259,7 @@ export default function SearchPage() {
 
   const totalMatches = results?.totalMatches || 0;
   const showingMatches = results?.showingMatches || 0;
-  const scopedDescription = mode === "semantic"
+  const scopedDescription = activeMode === "semantic"
     ? (scope === "work" && workSlug
       ? "Find semantically similar passages within one work, ranked by embedding similarity rather than exact wording."
       : "Find semantically similar passages across the canon, grouped by work and ordered by conceptual closeness.")
@@ -228,7 +271,7 @@ export default function SearchPage() {
     <div className="animate-in" style={{ maxWidth: 980, margin: "0 auto", padding: "48px 24px 72px" }}>
       <div style={{ maxWidth: 760, marginBottom: 28 }}>
         <h1 style={{ fontFamily: "var(--font-display)", fontSize: 28, letterSpacing: 2, marginBottom: 6 }}>
-          {mode === "semantic" ? "Semantic Passage Search" : "Text Search"}
+          {activeMode === "semantic" ? "Semantic Passage Search" : "Text Search"}
         </h1>
         <p style={{ fontFamily: "var(--font-fell)", fontStyle: "italic", color: "var(--text-muted)", fontSize: 15, lineHeight: 1.7, marginBottom: 18 }}>
           {scopedDescription}
@@ -250,17 +293,19 @@ export default function SearchPage() {
       <div style={{ background: "var(--surface)", border: "1px solid var(--border-light)", borderRadius: 14, padding: 18, marginBottom: 22 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
           <button
-            className={`btn btn-sm ${mode === "text" ? "btn-primary" : "btn-secondary"}`}
+            className={`btn btn-sm ${activeMode === "text" ? "btn-primary" : "btn-secondary"}`}
             onClick={() => setMode("text")}
           >
             Text
           </button>
-          <button
-            className={`btn btn-sm ${mode === "semantic" ? "btn-primary" : "btn-secondary"}`}
-            onClick={() => setMode("semantic")}
-          >
-            Semantic
-          </button>
+          {semanticEnabled && (
+            <button
+              className={`btn btn-sm ${activeMode === "semantic" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => setMode("semantic")}
+            >
+              Semantic
+            </button>
+          )}
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
           <button
@@ -284,7 +329,7 @@ export default function SearchPage() {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submitSearch()}
             autoFocus
-            placeholder={mode === "semantic"
+            placeholder={activeMode === "semantic"
               ? "Describe a passage, theme, or paste a remembered excerpt..."
               : (exact ? 'Search an exact phrase...' : 'Enter a word, phrase, or quoted phrase...')}
             style={{ width: "100%" }}
@@ -306,7 +351,7 @@ export default function SearchPage() {
         </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          {mode === "text" ? (
+          {activeMode === "text" ? (
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-light)" }}>
               <input type="checkbox" checked={exact} onChange={(e) => setExact(e.target.checked)} />
               Exact phrase only
@@ -322,7 +367,7 @@ export default function SearchPage() {
         </div>
 
         <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-light)", lineHeight: 1.6 }}>
-          {mode === "semantic"
+          {activeMode === "semantic"
             ? <>Tip: try a remembered line, a prose description like <span style={{ color: "var(--accent)" }}>Tarquin arguing with himself before the rape</span>, or a thematic phrase such as <span style={{ color: "var(--accent)" }}>honor and shame after violence</span>.</>
             : <>Tip: use quotation marks for a phrase such as <span style={{ color: "var(--accent)" }}>"to be or not to be"</span>.</>}
         </div>
@@ -330,11 +375,11 @@ export default function SearchPage() {
 
       {results && (
         <div style={{ fontSize: 14, color: "var(--text-light)", marginBottom: 16 }}>
-          {mode === "semantic" && results.available === false ? (
+          {activeMode === "semantic" && results.available === false ? (
             <>{results.reason || "Semantic search is not available on this server yet."}</>
           ) : totalMatches > 0 ? (
             <>
-              {mode === "semantic"
+              {activeMode === "semantic"
                 ? <>Found semantic matches across {results.totalWorks} work{results.totalWorks === 1 ? "" : "s"} in {results.tookMs}ms. Showing the top {showingMatches}.</>
                 : <>Found {totalMatches} match{totalMatches === 1 ? "" : "es"} across {results.totalWorks} work{results.totalWorks === 1 ? "" : "s"} in {results.tookMs}ms.
                   {totalMatches > showingMatches ? ` Showing the top ${showingMatches}.` : ""}</>}
@@ -402,9 +447,9 @@ export default function SearchPage() {
         </div>
       )}
 
-      {results && !results.results?.length && !error && !(mode === "semantic" && results.available === false) && (
+      {results && !results.results?.length && !error && !(activeMode === "semantic" && results.available === false) && (
         <div style={{ background: "var(--surface)", border: "1px solid var(--border-light)", borderRadius: 12, padding: "18px 20px", color: "var(--text-muted)", lineHeight: 1.7 }}>
-          {mode === "semantic"
+          {activeMode === "semantic"
             ? "Try a fuller phrase, a remembered excerpt, or a more conceptually specific description."
             : "Try fewer words, turn off exact phrase search, or narrow to a single work if you are looking for a remembered passage."}
         </div>

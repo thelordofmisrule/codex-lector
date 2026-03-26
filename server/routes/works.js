@@ -453,10 +453,32 @@ r.get("/search/text", (req, res) => {
   });
 });
 
+r.get("/search/semantic/status", (req, res) => {
+  const semanticStatus = getSemanticSearchStatus(db);
+  const isSignedIn = !!req.user;
+  const available = isSignedIn && semanticStatus.configured && semanticStatus.indexed;
+  const reason = !isSignedIn
+    ? "Semantic search requires sign-in."
+    : (!semanticStatus.configured
+      ? "Semantic search is not configured on this server."
+      : (!semanticStatus.indexed ? "Semantic search has not been indexed yet." : ""));
+
+  res.json({
+    available,
+    requiresLogin: !isSignedIn,
+    configured: semanticStatus.configured,
+    indexed: semanticStatus.indexed,
+    reason,
+  });
+});
+
 r.get("/search/semantic", async (req, res) => {
   const startedAt = Date.now();
   const query = String(req.query.q || "").trim();
   const semanticStatus = getSemanticSearchStatus(db);
+  if (!req.user) {
+    return res.status(403).json({ error: "Semantic search requires sign-in." });
+  }
   if (query.length < 3) {
     return res.json({
       query,

@@ -23,6 +23,7 @@ export const auth = {
 export const works = {
   list:()=>req("/works"),
   get:s=>req(`/works/${s}`),
+  semanticStatus:()=>req("/works/search/semantic/status"),
   searchText:(q, opts={})=>{
     const params = new URLSearchParams();
     params.set("q", q);
