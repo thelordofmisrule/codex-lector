@@ -41,6 +41,7 @@ export const works = {
     if (opts.category && opts.category !== "all") params.set("category", opts.category);
     if (opts.limit) params.set("limit", String(opts.limit));
     if (opts.perWork) params.set("perWork", String(opts.perWork));
+    if (opts.semanticMode === "explore") params.set("semanticMode", "explore");
     return req(`/works/search/semantic?${params.toString()}`);
   },
 };

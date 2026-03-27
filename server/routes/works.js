@@ -117,26 +117,29 @@ function buildGroupedResults(rows, matchCounts, limit, perWork) {
 
   for (const row of rows) {
     if (showingMatches >= limit) break;
-    let group = grouped.get(row.slug);
+    const groupSlug = row.groupSlug || row.slug;
+    let group = grouped.get(groupSlug);
     if (!group) {
       group = {
-        slug: row.slug,
-        title: row.title,
-        category: row.category,
-        variant: row.variant,
-        matchCount: matchCounts.get(row.slug) || 0,
+        slug: groupSlug,
+        title: row.groupTitle || row.title,
+        category: row.groupCategory || row.category,
+        variant: row.groupVariant || row.variant,
+        matchCount: matchCounts.get(groupSlug) || 0,
         bestScore: row.score,
         matches: [],
       };
-      grouped.set(row.slug, group);
+      grouped.set(groupSlug, group);
     }
     if (group.matches.length >= perWork) continue;
 
     group.bestScore = Math.max(group.bestScore, row.score);
     group.matches.push({
       id: row.id,
+      resultSlug: row.slug,
       lineNumber: row.lineNumber,
       displayLineNumber: row.displayLineNumber,
+      displayEndLineNumber: row.displayEndLineNumber,
       lineText: row.lineText,
       snippet: row.snippet,
       prevText: row.prevText,
@@ -367,6 +370,103 @@ function formatSemanticRow(row, score) {
   };
 }
 
+function normalizeSemanticText(text) {
+  return ` ${String(text || "")
+    .toLowerCase()
+    .replace(/[’']/g, "'")
+    .replace(/[^a-z0-9'\s]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()} `;
+}
+
+function regexCount(text, regex) {
+  const matches = text.match(regex);
+  return matches ? matches.length : 0;
+}
+
+function hasAnyRegex(text, regexes) {
+  return regexes.some((regex) => regex.test(text));
+}
+
+function buildSemanticQueryProfile(query) {
+  const text = normalizeSemanticText(query);
+  return {
+    text,
+    wantsViolence: hasAnyRegex(text, [/\bmurder\b/, /\bkill\b/, /\bdeath\b/, /\bstab\b/, /\bbloody\b/, /\bslay\b/, /\bassassin/]),
+    wantsIntrospection: hasAnyRegex(text, [/\bimagin/, /\bimagines?\b/, /\bthink/, /\bthought\b/, /\bmeditat/, /\bponder/, /\bconsider/, /\bfantas/, /\bsurmise/, /\bconscience/, /\bdoubt/, /\bhesitat/, /\bintent\b/]),
+    wantsBeforeAction: hasAnyRegex(text, [/\bbefore\b/, /\bprior\b/, /\bprepar/, /\babout to\b/, /\byet\b/, /\bnot yet\b/, /\bcommitt?ing\b/, /\bcommit\b/, /\bdoing it\b/, /\bdo it\b/, /\bfirst begin\b/]),
+    wantsInteriorConflict: hasAnyRegex(text, [/\bargu/, /\bdebate/, /\bconflict/, /\bstruggle/, /\bwrestl/, /\bpause/, /\bindecis/, /\bremorse/, /\bconscience/]),
+  };
+}
+
+function semanticHeuristicAdjustments(row, profile) {
+  const text = normalizeSemanticText(row.chunk_text || "");
+  const localText = normalizeSemanticText(`${row.label || ""} ${row.location_label || ""} ${row.speaker || ""}`);
+  const combined = `${text}${localText}`;
+
+  const introspectionCount = regexCount(combined, /\b(i|me|my|myself|thought|think|imagine|imaginings|fantastical|surmise|meditate|conscience|intent|inclination|pause|resolve|fear|doubt|remorse)\b/g);
+  const violenceCount = regexCount(combined, /\b(murder|kill|killing|death|deed|bloody|stab|slay|assassin|poison)\b/g);
+  const beforeCount = regexCount(combined, /\b(yet|before|not yet|if|shall|would|begin|commencing|pause|surmise|fantastical|intent|inclination|thought)\b/g);
+  const boastCount = regexCount(combined, /\b(done a thousand more|notorious ill|i curse|ravish a maid|accuse some innocent|set fire|or else devise his death|plot the way to do it)\b/g);
+  const listLikeCount = regexCount(combined, /\b(or else|as kill a man|ravish a maid|accuse some innocent|set fire)\b/g)
+    + regexCount(String(row.chunk_text || ""), /[,;:]/g);
+  const retrospectiveCount = regexCount(combined, /\b(had done|have done|did not|have not done|even now i curse|i curse the day)\b/g);
+  const speakerNamed = regexCount(combined, /\b(aaron|lucio|escalus|horatio|polonius)\b/g);
+
+  let adjustment = 0;
+  if (profile.wantsIntrospection) adjustment += Math.min(0.11, introspectionCount * 0.015);
+  if (profile.wantsViolence) adjustment += Math.min(0.07, violenceCount * 0.012);
+  if (profile.wantsBeforeAction) adjustment += Math.min(0.1, beforeCount * 0.016);
+  if (profile.wantsInteriorConflict) adjustment += Math.min(0.08, introspectionCount * 0.01) + Math.min(0.04, beforeCount * 0.008);
+
+  if (introspectionCount >= 3 && violenceCount >= 1 && beforeCount >= 2) adjustment += 0.05;
+  if (/\bmy thought\b/.test(combined) || /\bhorrible imaginings\b/.test(combined) || /\bfirst begin\b/.test(combined)) adjustment += 0.08;
+  if (/\bconscience\b/.test(combined) && /\bkill/.test(combined)) adjustment += 0.03;
+
+  adjustment -= Math.min(0.15, boastCount * 0.06);
+  adjustment -= Math.min(0.1, retrospectiveCount * 0.04);
+  adjustment -= Math.min(0.08, Math.max(0, listLikeCount - 3) * 0.01);
+  if (speakerNamed > 0 && introspectionCount < 2) adjustment -= 0.015;
+
+  return adjustment;
+}
+
+function rerankSemanticEntries(entries, query, options = {}) {
+  const profile = buildSemanticQueryProfile(query);
+  const mode = options.semanticMode === "explore" ? "explore" : "tight";
+  const heuristicWeight = mode === "explore" ? 0.6 : 1;
+  return entries
+    .map((entry) => {
+      const heuristic = semanticHeuristicAdjustments(entry.row, profile) * heuristicWeight;
+      const modeBoost = mode === "tight"
+        ? ((entry.row.chunk_type === "passage" ? 0.012 : 0) - Math.max(0, entry.row.line_end - entry.row.line_start - 12) * 0.0008)
+        : 0;
+      return {
+        ...entry,
+        heuristicScore: heuristic,
+        totalScore: entry.totalScore + heuristic + modeBoost,
+      };
+    })
+    .sort((a, b) => b.totalScore - a.totalScore);
+}
+
+function collapseEquivalentEditionEntries(entries, lookup, options = {}) {
+  if (options.workSlug || (options.category && options.category !== "all")) return entries;
+  const enrichedBySlug = new Map(lookup.works.map((work) => [work.slug, enrichWork(work, lookup)]));
+  const primaryFamilies = new Set();
+  entries.forEach((entry) => {
+    const meta = enrichedBySlug.get(entry.row.work_slug);
+    if (meta?.isPrimaryEdition) primaryFamilies.add(meta.familySlug);
+  });
+  if (!primaryFamilies.size) return entries;
+  return entries.filter((entry) => {
+    const meta = enrichedBySlug.get(entry.row.work_slug);
+    if (!meta) return true;
+    if (meta.isPrimaryEdition) return true;
+    return !primaryFamilies.has(meta.familySlug);
+  });
+}
+
 function scoreSemanticEntries(rows, queryVector, queryNorm, options = {}) {
   const parentScoreByKey = options.parentScoreByKey || new Map();
   const rootScoreByWork = options.rootScoreByWork || new Map();
@@ -421,7 +521,7 @@ async function searchSemantic(query, options) {
     };
   }
 
-  const { workSlug, category, limit, perWork } = options;
+  const { workSlug, category, limit, perWork, semanticMode = "tight" } = options;
   const queryVector = (await embedTexts([query], { inputType: "query" }))[0] || [];
   if (!queryVector.length) {
     return {
@@ -438,9 +538,10 @@ async function searchSemantic(query, options) {
   for (const value of queryVector) queryNorm += value * value;
   queryNorm = Math.sqrt(queryNorm) || 1;
 
+  const workLookup = buildWorkLookup();
   const rootRows = selectSemanticNodes("work", { workSlug, category });
   const scoredRoots = scoreSemanticEntries(rootRows, queryVector, queryNorm, { localWeight: 1, parentWeight: 0, rootWeight: 0 })
-    .slice(0, workSlug ? 1 : Math.max(limit, 12));
+    .slice(0, workSlug ? 1 : (semanticMode === "explore" ? Math.max(limit + 6, 16) : Math.max(limit, 10)));
 
   const passageEntryMap = new Map();
   const rootScoreByWork = new Map(scoredRoots.map((entry) => [entry.row.work_slug, entry.totalScore]));
@@ -471,8 +572,8 @@ async function searchSemantic(query, options) {
     const nonLeafEntries = scoredChildren.filter((entry) => entry.row.chunk_type !== "passage");
     frontier = pickNextSemanticFrontier(
       nonLeafEntries,
-      workSlug ? 3 : 2,
-      Math.max(limit * 3, workSlug ? 18 : 24)
+      workSlug ? 3 : (semanticMode === "explore" ? 3 : 2),
+      Math.max(limit * (semanticMode === "explore" ? 4 : 3), workSlug ? 18 : (semanticMode === "explore" ? 32 : 24))
     );
     depth += 1;
   }
@@ -491,9 +592,17 @@ async function searchSemantic(query, options) {
     }
   });
 
-  const scoredPassages = dedupeSemanticPassages(
-    [...passageEntryMap.values()]
-      .sort((a, b) => b.totalScore - a.totalScore)
+  const scoredPassages = collapseEquivalentEditionEntries(
+    dedupeSemanticPassages(
+      rerankSemanticEntries(
+        [...passageEntryMap.values()]
+          .sort((a, b) => b.totalScore - a.totalScore),
+        query,
+        { semanticMode }
+      )
+    ),
+    workLookup,
+    { workSlug, category }
   );
 
   if (!scoredPassages.length) {
@@ -508,11 +617,23 @@ async function searchSemantic(query, options) {
 
   const matchCounts = new Map();
   scoredPassages.forEach(({ row }) => {
-    matchCounts.set(row.work_slug, (matchCounts.get(row.work_slug) || 0) + 1);
+    const meta = enrichWork({ slug: row.work_slug, title: row.work_title, category: row.category, variant: row.variant }, workLookup);
+    const groupSlug = (!workSlug && category === "all") ? (meta.familySlug || row.work_slug) : row.work_slug;
+    matchCounts.set(groupSlug, (matchCounts.get(groupSlug) || 0) + 1);
   });
 
   const grouped = buildGroupedResults(
-    scoredPassages.map(({ row, totalScore }) => formatSemanticRow(row, totalScore)),
+    scoredPassages.map(({ row, totalScore }) => {
+      const formatted = formatSemanticRow(row, totalScore);
+      if (!workSlug && category === "all") {
+        const meta = enrichWork({ slug: row.work_slug, title: row.work_title, category: row.category, variant: row.variant }, workLookup);
+        formatted.groupSlug = meta.familySlug || row.work_slug;
+        formatted.groupTitle = meta.familyTitle || row.work_title;
+        formatted.groupCategory = meta.category || row.category;
+        formatted.groupVariant = meta.variant || row.variant;
+      }
+      return formatted;
+    }),
     matchCounts,
     limit,
     perWork
@@ -627,13 +748,15 @@ r.get("/search/semantic", async (req, res) => {
   const category = String(req.query.category || "all").trim() || "all";
   const limit = clampInt(req.query.limit, 6, 60, workSlug ? 18 : 24);
   const perWork = clampInt(req.query.perWork, 1, 8, workSlug ? 6 : 4);
+  const semanticMode = String(req.query.semanticMode || "tight").trim() === "explore" ? "explore" : "tight";
 
   try {
-    const response = await searchSemantic(query, { workSlug, category, limit, perWork });
+    const response = await searchSemantic(query, { workSlug, category, limit, perWork, semanticMode });
     return res.json({
       query,
       work: workSlug,
       category,
+      semanticMode,
       totalMatches: response.totalMatches,
       totalWorks: response.totalWorks,
       showingMatches: response.showingMatches,

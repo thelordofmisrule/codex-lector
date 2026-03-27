@@ -130,7 +130,7 @@ function SearchMatchButton({ resultSlug, match, query, exact, nav, semantic = fa
     <button
       key={match.id}
       className="btn btn-ghost"
-      onClick={() => nav(`/read/${resultSlug}${match.lineNumber ? `?line=${match.lineNumber}` : ""}`)}
+      onClick={() => nav(`/read/${match.resultSlug || resultSlug}${match.lineNumber ? `?line=${match.lineNumber}` : ""}`)}
       style={{
         display: "block",
         width: "100%",
@@ -189,6 +189,7 @@ export default function SearchPage() {
   const [workSlug, setWorkSlug] = useState(() => params.get("work") || "");
   const [category, setCategory] = useState(() => params.get("category") || "all");
   const [exact, setExact] = useState(() => params.get("exact") === "1");
+  const [semanticMode, setSemanticMode] = useState(() => params.get("semanticMode") === "explore" ? "explore" : "tight");
   const [originWorkSlug, setOriginWorkSlug] = useState(() => params.get("originWork") || "");
   const [returnLine, setReturnLine] = useState(() => Math.max(0, parseInt(params.get("returnLine") || "0", 10) || 0));
   const [works, setWorks] = useState([]);
@@ -242,6 +243,7 @@ export default function SearchPage() {
     const nextWork = nextParams.get("work") || "";
     const nextCategory = nextParams.get("category") || "all";
     const nextExact = nextParams.get("exact") === "1";
+    const nextSemanticMode = nextParams.get("semanticMode") === "explore" ? "explore" : "tight";
     const requestedMode = nextParams.get("mode") === "semantic" ? "semantic" : "text";
     const nextReturnLine = Math.max(0, parseInt(nextParams.get("returnLine") || "0", 10) || 0);
     const nextOrigin = nextParams.get("originWork") || ((nextReturnLine && nextWork) ? nextWork : "");
@@ -255,6 +257,7 @@ export default function SearchPage() {
     setWorkSlug(nextWork);
     setCategory(nextCategory);
     setExact(nextExact);
+    setSemanticMode(nextSemanticMode);
     setReturnLine(nextReturnLine);
     setOriginWorkSlug(nextOrigin);
     setScope(nextWork ? "work" : "all");
@@ -271,13 +274,14 @@ export default function SearchPage() {
     setError("");
 
     const searchFn = nextMode === "semantic" ? api.searchSemantic : api.searchText;
-    searchFn(nextQuery.trim(), {
-      workSlug: nextWork,
-      category: nextWork ? "all" : nextCategory,
-      exact: nextMode === "text" ? nextExact : false,
-      limit: nextWork ? 18 : 24,
-      perWork: nextWork ? 6 : 4,
-    })
+      searchFn(nextQuery.trim(), {
+        workSlug: nextWork,
+        category: nextWork ? "all" : nextCategory,
+        exact: nextMode === "text" ? nextExact : false,
+        semanticMode: nextMode === "semantic" ? nextSemanticMode : "tight",
+        limit: nextWork ? 18 : 24,
+        perWork: nextWork ? 6 : 4,
+      })
       .then((response) => {
         if (cancelled) return;
         setResults(response);
@@ -310,7 +314,10 @@ export default function SearchPage() {
 
     const nextParams = new URLSearchParams();
     nextParams.set("q", trimmed);
-    if (activeMode === "semantic") nextParams.set("mode", "semantic");
+    if (activeMode === "semantic") {
+      nextParams.set("mode", "semantic");
+      if (semanticMode === "explore") nextParams.set("semanticMode", "explore");
+    }
 
     if (scope === "work" && workSlug) nextParams.set("work", workSlug);
     if (scope === "all" && category !== "all") nextParams.set("category", category);
@@ -328,7 +335,7 @@ export default function SearchPage() {
   const scopedDescription = activeMode === "semantic"
     ? (scope === "work" && workSlug
       ? "Find semantically similar passages within one work, ranked by embedding similarity rather than exact wording."
-      : "Find semantically similar passages across the canon, grouped by work and ordered by conceptual closeness.")
+      : "Find semantically similar passages across the canon, grouped by work family and ordered by conceptual closeness.")
     : (scope === "work" && workSlug
       ? "Search within a single work, with ranked line matches and surrounding context."
       : "Search across the canon, grouped by work and ordered by the strongest matches first.");
@@ -388,6 +395,23 @@ export default function SearchPage() {
           </button>
         </div>
 
+        {activeMode === "semantic" && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+            <button
+              className={`btn btn-sm ${semanticMode === "tight" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => setSemanticMode("tight")}
+            >
+              Tighter
+            </button>
+            <button
+              className={`btn btn-sm ${semanticMode === "explore" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => setSemanticMode("explore")}
+            >
+              Exploratory
+            </button>
+          </div>
+        )}
+
         <div style={{ display: "grid", gridTemplateColumns: scope === "work" ? "minmax(0, 2fr) minmax(240px, 1fr)" : "minmax(0, 1fr) minmax(220px, 0.8fr)", gap: 10, marginBottom: 10 }}>
           <input
             className="input"
@@ -424,7 +448,7 @@ export default function SearchPage() {
             </label>
           ) : (
             <div style={{ fontSize: 12, color: "var(--text-light)", lineHeight: 1.6 }}>
-              Semantic search is approximate and looks for conceptually similar passages.
+              Semantic search is approximate. <span style={{ color: "var(--accent)" }}>Tighter</span> favors inwardly similar passages; <span style={{ color: "var(--accent)" }}>Exploratory</span> casts a wider net.
             </div>
           )}
           <button className="btn btn-primary" onClick={submitSearch} disabled={loading || (scope === "work" && !workSlug)}>
@@ -446,7 +470,7 @@ export default function SearchPage() {
           ) : totalMatches > 0 ? (
             <>
               {activeMode === "semantic"
-                ? <>Found semantic matches across {results.totalWorks} work{results.totalWorks === 1 ? "" : "s"} in {results.tookMs}ms. Showing the top {showingMatches}.</>
+                ? <>Found semantic matches across {results.totalWorks} work famil{results.totalWorks === 1 ? "y" : "ies"} in {results.tookMs}ms. Showing the top {showingMatches}.</>
                 : <>Found {totalMatches} match{totalMatches === 1 ? "" : "es"} across {results.totalWorks} work{results.totalWorks === 1 ? "" : "s"} in {results.tookMs}ms.
                   {totalMatches > showingMatches ? ` Showing the top ${showingMatches}.` : ""}</>}
             </>
