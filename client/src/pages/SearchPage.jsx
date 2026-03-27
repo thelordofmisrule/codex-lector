@@ -35,7 +35,15 @@ function normalizeTerms(query) {
     .trim();
 }
 
-function buildHighlightTerms(query, exact) {
+const SEMANTIC_HIGHLIGHT_STOPWORDS = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "before", "but", "by", "do", "does",
+  "for", "from", "he", "her", "him", "his", "i", "if", "in", "into", "is", "it",
+  "its", "me", "my", "of", "on", "or", "she", "so", "that", "the", "their", "them",
+  "then", "there", "they", "this", "to", "was", "were", "what", "when", "which",
+  "who", "with", "would", "yet", "you", "your",
+]);
+
+function buildHighlightTerms(query, exact, semantic = false) {
   const normalized = normalizeTerms(query);
   if (!normalized) return [];
   if (exact) return [String(query || "").replace(/"/g, "").trim()].filter(Boolean);
@@ -43,14 +51,24 @@ function buildHighlightTerms(query, exact) {
   const quoted = Array.from(String(query || "").matchAll(/"([^"]+)"/g))
     .map((match) => normalizeTerms(match[1]))
     .filter(Boolean);
-  const tokens = normalized.replace(/"([^"]+)"/g, " ").split(" ").filter(Boolean);
+  const tokens = normalized
+    .replace(/"([^"]+)"/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .filter((token) => {
+      if (!semantic) return true;
+      if (token.length < 3) return false;
+      return !SEMANTIC_HIGHLIGHT_STOPWORDS.has(token);
+    });
 
-  return Array.from(new Set([...quoted, ...tokens])).sort((a, b) => b.length - a.length);
+  const terms = Array.from(new Set([...quoted, ...tokens]))
+    .sort((a, b) => b.length - a.length);
+  return semantic ? terms.slice(0, 8) : terms;
 }
 
-function highlightText(text, query, exact) {
+function highlightText(text, query, exact, semantic = false) {
   const raw = String(text || "");
-  const terms = buildHighlightTerms(query, exact);
+  const terms = buildHighlightTerms(query, exact, semantic);
   if (!raw || !terms.length) return raw;
 
   const pattern = new RegExp(`(${terms.map((term) => escapeRegex(term)).join("|")})`, "gi");
@@ -147,14 +165,14 @@ function SearchMatchButton({ resultSlug, match, query, exact, nav, semantic = fa
         </div>
       )}
       <Metadata match={match} showSemanticPath={!semantic} />
-      <ContextLine text={match.prevText} query={query} exact={exact} emphasized={false} />
-      <ContextLine text={match.snippet || match.lineText} query={query} exact={exact} emphasized />
-      <ContextLine text={match.nextText} query={query} exact={exact} emphasized={false} />
+      <ContextLine text={match.prevText} query={query} exact={exact} semantic={semantic} emphasized={false} />
+      <ContextLine text={match.snippet || match.lineText} query={query} exact={exact} semantic={semantic} emphasized />
+      <ContextLine text={match.nextText} query={query} exact={exact} semantic={semantic} emphasized={false} />
     </button>
   );
 }
 
-function ContextLine({ text, query, exact, emphasized }) {
+function ContextLine({ text, query, exact, semantic = false, emphasized }) {
   if (!text) return null;
   return (
     <div
@@ -163,12 +181,12 @@ function ContextLine({ text, query, exact, emphasized }) {
         opacity: emphasized ? 1 : 0.76,
         fontSize: emphasized ? 15 : 13,
         lineHeight: 1.6,
-        paddingLeft: emphasized ? 0 : 12,
+        paddingLeft: 12,
         borderLeft: emphasized ? "3px solid var(--accent)" : "1px solid var(--border-light)",
         marginBottom: 4,
       }}
     >
-      {highlightText(text, query, exact)}
+      {highlightText(text, query, exact, semantic)}
     </div>
   );
 }
