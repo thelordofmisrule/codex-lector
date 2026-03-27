@@ -243,6 +243,41 @@ function buildWorkTree(work, scaffold) {
   return [rootNode, ...workClusters, ...allNodes];
 }
 
+function normalizeLegacySemanticNodeKeys(db) {
+  db.prepare(`
+    UPDATE semantic_search_chunks
+    SET node_key = 'legacy:' || id
+    WHERE TRIM(COALESCE(node_key, '')) = ''
+  `).run();
+
+  const duplicates = db.prepare(`
+    SELECT node_key
+    FROM semantic_search_chunks
+    WHERE TRIM(COALESCE(node_key, '')) <> ''
+    GROUP BY node_key
+    HAVING COUNT(*) > 1
+  `).all();
+
+  const selectIds = db.prepare(`
+    SELECT id
+    FROM semantic_search_chunks
+    WHERE node_key = ?
+    ORDER BY id
+  `);
+  const updateKey = db.prepare(`
+    UPDATE semantic_search_chunks
+    SET node_key = ?
+    WHERE id = ?
+  `);
+
+  duplicates.forEach(({ node_key: nodeKey }) => {
+    const rows = selectIds.all(nodeKey);
+    rows.slice(1).forEach(({ id }) => {
+      updateKey.run(`${nodeKey}::legacy:${id}`, id);
+    });
+  });
+}
+
 function ensureSemanticSearchSchema(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS semantic_search_chunks (
@@ -290,6 +325,8 @@ function ensureSemanticSearchSchema(db) {
     try { db.exec(statement); } catch {}
   });
 
+  normalizeLegacySemanticNodeKeys(db);
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_semantic_search_chunks_type
       ON semantic_search_chunks(chunk_type, work_slug, scope_key);
@@ -297,6 +334,8 @@ function ensureSemanticSearchSchema(db) {
       ON semantic_search_chunks(work_id, chunk_type, line_start);
     CREATE INDEX IF NOT EXISTS idx_semantic_search_chunks_parent
       ON semantic_search_chunks(parent_node_key, node_order);
+  `);
+  db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_semantic_search_chunks_node_key
       ON semantic_search_chunks(node_key);
   `);
