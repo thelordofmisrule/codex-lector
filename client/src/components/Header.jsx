@@ -31,6 +31,7 @@ export default function Header() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 860);
   const chatRefreshTimerRef = useRef(null);
   const groupedNavRef = useRef(null);
+  const notificationsRef = useRef(null);
   const themeMenuRef = useRef(null);
   const nav = useNavigate();
   const loc = useLocation();
@@ -160,6 +161,9 @@ export default function Header() {
     const handlePointerDown = (event) => {
       if (openNavGroup && groupedNavRef.current && !groupedNavRef.current.contains(event.target)) {
         setOpenNavGroup("");
+      }
+      if (showNotifs && notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+        setShowNotifs(false);
       }
       if (showThemes && themeMenuRef.current && !themeMenuRef.current.contains(event.target)) {
         setShowThemes(false);
@@ -340,7 +344,7 @@ export default function Header() {
 
             {/* Notification bell */}
             {user && (
-              <div style={{ position:"relative" }}>
+              <div ref={showNotifs ? notificationsRef : null} style={{ position:"relative" }}>
                 <button className="btn btn-ghost" aria-label="Toggle notifications" onClick={()=>{setShowNotifs(!showNotifs);setMenu(false);setShowMobileNav(false);setShowThemes(false);setOpenNavGroup("");}} title="Notifications" style={{
                   fontSize:18, padding:"6px 10px", position:"relative",
                 }}>
@@ -351,7 +355,6 @@ export default function Header() {
                   )}
                   {unread > 0 && <span style={{ position:"absolute", top:2, right:2, width:16, height:16, borderRadius:"50%", background:"var(--danger)", color:"#fff", fontSize:10, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center" }}>{unread > 9 ? "9+" : unread}</span>}
                 </button>
-                {showNotifs && <div onClick={()=>setShowNotifs(false)} style={{ position:"fixed", inset:0, zIndex:199 }} />}
                 {showNotifs && (
                   <div style={{ position:"absolute", top:42, right:0, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, boxShadow:"0 8px 24px var(--shadow)", width:"min(320px, calc(100vw - 24px))", maxHeight:400, overflowY:"auto", zIndex:200 }}>
                     <div style={{ padding:"10px 14px", borderBottom:"1px solid var(--border-light)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
