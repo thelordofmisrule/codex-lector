@@ -101,7 +101,7 @@ async function rebuildSemanticSearchIndex(db, options = {}) {
     ].filter(Boolean).join(" · ");
     return `${prefix}\n\n${chunk.chunk_text || chunk.text || ""}`.trim();
   });
-  const vectors = await embedTexts(texts, { logger });
+  const vectors = await embedTexts(texts, { logger, inputType: "document" });
   const config = getSemanticEmbeddingConfig();
 
   const clearRows = db.prepare("DELETE FROM semantic_search_chunks");

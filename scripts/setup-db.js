@@ -1280,10 +1280,11 @@ const semanticCodeSignature = digestParts([
   digestFile(path.join(__dirname, "..", "server", "lib", "semanticSearchIndex.js")),
 ]);
 const semanticStateSignature = digestParts([
-  "semantic-search-v1",
+  "semantic-search-v2",
   String(searchInputState.works || 0),
   String(searchInputState.max_fetched_at || ""),
   semanticCodeSignature,
+  semanticConfig.provider,
   semanticConfig.model,
   String(semanticConfig.dimensions),
 ]);
@@ -1315,7 +1316,7 @@ if (shouldRebuildSemantic) {
     });
 } else {
   if (!semanticConfig.available && indexedSemanticChunks === 0) {
-    console.log("Semantic search not configured. Set OPENAI_API_KEY to build semantic embeddings.");
+    console.log("Semantic search not configured. Set OPENAI_API_KEY or VOYAGE_API_KEY to build semantic embeddings.");
   }
 
   console.log("Database setup complete.");

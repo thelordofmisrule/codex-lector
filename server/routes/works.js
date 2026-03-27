@@ -327,7 +327,7 @@ async function searchSemantic(query, options) {
   }
 
   const { workSlug, category, limit, perWork } = options;
-  const queryVector = (await embedTexts([query]))[0] || [];
+  const queryVector = (await embedTexts([query], { inputType: "query" }))[0] || [];
   if (!queryVector.length) {
     return {
       available: false,
