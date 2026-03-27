@@ -87,6 +87,13 @@ function makeLocationLabel(row) {
   return row.actLabel || row.sceneLabel || "";
 }
 
+function makeSearchLineKey(displayLineNumber, visibleLineNumber) {
+  if (Number.isFinite(displayLineNumber) && displayLineNumber > 0) {
+    return `gn:${displayLineNumber}:${visibleLineNumber}`;
+  }
+  return `idx:${visibleLineNumber}`;
+}
+
 function extractSearchLines(xml) {
   const source = String(xml || "");
   if (!source.trim()) return [];
@@ -153,6 +160,7 @@ function extractSearchLines(xml) {
             const xmlLineNumber = parseLineNumber(capture?.attrs);
             displayLineNumber = Number.isFinite(xmlLineNumber) ? xmlLineNumber : (displayLineNumber + 1);
             rows.push({
+              lineKey: makeSearchLineKey(displayLineNumber, visibleLineNumber),
               lineNumber: visibleLineNumber,
               displayLineNumber,
               lineText,

@@ -72,7 +72,8 @@ function highlightText(text, query, exact) {
 
 function Metadata({ match }) {
   const bits = [];
-  if (match.locationLabel) bits.push(match.locationLabel);
+  if (match.semanticPath) bits.push(match.semanticPath);
+  if (match.locationLabel && match.locationLabel !== match.semanticPath) bits.push(match.locationLabel);
   if (match.speaker) bits.push(match.speaker);
   if (match.displayLineNumber) {
     bits.push(

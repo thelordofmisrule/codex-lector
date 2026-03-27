@@ -266,7 +266,7 @@ function searchFallback(parsed, options) {
   };
 }
 
-function selectSemanticChunks(chunkType, options = {}) {
+function selectSemanticNodes(chunkType, options = {}) {
   const conditions = ["chunk_type = ?", "embedding IS NOT NULL"];
   const params = [chunkType];
 
@@ -283,7 +283,33 @@ function selectSemanticChunks(chunkType, options = {}) {
     SELECT *
     FROM semantic_search_chunks
     WHERE ${conditions.join(" AND ")}
+    ORDER BY work_slug, node_order, line_start
   `).all(...params);
+}
+
+function selectSemanticChildren(parentKeys) {
+  if (!Array.isArray(parentKeys) || !parentKeys.length) return [];
+  const placeholders = parentKeys.map(() => "?").join(",");
+  return db.prepare(`
+    SELECT *
+    FROM semantic_search_chunks
+    WHERE embedding IS NOT NULL
+      AND parent_node_key IN (${placeholders})
+    ORDER BY node_depth, node_order, line_start
+  `).all(...parentKeys);
+}
+
+function selectSemanticPassagesForWorks(workSlugs) {
+  if (!Array.isArray(workSlugs) || !workSlugs.length) return [];
+  const placeholders = workSlugs.map(() => "?").join(",");
+  return db.prepare(`
+    SELECT *
+    FROM semantic_search_chunks
+    WHERE chunk_type='passage'
+      AND embedding IS NOT NULL
+      AND work_slug IN (${placeholders})
+    ORDER BY work_slug, line_start
+  `).all(...workSlugs);
 }
 
 function dedupeSemanticPassages(entries) {
@@ -323,6 +349,8 @@ function formatSemanticRow(row, score) {
     lineEndNumber: row.line_end,
     displayLineNumber: row.display_line_start,
     displayEndLineNumber: row.display_line_end,
+    startLineKey: row.start_line_key || "",
+    endLineKey: row.end_line_key || "",
     lineText: row.chunk_text,
     snippet: row.chunk_text,
     prevText: "",
@@ -332,9 +360,50 @@ function formatSemanticRow(row, score) {
     sceneLabel: "",
     sectionLabel: row.label,
     locationLabel: row.location_label || row.label,
+    semanticPath: row.path_label || "",
+    nodeType: row.chunk_type,
     score,
     semantic: true,
   };
+}
+
+function scoreSemanticEntries(rows, queryVector, queryNorm, options = {}) {
+  const parentScoreByKey = options.parentScoreByKey || new Map();
+  const rootScoreByWork = options.rootScoreByWork || new Map();
+  const localWeight = typeof options.localWeight === "number" ? options.localWeight : 0.88;
+  const parentWeight = typeof options.parentWeight === "number" ? options.parentWeight : 0.12;
+  const rootWeight = typeof options.rootWeight === "number" ? options.rootWeight : 0;
+
+  return rows
+    .map((row) => {
+      const localScore = cosineSimilarity(queryVector, queryNorm, row.embedding, row.embedding_norm);
+      if (!Number.isFinite(localScore)) return null;
+      const parentScore = parentScoreByKey.get(row.parent_node_key) || 0;
+      const rootScore = rootScoreByWork.get(row.work_slug) || 0;
+      return {
+        row,
+        localScore,
+        totalScore: (localScore * localWeight) + (parentScore * parentWeight) + (rootScore * rootWeight),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.totalScore - a.totalScore);
+}
+
+function pickNextSemanticFrontier(entries, perParent, cap) {
+  const picked = [];
+  const counts = new Map();
+
+  for (const entry of entries) {
+    const parentKey = entry.row.parent_node_key || "";
+    const seen = counts.get(parentKey) || 0;
+    if (seen >= perParent) continue;
+    counts.set(parentKey, seen + 1);
+    picked.push(entry);
+    if (picked.length >= cap) break;
+  }
+
+  return picked;
 }
 
 async function searchSemantic(query, options) {
@@ -369,29 +438,62 @@ async function searchSemantic(query, options) {
   for (const value of queryVector) queryNorm += value * value;
   queryNorm = Math.sqrt(queryNorm) || 1;
 
-  const scopeRows = selectSemanticChunks("scope", { workSlug, category });
-  const scopeScoreByKey = new Map(
-    scopeRows
-      .map((row) => [
-        `${row.work_slug}::${row.scope_key}`,
-        cosineSimilarity(queryVector, queryNorm, row.embedding, row.embedding_norm),
-      ])
-      .filter((entry) => Number.isFinite(entry[1]))
-  );
+  const rootRows = selectSemanticNodes("work", { workSlug, category });
+  const scoredRoots = scoreSemanticEntries(rootRows, queryVector, queryNorm, { localWeight: 1, parentWeight: 0, rootWeight: 0 })
+    .slice(0, workSlug ? 1 : Math.max(limit, 12));
 
-  const passageRows = selectSemanticChunks("passage", { workSlug, category });
+  const passageEntryMap = new Map();
+  const rootScoreByWork = new Map(scoredRoots.map((entry) => [entry.row.work_slug, entry.totalScore]));
+  let frontier = scoredRoots;
+  let depth = 0;
+
+  while (frontier.length && depth < 8) {
+    const childRows = selectSemanticChildren(frontier.map((entry) => entry.row.node_key));
+    if (!childRows.length) break;
+
+    const parentScoreByKey = new Map(frontier.map((entry) => [entry.row.node_key, entry.totalScore]));
+    const scoredChildren = scoreSemanticEntries(childRows, queryVector, queryNorm, {
+      parentScoreByKey,
+      rootScoreByWork,
+      localWeight: 0.84,
+      parentWeight: 0.12,
+      rootWeight: 0.04,
+    });
+
+    scoredChildren.forEach((entry) => {
+      if (entry.row.chunk_type !== "passage") return;
+      const existing = passageEntryMap.get(entry.row.node_key);
+      if (!existing || entry.totalScore > existing.totalScore) {
+        passageEntryMap.set(entry.row.node_key, entry);
+      }
+    });
+
+    const nonLeafEntries = scoredChildren.filter((entry) => entry.row.chunk_type !== "passage");
+    frontier = pickNextSemanticFrontier(
+      nonLeafEntries,
+      workSlug ? 3 : 2,
+      Math.max(limit * 3, workSlug ? 18 : 24)
+    );
+    depth += 1;
+  }
+
+  const candidateWorkSlugs = [...new Set(scoredRoots.map((entry) => entry.row.work_slug))];
+  const directPassageRows = selectSemanticPassagesForWorks(candidateWorkSlugs);
+  scoreSemanticEntries(directPassageRows, queryVector, queryNorm, {
+    rootScoreByWork,
+    localWeight: 0.92,
+    parentWeight: 0,
+    rootWeight: 0.08,
+  }).forEach((entry) => {
+    const existing = passageEntryMap.get(entry.row.node_key);
+    if (!existing || entry.totalScore > existing.totalScore) {
+      passageEntryMap.set(entry.row.node_key, entry);
+    }
+  });
+
   const scoredPassages = dedupeSemanticPassages(
-    passageRows
-      .map((row) => {
-        const passageScore = cosineSimilarity(queryVector, queryNorm, row.embedding, row.embedding_norm);
-        const scopeScore = scopeScoreByKey.get(`${row.work_slug}::${row.scope_key}`) ?? 0;
-        return {
-          row,
-          score: (passageScore * 0.82) + (scopeScore * 0.18),
-        };
-      })
-      .filter((entry) => Number.isFinite(entry.score))
-      .sort((a, b) => b.score - a.score)
+    [...passageEntryMap.values()]
+      .sort((a, b) => b.totalScore - a.totalScore)
   );
 
   if (!scoredPassages.length) {
@@ -410,7 +512,7 @@ async function searchSemantic(query, options) {
   });
 
   const grouped = buildGroupedResults(
-    scoredPassages.map(({ row, score }) => formatSemanticRow(row, score)),
+    scoredPassages.map(({ row, totalScore }) => formatSemanticRow(row, totalScore)),
     matchCounts,
     limit,
     perWork
