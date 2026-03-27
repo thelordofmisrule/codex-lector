@@ -70,9 +70,9 @@ function highlightText(text, query, exact) {
   ));
 }
 
-function Metadata({ match }) {
+function Metadata({ match, showSemanticPath = true }) {
   const bits = [];
-  if (match.semanticPath) bits.push(match.semanticPath);
+  if (showSemanticPath && match.semanticPath) bits.push(match.semanticPath);
   if (match.locationLabel && match.locationLabel !== match.semanticPath) bits.push(match.locationLabel);
   if (match.speaker) bits.push(match.speaker);
   if (match.displayLineNumber) {
@@ -86,6 +86,71 @@ function Metadata({ match }) {
     <div style={{ fontSize: 11, color: "var(--text-light)", marginBottom: 6, fontFamily: "var(--font-display)", letterSpacing: 1.1, textTransform: "uppercase" }}>
       {bits.join(" · ")}
     </div>
+  );
+}
+
+function semanticPathParts(match) {
+  return String(match?.semanticPath || "")
+    .split("›")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function groupSemanticMatches(matches) {
+  const groups = new Map();
+  (matches || []).forEach((match) => {
+    const parts = semanticPathParts(match);
+    const leaf = parts.length > 1 ? parts[parts.length - 1] : "";
+    const branchParts = parts.length > 1 ? parts.slice(0, -1) : [];
+    const branchLabel = branchParts.join(" › ") || match.locationLabel || "Best passages";
+    const branchKey = branchLabel.toLowerCase();
+    const existing = groups.get(branchKey);
+    if (existing) {
+      existing.matches.push({ ...match, semanticLeafLabel: leaf });
+      existing.bestScore = Math.max(existing.bestScore, match.score || 0);
+      return;
+    }
+    groups.set(branchKey, {
+      key: branchKey,
+      label: branchLabel,
+      matches: [{ ...match, semanticLeafLabel: leaf }],
+      bestScore: match.score || 0,
+    });
+  });
+
+  return [...groups.values()]
+    .sort((a, b) => {
+      if (b.bestScore !== a.bestScore) return b.bestScore - a.bestScore;
+      return a.label.localeCompare(b.label);
+    });
+}
+
+function SearchMatchButton({ resultSlug, match, query, exact, nav, semantic = false }) {
+  return (
+    <button
+      key={match.id}
+      className="btn btn-ghost"
+      onClick={() => nav(`/read/${resultSlug}${match.lineNumber ? `?line=${match.lineNumber}` : ""}`)}
+      style={{
+        display: "block",
+        width: "100%",
+        textAlign: "left",
+        padding: "12px 14px",
+        background: "var(--bg-soft)",
+        border: "1px solid var(--border-light)",
+        borderRadius: 10,
+      }}
+    >
+      {semantic && match.semanticLeafLabel && (
+        <div style={{ fontSize: 11, color: "var(--gold)", marginBottom: 5, fontFamily: "var(--font-display)", letterSpacing: 1.1, textTransform: "uppercase" }}>
+          {match.semanticLeafLabel}
+        </div>
+      )}
+      <Metadata match={match} showSemanticPath={!semantic} />
+      <ContextLine text={match.prevText} query={query} exact={exact} emphasized={false} />
+      <ContextLine text={match.snippet || match.lineText} query={query} exact={exact} emphasized />
+      <ContextLine text={match.nextText} query={query} exact={exact} emphasized={false} />
+    </button>
   );
 }
 
@@ -402,6 +467,10 @@ export default function SearchPage() {
         <div style={{ display: "grid", gap: 14 }}>
           {results.results.map((result) => (
             <section key={result.slug} style={{ background: "var(--surface)", border: "1px solid var(--border-light)", borderRadius: 14, padding: "18px 20px" }}>
+              {(() => {
+                const semanticGroups = activeMode === "semantic" ? groupSemanticMatches(result.matches) : [];
+                return (
+                  <>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap", marginBottom: 12 }}>
                 <div>
                   <button
@@ -416,33 +485,73 @@ export default function SearchPage() {
                   </div>
                 </div>
                 <div style={{ fontSize: 12, color: "var(--text-light)", fontFamily: "var(--font-display)", letterSpacing: 1 }}>
-                  {result.matchCount} total match{result.matchCount === 1 ? "" : "es"}
+                  {activeMode === "semantic"
+                    ? `${semanticGroups.length} branch${semanticGroups.length === 1 ? "" : "es"}`
+                    : `${result.matchCount} total match${result.matchCount === 1 ? "" : "es"}`}
                 </div>
               </div>
 
-              <div style={{ display: "grid", gap: 10 }}>
-                {result.matches.map((match) => (
-                  <button
-                    key={match.id}
-                    className="btn btn-ghost"
-                    onClick={() => nav(`/read/${result.slug}${match.lineNumber ? `?line=${match.lineNumber}` : ""}`)}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "12px 14px",
-                      background: "var(--bg-soft)",
-                      border: "1px solid var(--border-light)",
-                      borderRadius: 10,
-                    }}
-                  >
-                    <Metadata match={match} />
-                    <ContextLine text={match.prevText} query={query} exact={exact} emphasized={false} />
-                    <ContextLine text={match.snippet || match.lineText} query={query} exact={exact} emphasized />
-                    <ContextLine text={match.nextText} query={query} exact={exact} emphasized={false} />
-                  </button>
-                ))}
-              </div>
+              {activeMode === "semantic" ? (
+                <div style={{ display: "grid", gap: 10 }}>
+                  {semanticGroups.map((group, groupIndex) => (
+                    <details
+                      key={group.key}
+                      open={groupIndex === 0}
+                      style={{
+                        background: "var(--bg-soft)",
+                        border: "1px solid var(--border-light)",
+                        borderRadius: 12,
+                        padding: "10px 12px",
+                      }}
+                    >
+                      <summary style={{ cursor: "pointer", listStyle: "none" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                          <div>
+                            <div style={{ fontSize: 11, color: "var(--gold)", marginBottom: 2, fontFamily: "var(--font-display)", letterSpacing: 1.2, textTransform: "uppercase" }}>
+                              Matching Branch
+                            </div>
+                            <div style={{ fontSize: 15, color: "var(--text)", lineHeight: 1.45 }}>
+                              {group.label}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 11, color: "var(--text-light)", fontFamily: "var(--font-display)", letterSpacing: 1 }}>
+                            {group.matches.length} passage{group.matches.length === 1 ? "" : "s"}
+                          </div>
+                        </div>
+                      </summary>
+                      <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+                        {group.matches.map((match) => (
+                          <SearchMatchButton
+                            key={match.id}
+                            resultSlug={result.slug}
+                            match={match}
+                            query={query}
+                            exact={exact}
+                            nav={nav}
+                            semantic
+                          />
+                        ))}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 10 }}>
+                  {result.matches.map((match) => (
+                    <SearchMatchButton
+                      key={match.id}
+                      resultSlug={result.slug}
+                      match={match}
+                      query={query}
+                      exact={exact}
+                      nav={nav}
+                    />
+                  ))}
+                </div>
+              )}
+                  </>
+                );
+              })()}
             </section>
           ))}
         </div>
