@@ -286,6 +286,32 @@ function selectSemanticChunks(chunkType, options = {}) {
   `).all(...params);
 }
 
+function dedupeSemanticPassages(entries) {
+  const deduped = [];
+  const seenByScope = new Map();
+
+  for (const entry of entries) {
+    const key = `${entry.row.work_slug}::${entry.row.scope_key}`;
+    const bucket = seenByScope.get(key) || [];
+    const overlapsExisting = bucket.some((existing) => {
+      const overlapStart = Math.max(existing.row.line_start, entry.row.line_start);
+      const overlapEnd = Math.min(existing.row.line_end, entry.row.line_end);
+      const overlap = Math.max(0, overlapEnd - overlapStart + 1);
+      const shortestLength = Math.max(1, Math.min(
+        existing.row.line_end - existing.row.line_start + 1,
+        entry.row.line_end - entry.row.line_start + 1
+      ));
+      return overlap / shortestLength >= 0.67;
+    });
+    if (overlapsExisting) continue;
+    bucket.push(entry);
+    seenByScope.set(key, bucket);
+    deduped.push(entry);
+  }
+
+  return deduped;
+}
+
 function formatSemanticRow(row, score) {
   return {
     id: row.id,
@@ -344,13 +370,31 @@ async function searchSemantic(query, options) {
   queryNorm = Math.sqrt(queryNorm) || 1;
 
   const scopeRows = selectSemanticChunks("scope", { workSlug, category });
-  const scoredScopes = scopeRows
-    .map((row) => ({ row, score: cosineSimilarity(queryVector, queryNorm, row.embedding, row.embedding_norm) }))
-    .filter((entry) => Number.isFinite(entry.score))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, Math.max(limit * 2, workSlug ? 10 : 16));
+  const scopeScoreByKey = new Map(
+    scopeRows
+      .map((row) => [
+        `${row.work_slug}::${row.scope_key}`,
+        cosineSimilarity(queryVector, queryNorm, row.embedding, row.embedding_norm),
+      ])
+      .filter((entry) => Number.isFinite(entry[1]))
+  );
 
-  if (!scoredScopes.length) {
+  const passageRows = selectSemanticChunks("passage", { workSlug, category });
+  const scoredPassages = dedupeSemanticPassages(
+    passageRows
+      .map((row) => {
+        const passageScore = cosineSimilarity(queryVector, queryNorm, row.embedding, row.embedding_norm);
+        const scopeScore = scopeScoreByKey.get(`${row.work_slug}::${row.scope_key}`) ?? 0;
+        return {
+          row,
+          score: (passageScore * 0.82) + (scopeScore * 0.18),
+        };
+      })
+      .filter((entry) => Number.isFinite(entry.score))
+      .sort((a, b) => b.score - a.score)
+  );
+
+  if (!scoredPassages.length) {
     return {
       available: true,
       totalMatches: 0,
@@ -359,23 +403,6 @@ async function searchSemantic(query, options) {
       results: [],
     };
   }
-
-  const allowedScopes = new Set(scoredScopes.map((entry) => `${entry.row.work_slug}::${entry.row.scope_key}`));
-  const workSlugs = [...new Set(scoredScopes.map((entry) => entry.row.work_slug))];
-  const placeholders = workSlugs.map(() => "?").join(",");
-  const passageRows = db.prepare(`
-    SELECT *
-    FROM semantic_search_chunks
-    WHERE chunk_type='passage'
-      AND embedding IS NOT NULL
-      AND work_slug IN (${placeholders})
-  `).all(...workSlugs);
-
-  const scoredPassages = passageRows
-    .filter((row) => allowedScopes.has(`${row.work_slug}::${row.scope_key}`))
-    .map((row) => ({ row, score: cosineSimilarity(queryVector, queryNorm, row.embedding, row.embedding_norm) }))
-    .filter((entry) => Number.isFinite(entry.score))
-    .sort((a, b) => b.score - a.score);
 
   const matchCounts = new Map();
   scoredPassages.forEach(({ row }) => {
