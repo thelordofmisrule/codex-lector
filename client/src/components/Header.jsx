@@ -30,6 +30,8 @@ export default function Header() {
   const [chatUnread, setChatUnread] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 860);
   const chatRefreshTimerRef = useRef(null);
+  const groupedNavRef = useRef(null);
+  const themeMenuRef = useRef(null);
   const nav = useNavigate();
   const loc = useLocation();
   const currentTheme = THEME_OPTIONS.find(option => option.id === themeMode) || THEME_OPTIONS[0];
@@ -154,6 +156,23 @@ export default function Header() {
     setOpenNavGroup("");
     setShowMobileNav(false);
   }, [loc.pathname]);
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (openNavGroup && groupedNavRef.current && !groupedNavRef.current.contains(event.target)) {
+        setOpenNavGroup("");
+      }
+      if (showThemes && themeMenuRef.current && !themeMenuRef.current.contains(event.target)) {
+        setShowThemes(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [openNavGroup, showThemes]);
 
   const renderNavLabel = (label) => {
     const textLabel = label;
@@ -247,7 +266,7 @@ export default function Header() {
               const isOpen = openNavGroup === group.id;
               const isActive = groupActive(group);
               return (
-                <div key={group.id} style={{ position:"relative" }}>
+                <div key={group.id} ref={isOpen ? groupedNavRef : null} style={{ position:"relative" }}>
                   <button
                     className="btn btn-ghost"
                     onClick={()=>{
@@ -270,7 +289,6 @@ export default function Header() {
                     <span>{group.label}</span>
                     <span style={{ fontSize:10, opacity:0.75 }}>▾</span>
                   </button>
-                  {isOpen && <div onClick={()=>setOpenNavGroup("")} style={{ position:"fixed", inset:0, zIndex:199 }} />}
                   {isOpen && (
                     <div style={{ position:"absolute", top:42, left:0, minWidth:190, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, boxShadow:"0 8px 24px var(--shadow)", padding:8, zIndex:200 }}>
                       {group.items.map(item => (
@@ -370,7 +388,7 @@ export default function Header() {
             )}
 
             {/* Theme picker */}
-            <div style={{ position:"relative" }}>
+            <div ref={showThemes ? themeMenuRef : null} style={{ position:"relative" }}>
               <button className="btn btn-ghost" aria-label="Choose theme" onClick={()=>{setShowThemes(!showThemes);setMenu(false);setShowMobileNav(false);setShowNotifs(false);setOpenNavGroup("");}} title={`Theme: ${currentTheme.label}`} style={{
                 fontSize: currentTheme.id === "eva" || currentTheme.id === "gwern" ? 11 : 19,
                 padding:"6px 10px", borderRadius:6,
@@ -381,7 +399,6 @@ export default function Header() {
               }}>
                 {currentTheme.icon}
               </button>
-              {showThemes && <div onClick={()=>setShowThemes(false)} style={{ position:"fixed", inset:0, zIndex:199 }} />}
               {showThemes && (
                 <div style={{ position:"absolute", top:42, right:0, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, boxShadow:"0 8px 24px var(--shadow)", minWidth:220, padding:8, zIndex:200 }}>
                   {THEME_OPTIONS.map(option => (
