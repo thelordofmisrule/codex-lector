@@ -370,6 +370,14 @@ function formatSemanticRow(row, score) {
   };
 }
 
+const SEMANTIC_QUERY_STOPWORDS = new Set([
+  "a", "an", "and", "are", "argues", "arguing", "as", "at", "be", "before", "by", "committing",
+  "do", "does", "for", "from", "he", "her", "herself", "him", "himself", "his", "i", "if",
+  "in", "into", "is", "it", "itself", "me", "my", "myself", "of", "on", "or", "she",
+  "that", "the", "their", "them", "themselves", "then", "there", "they", "this", "to",
+  "was", "were", "with", "you", "your", "yourself",
+]);
+
 function normalizeSemanticText(text) {
   return ` ${String(text || "")
     .toLowerCase()
@@ -377,6 +385,22 @@ function normalizeSemanticText(text) {
     .replace(/[^a-z0-9'\s]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()} `;
+}
+
+function tokenizeSemanticText(text) {
+  return normalizeSemanticText(text).trim().split(/\s+/).filter(Boolean);
+}
+
+function stemSemanticToken(token) {
+  const value = String(token || "").toLowerCase();
+  if (value.length <= 4) return value;
+  return value
+    .replace(/(ingly|edly|ingly|lessly|fully|ation|ition|ments|ment|ously|ously|edly|ness)$/g, "")
+    .replace(/(ing|ed|es|s)$/g, "");
+}
+
+function matchesSemanticLexicon(text, lexicon) {
+  return lexicon.some((regex) => regex.test(text));
 }
 
 function regexCount(text, regex) {
@@ -389,19 +413,46 @@ function hasAnyRegex(text, regexes) {
 }
 
 function buildSemanticQueryProfile(query) {
-  const text = normalizeSemanticText(query);
+  const raw = String(query || "");
+  const text = normalizeSemanticText(raw);
+  const tokens = tokenizeSemanticText(raw);
+  const distinctiveTokens = Array.from(new Set(tokens.filter((token) => (
+    token.length >= 4 && !SEMANTIC_QUERY_STOPWORDS.has(token)
+  ))));
+  const stemmedTokens = Array.from(new Set(distinctiveTokens.map((token) => stemSemanticToken(token)).filter(Boolean)));
+  const namedTerms = Array.from(new Set(
+    (raw.match(/\b[A-Z][a-z]{3,}\b/g) || [])
+      .map((token) => token.toLowerCase())
+      .filter((token) => !SEMANTIC_QUERY_STOPWORDS.has(token))
+  ));
+
   return {
+    raw,
     text,
-    wantsViolence: hasAnyRegex(text, [/\bmurder\b/, /\bkill\b/, /\bdeath\b/, /\bstab\b/, /\bbloody\b/, /\bslay\b/, /\bassassin/]),
-    wantsIntrospection: hasAnyRegex(text, [/\bimagin/, /\bimagines?\b/, /\bthink/, /\bthought\b/, /\bmeditat/, /\bponder/, /\bconsider/, /\bfantas/, /\bsurmise/, /\bconscience/, /\bdoubt/, /\bhesitat/, /\bintent\b/]),
+    namedTerms,
+    distinctiveTokens,
+    stemmedTokens,
+    wantsViolence: hasAnyRegex(text, [/\bmurder\b/, /\bkill\b/, /\bdeath\b/, /\bstab\b/, /\bbloody\b/, /\bslay\b/, /\bassassin/, /\brape\b/, /\bravish/]),
+    wantsIntrospection: hasAnyRegex(text, [/\bimagin/, /\bimagines?\b/, /\bthink/, /\bthought\b/, /\bmeditat/, /\bponder/, /\bconsider/, /\bfantas/, /\bsurmise/, /\bconscience/, /\bdoubt/, /\bhesitat/, /\bintent\b/, /\bargu/, /\bdebate/, /\bdisput/]),
     wantsBeforeAction: hasAnyRegex(text, [/\bbefore\b/, /\bprior\b/, /\bprepar/, /\babout to\b/, /\byet\b/, /\bnot yet\b/, /\bcommitt?ing\b/, /\bcommit\b/, /\bdoing it\b/, /\bdo it\b/, /\bfirst begin\b/]),
-    wantsInteriorConflict: hasAnyRegex(text, [/\bargu/, /\bdebate/, /\bconflict/, /\bstruggle/, /\bwrestl/, /\bpause/, /\bindecis/, /\bremorse/, /\bconscience/]),
+    wantsInteriorConflict: hasAnyRegex(text, [/\bargu/, /\bdebate/, /\bdisput/, /\bconflict/, /\bstruggle/, /\bwrestl/, /\bpause/, /\bindecis/, /\bremorse/, /\bconscience/]),
+    wantsSexualViolence: hasAnyRegex(text, [/\brape\b/, /\bravish/, /\bsexual\b/, /\blust\b/, /\bviolate/, /\bassault\b/]),
   };
 }
 
-function semanticHeuristicAdjustments(row, profile) {
+const SELF_DEBATE_LEXICON = [
+  /\bargu/, /\bdebate/, /\bdisput/, /\bconscience\b/, /\bthought\b/, /\bthink\b/, /\bsurmise\b/, /\bfantas/, /\bintent\b/,
+  /\binclin/, /\bpause\b/, /\bdoubt\b/, /\bhesitat/, /\bdeliber/, /\bresolve\b/, /\bfear\b/, /\bmind\b/, /\bheart\b/,
+  /\brevolving\b/, /\bdesire\b/, /\bdread\b/, /\bpersuasion\b/, /\babstain/, /\bopposite persuasion\b/,
+];
+const SEXUAL_VIOLENCE_LEXICON = [
+  /\brape\b/, /\bravish/, /\blust\b/, /\bdesire\b/, /\bbed\b/, /\bshame\b/, /\bstain/, /\btaint/, /\bunchaste\b/,
+  /\bmaiden\b/, /\bchaste\b/, /\bwill\b/, /\bnight\b/, /\bdeflow/, /\bforce to my desire\b/, /\bdespoil/,
+];
+
+function semanticHeuristicAdjustments(row, profile, workBoost = 0) {
   const text = normalizeSemanticText(row.chunk_text || "");
-  const localText = normalizeSemanticText(`${row.label || ""} ${row.location_label || ""} ${row.speaker || ""}`);
+  const localText = normalizeSemanticText(`${row.label || ""} ${row.location_label || ""} ${row.speaker || ""} ${row.path_label || ""} ${row.work_title || ""}`);
   const combined = `${text}${localText}`;
 
   const introspectionCount = regexCount(combined, /\b(i|me|my|myself|thought|think|imagine|imaginings|fantastical|surmise|meditate|conscience|intent|inclination|pause|resolve|fear|doubt|remorse)\b/g);
@@ -414,14 +465,31 @@ function semanticHeuristicAdjustments(row, profile) {
   const speakerNamed = regexCount(combined, /\b(aaron|lucio|escalus|horatio|polonius)\b/g);
 
   let adjustment = 0;
+  adjustment += workBoost;
   if (profile.wantsIntrospection) adjustment += Math.min(0.11, introspectionCount * 0.015);
   if (profile.wantsViolence) adjustment += Math.min(0.07, violenceCount * 0.012);
   if (profile.wantsBeforeAction) adjustment += Math.min(0.1, beforeCount * 0.016);
   if (profile.wantsInteriorConflict) adjustment += Math.min(0.08, introspectionCount * 0.01) + Math.min(0.04, beforeCount * 0.008);
+  if (profile.wantsIntrospection && matchesSemanticLexicon(combined, SELF_DEBATE_LEXICON)) adjustment += 0.045;
+  if (profile.wantsSexualViolence && matchesSemanticLexicon(combined, SEXUAL_VIOLENCE_LEXICON)) adjustment += 0.05;
+  if (profile.wantsIntrospection && profile.wantsSexualViolence && matchesSemanticLexicon(combined, SELF_DEBATE_LEXICON) && matchesSemanticLexicon(combined, SEXUAL_VIOLENCE_LEXICON)) adjustment += 0.08;
+  if ((/\bdesire\b/.test(combined) && /\bdread\b/.test(combined)) || (/\blust\b/.test(combined) && /\bfear\b/.test(combined))) adjustment += 0.06;
+  if (/\brevolving\b/.test(combined) || /\bdisputation\b/.test(combined) || /\binward mind\b/.test(combined)) adjustment += 0.06;
 
   if (introspectionCount >= 3 && violenceCount >= 1 && beforeCount >= 2) adjustment += 0.05;
   if (/\bmy thought\b/.test(combined) || /\bhorrible imaginings\b/.test(combined) || /\bfirst begin\b/.test(combined)) adjustment += 0.08;
+  if (/\bdisputation\b/.test(combined) || /\bdebating die\b/.test(combined)) adjustment += 0.07;
   if (/\bconscience\b/.test(combined) && /\bkill/.test(combined)) adjustment += 0.03;
+
+  profile.namedTerms.forEach((term) => {
+    if (combined.includes(` ${term} `)) adjustment += 0.09;
+  });
+  profile.distinctiveTokens.slice(0, 5).forEach((token) => {
+    if (combined.includes(` ${token} `)) adjustment += 0.012;
+  });
+  profile.stemmedTokens.slice(0, 5).forEach((stem) => {
+    if (stem.length >= 4 && combined.includes(` ${stem}`)) adjustment += 0.008;
+  });
 
   adjustment -= Math.min(0.15, boastCount * 0.06);
   adjustment -= Math.min(0.1, retrospectiveCount * 0.04);
@@ -431,13 +499,53 @@ function semanticHeuristicAdjustments(row, profile) {
   return adjustment;
 }
 
+function selectWorkTextRows(workSlugs) {
+  if (!Array.isArray(workSlugs) || !workSlugs.length) return [];
+  const placeholders = workSlugs.map(() => "?").join(",");
+  return db.prepare(`
+    SELECT slug, title, content
+    FROM works
+    WHERE slug IN (${placeholders})
+  `).all(...workSlugs);
+}
+
+function buildSemanticWorkBoosts(workSlugs, profile) {
+  const rows = selectWorkTextRows(workSlugs);
+  const boosts = new Map();
+  rows.forEach((row) => {
+    const combined = normalizeSemanticText(`${row.title || ""} ${row.content || ""}`);
+    let boost = 0;
+    let nameMatches = 0;
+    profile.namedTerms.forEach((term) => {
+      if (combined.includes(` ${term} `)) {
+        boost += 0.12;
+        nameMatches += 1;
+      }
+    });
+    if (profile.namedTerms.length) {
+      if (nameMatches === profile.namedTerms.length) boost += 0.1;
+      else if (nameMatches === 0) boost -= 0.16;
+    }
+    profile.distinctiveTokens.slice(0, 4).forEach((token) => {
+      if (combined.includes(` ${token} `)) boost += 0.015;
+    });
+    if (profile.wantsSexualViolence && matchesSemanticLexicon(combined, SEXUAL_VIOLENCE_LEXICON)) boost += 0.04;
+    if (profile.wantsIntrospection && matchesSemanticLexicon(combined, SELF_DEBATE_LEXICON)) boost += 0.03;
+    if (profile.wantsIntrospection && profile.wantsSexualViolence && matchesSemanticLexicon(combined, SELF_DEBATE_LEXICON) && matchesSemanticLexicon(combined, SEXUAL_VIOLENCE_LEXICON)) boost += 0.06;
+    boosts.set(row.slug, Math.max(-0.16, Math.min(0.34, boost)));
+  });
+  return boosts;
+}
+
 function rerankSemanticEntries(entries, query, options = {}) {
   const profile = buildSemanticQueryProfile(query);
   const mode = options.semanticMode === "explore" ? "explore" : "tight";
   const heuristicWeight = mode === "explore" ? 0.6 : 1;
+  const workBoosts = options.workBoosts || new Map();
   return entries
     .map((entry) => {
-      const heuristic = semanticHeuristicAdjustments(entry.row, profile) * heuristicWeight;
+      const workBoost = workBoosts.get(entry.row.work_slug) || 0;
+      const heuristic = semanticHeuristicAdjustments(entry.row, profile, workBoost) * heuristicWeight;
       const modeBoost = mode === "tight"
         ? ((entry.row.chunk_type === "passage" ? 0.012 : 0) - Math.max(0, entry.row.line_end - entry.row.line_start - 12) * 0.0008)
         : 0;
@@ -592,13 +700,14 @@ async function searchSemantic(query, options) {
     }
   });
 
+  const workBoosts = buildSemanticWorkBoosts(candidateWorkSlugs, buildSemanticQueryProfile(query));
   const scoredPassages = collapseEquivalentEditionEntries(
     dedupeSemanticPassages(
       rerankSemanticEntries(
         [...passageEntryMap.values()]
           .sort((a, b) => b.totalScore - a.totalScore),
         query,
-        { semanticMode }
+        { semanticMode, workBoosts }
       )
     ),
     workLookup,
