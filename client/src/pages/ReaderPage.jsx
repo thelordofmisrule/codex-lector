@@ -10,6 +10,7 @@ import { preservedAnnotationTextStyle, quotedExcerpt, smartenAnnotationText } fr
 import { findPlaceAwarenessMatch, warmPlaceAwarenessIndex } from "../lib/placeAwareness";
 import { analyzeProsodyLine, parseProsodyScan } from "../lib/prosody";
 import { clearResearchTray, loadResearchTray, removeResearchTrayItem, saveResearchTray, upsertResearchTrayItem } from "../lib/researchTray";
+import { hasBookshelfForWork } from "../lib/shakespeareBookshelf";
 import { YEAR_OF_SHAKESPEARE_ROWS, buildReadingWaypoints, getCalendarRowsForWork } from "../lib/yearOfShakespeare";
 import { ANNOTATION_KINDS as ANNOT_TYPES, DEFAULT_ANNOTATION_COLOR, getAnnotationColor, getAnnotationKind, getAnnotationKindId } from "../lib/annotationKinds";
 import PlaceAwareness from "../components/PlaceAwareness";
@@ -2252,6 +2253,8 @@ export default function ReaderPage() {
       : work.variant === "ps-apocrypha"
         ? "Apocrypha"
         : work.variant || "Edition");
+  const bookshelfSlug = work.familySlug || slug;
+  const showBookshelfLink = hasBookshelfForWork(bookshelfSlug);
   const layerCatalogById = Object.fromEntries((layerCatalog || []).map((layer) => [String(layer.id), layer]));
   const typeCounts = {};
   const layerCounts = {};
@@ -2483,6 +2486,15 @@ export default function ReaderPage() {
           >
             Live Chat
           </button>
+          {showBookshelfLink && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => navigate(`/bookshelf?work=${encodeURIComponent(bookshelfSlug)}`)}
+              style={{ color:"var(--text-light)", fontSize:12, fontFamily:"var(--font-display)", letterSpacing:1 }}
+            >
+              Bookshelf
+            </button>
+          )}
           {isLucrece && (
             <button
               className="btn btn-ghost btn-sm"
