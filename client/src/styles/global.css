@@ -239,6 +239,115 @@ a:hover { text-decoration:underline; }
   padding: 0.08em 0.12em 0.06em;
 }
 
+.source-text-print-mode {
+  margin: 0 0 26px;
+}
+
+.source-text-print-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-light);
+  font-family: var(--font-display);
+}
+
+.source-text-print-frame {
+  position: relative;
+  padding: 22px 24px 28px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.18), transparent 25%),
+    linear-gradient(180deg, var(--surface), var(--surface-hover));
+  box-shadow: 0 16px 36px var(--shadow);
+  overflow: hidden;
+}
+
+.source-text-print-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top right, rgba(255,255,255,0.18), transparent 28%),
+    linear-gradient(180deg, transparent, rgba(0,0,0,0.03));
+}
+
+.source-text-print-running-head {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 2.6px;
+  text-transform: uppercase;
+  color: var(--text-light);
+  font-family: var(--font-display);
+  margin-bottom: 12px;
+}
+
+.source-text-print-rule {
+  position: relative;
+  z-index: 1;
+  height: 1px;
+  margin-bottom: 18px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  opacity: 0.65;
+}
+
+.source-text-print-body {
+  position: relative;
+  font-family: 'IM Fell English', 'Cormorant Garamond', serif;
+}
+
+.source-text-print-dropcap {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  font-size: calc(33px * 4.1);
+  line-height: 0.82;
+  font-weight: 700;
+  color: var(--gold);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.18);
+}
+
+.source-text-print-line {
+  position: absolute;
+  font-family: 'IM Fell English', 'Cormorant Garamond', serif;
+  font-size: 20px;
+  line-height: 33px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.source-text-print-fallback {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 720px) {
+  .source-text-print-frame {
+    padding: 18px 18px 22px;
+  }
+
+  .source-text-print-dropcap {
+    position: relative;
+    float: left;
+    font-size: 4.4rem;
+    margin: 0.02em 0.14em 0 0;
+  }
+
+  .source-text-print-line {
+    position: static;
+    white-space: normal;
+  }
+}
+
 /* Highlights */
 .hl-0 { background:rgba(201,168,76,0.25);border-bottom:2px solid var(--gold-light);border-radius:2px;padding:1px 0;cursor:pointer; }
 .hl-1 { background:rgba(122,46,30,0.12);border-bottom:2px solid var(--accent);border-radius:2px;padding:1px 0;cursor:pointer; }

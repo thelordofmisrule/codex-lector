@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { layoutNextLine, prepareWithSegments, walkLineRanges } from "@chenglou/pretext";
 import { sourceTexts as sourceTextsApi } from "../lib/api";
 import { getBookshelfSourceById, getBookshelfWorksForSource } from "../lib/shakespeareBookshelf";
 import { parseSourceTextXML } from "../lib/sourceTextParser";
+
+const PRINT_BODY_FONT_SIZE = 20;
+const PRINT_LINE_HEIGHT = 33;
+const PRINT_DROP_CAP_LINES = 4;
+const PRINT_DROP_CAP_GAP = 16;
+const PRINT_BODY_FONT = `${PRINT_BODY_FONT_SIZE}px "IM Fell English"`;
+const PRINT_DROP_CAP_FONT = `700 ${Math.round(PRINT_LINE_HEIGHT * 4.1)}px "Cinzel Decorative"`;
 
 function metaBadgeStyle() {
   return {
@@ -42,8 +50,192 @@ function SourceParagraph({ text, decorativeInitial }) {
   );
 }
 
-function RenderBlocks({ blocks }) {
+function findPrintModeCandidate(parsed) {
+  if (!parsed?.sections?.length) return null;
+
+  const preferredSections = parsed.sections
+    .filter((section) => section.path.some((part) => /body/i.test(part)))
+    .concat(parsed.sections.filter((section) => !section.path.some((part) => /body/i.test(part))));
+
+  for (const section of preferredSections) {
+    for (let blockIndex = 0; blockIndex < (section.blocks || []).length; blockIndex += 1) {
+      const block = section.blocks[blockIndex];
+      if (
+        block?.type === "paragraph"
+        && block.decorativeInitial
+        && String(block.text || "").trim().length >= 120
+      ) {
+        return {
+          sectionKey: section.key,
+          blockIndex,
+          decorativeInitial: block.decorativeInitial,
+          text: block.text,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSource }) {
+  const frameRef = useRef(null);
+  const [frameWidth, setFrameWidth] = useState(0);
+  const [layout, setLayout] = useState({
+    lines: [],
+    height: PRINT_DROP_CAP_LINES * PRINT_LINE_HEIGHT,
+    ready: false,
+  });
+
+  useEffect(() => {
+    const element = frameRef.current;
+    if (!element) return undefined;
+
+    const updateWidth = () => {
+      const styles = window.getComputedStyle(element);
+      const horizontalPadding = (parseFloat(styles.paddingLeft || "0") || 0) + (parseFloat(styles.paddingRight || "0") || 0);
+      setFrameWidth(Math.max(0, element.clientWidth - horizontalPadding));
+    };
+
+    updateWidth();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateWidth) : null;
+    observer?.observe(element);
+    window.addEventListener("resize", updateWidth);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateWidth);
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function buildLayout() {
+      if (!frameWidth || !text || !decorativeInitial) {
+        if (!ignore) {
+          setLayout({
+            lines: [],
+            height: PRINT_DROP_CAP_LINES * PRINT_LINE_HEIGHT,
+            ready: false,
+          });
+        }
+        return;
+      }
+
+      if (document.fonts?.ready) {
+        try {
+          await document.fonts.ready;
+        } catch {
+          // Ignore font readiness failures and attempt layout anyway.
+        }
+      }
+
+      const preparedBody = prepareWithSegments(text, PRINT_BODY_FONT);
+      const preparedDropCap = prepareWithSegments(decorativeInitial, PRINT_DROP_CAP_FONT);
+      let dropCapWidth = 0;
+
+      walkLineRanges(preparedDropCap, 9999, (line) => {
+        dropCapWidth = Math.max(dropCapWidth, line.width);
+      });
+
+      const insetWidth = Math.min(
+        Math.max(150, Math.ceil(dropCapWidth) + PRINT_DROP_CAP_GAP),
+        Math.max(150, Math.floor(frameWidth * 0.44)),
+      );
+
+      const lines = [];
+      let cursor = { segmentIndex: 0, graphemeIndex: 0 };
+      let lineIndex = 0;
+
+      while (true) {
+        const availableWidth = lineIndex < PRINT_DROP_CAP_LINES
+          ? Math.max(160, frameWidth - insetWidth)
+          : frameWidth;
+        const line = layoutNextLine(preparedBody, cursor, availableWidth);
+        if (line === null) break;
+        lines.push({
+          text: line.text,
+          top: lineIndex * PRINT_LINE_HEIGHT,
+          left: lineIndex < PRINT_DROP_CAP_LINES ? insetWidth : 0,
+        });
+        cursor = line.end;
+        lineIndex += 1;
+      }
+
+      if (!ignore) {
+        setLayout({
+          lines,
+          height: Math.max(lineIndex * PRINT_LINE_HEIGHT, PRINT_DROP_CAP_LINES * PRINT_LINE_HEIGHT),
+          ready: true,
+        });
+      }
+    }
+
+    buildLayout();
+    return () => {
+      ignore = true;
+    };
+  }, [decorativeInitial, frameWidth, text]);
+
+  const runningHead = relatedWorks?.[0]?.title || bookshelfSource?.title || "Source Shelf";
+
+  return (
+    <section className="source-text-print-mode">
+      <div className="source-text-print-meta">
+        <span>Print Mode</span>
+        <span>Experimental composition with Pretext</span>
+      </div>
+      <div className="source-text-print-frame" ref={frameRef}>
+        <div className="source-text-print-running-head">
+          {bookshelfSource?.author || "Bookshelf Source"} · {runningHead}
+        </div>
+        <div className="source-text-print-rule" />
+        <div
+          className="source-text-print-body"
+          style={{ minHeight: layout.height }}
+        >
+          <div className="source-text-print-dropcap">
+            {decorativeInitial}
+          </div>
+          {layout.ready ? (
+            layout.lines.map((line, index) => (
+              <div
+                key={`print-line-${index}`}
+                className="source-text-print-line"
+                style={{ top: line.top, left: line.left }}
+              >
+                {line.text}
+              </div>
+            ))
+          ) : (
+            <div className="source-text-print-fallback">
+              <SourceParagraph text={text} decorativeInitial={decorativeInitial} />
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RenderBlocks({
+  blocks,
+  printMode = false,
+  printCandidate = null,
+  sectionKey = "",
+  relatedWorks = [],
+  bookshelfSource = null,
+}) {
   return (blocks || []).map((block, index) => {
+    const isPrintOpening = Boolean(
+      printMode
+      && printCandidate
+      && sectionKey === printCandidate.sectionKey
+      && index === printCandidate.blockIndex
+      && block?.type === "paragraph",
+    );
+
     if (block.type === "verse") {
       return (
         <div key={`verse-${index}`} style={{ marginBottom: 18, paddingLeft: 14, borderLeft: "2px solid var(--border-light)" }}>
@@ -84,6 +276,18 @@ function RenderBlocks({ blocks }) {
       );
     }
 
+    if (isPrintOpening) {
+      return (
+        <SourcePrintOpening
+          key={`print-opening-${sectionKey}-${index}`}
+          decorativeInitial={block.decorativeInitial}
+          text={block.text}
+          relatedWorks={relatedWorks}
+          bookshelfSource={bookshelfSource}
+        />
+      );
+    }
+
     return <SourceParagraph key={`paragraph-${index}`} text={block.text} decorativeInitial={block.decorativeInitial} />;
   });
 }
@@ -93,6 +297,7 @@ export default function SourceTextPage() {
   const [entry, setEntry] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [printMode, setPrintMode] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -122,6 +327,7 @@ export default function SourceTextPage() {
   }, [entry]);
   const bookshelfSource = getBookshelfSourceById(entry?.source_id);
   const relatedWorks = getBookshelfWorksForSource(entry?.source_id);
+  const printCandidate = useMemo(() => findPrintModeCandidate(parsed), [parsed]);
 
   if (loading) {
     return <div style={{ padding: 60, textAlign: "center" }}><div className="spinner" /></div>;
@@ -160,6 +366,7 @@ export default function SourceTextPage() {
           <span style={metaBadgeStyle()}>TCP {entry.tcp_id}</span>
           {entry.language && <span style={metaBadgeStyle()}>{entry.language}</span>}
           {bookshelfSource && <span style={metaBadgeStyle()}>{bookshelfSource.shelfType}</span>}
+          {printCandidate && <span style={metaBadgeStyle()}>Print mode available</span>}
         </div>
         {entry.publication && (
           <div style={{ color: "var(--text)", lineHeight: 1.8, maxWidth: 760, margin: "0 auto 16px" }}>
@@ -208,6 +415,35 @@ export default function SourceTextPage() {
         </section>
       )}
 
+      {printCandidate && (
+        <section style={{ padding: 18, background: "var(--surface)", border: "1px solid var(--border-light)", borderRadius: 14, marginBottom: 22 }}>
+          <div style={{ display: "flex", gap: 12, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "var(--gold)", fontFamily: "var(--font-display)", marginBottom: 8 }}>
+                Experimental Print Mode
+              </div>
+              <div style={{ color: "var(--text)", lineHeight: 1.8, maxWidth: 700 }}>
+                Recompose the first ornamental opening with Pretext so the paragraph truly wraps around the decorated initial like a printed page instead of a normal web block.
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                className={printMode ? "btn btn-secondary" : "btn btn-primary"}
+                onClick={() => setPrintMode(false)}
+              >
+                Diplomatic View
+              </button>
+              <button
+                className={printMode ? "btn btn-primary" : "btn btn-secondary"}
+                onClick={() => setPrintMode(true)}
+              >
+                Print Mode
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
       <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-fell)", fontStyle: "italic", marginBottom: 20, lineHeight: 1.8 }}>
         This is a diplomatic EEBO-TCP transcription shown with light structural cleanup for reading. Spelling and punctuation remain early modern.
       </div>
@@ -221,7 +457,14 @@ export default function SourceTextPage() {
             <h2 style={{ margin: "0 0 14px", fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 400, color: "var(--accent)" }}>
               {section.title}
             </h2>
-            <RenderBlocks blocks={section.blocks} />
+            <RenderBlocks
+              blocks={section.blocks}
+              printMode={printMode}
+              printCandidate={printCandidate}
+              sectionKey={section.key}
+              relatedWorks={relatedWorks}
+              bookshelfSource={bookshelfSource}
+            />
           </section>
         ))}
       </div>
