@@ -206,6 +206,39 @@ a:hover { text-decoration:underline; }
 .input { width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:6px;font-size:15px;font-family:var(--font-body);background:var(--surface);color:var(--text);outline:none; }
 .input:focus { border-color:var(--accent-border);box-shadow:0 0 0 2px var(--accent-faint); }
 
+.source-text-paragraph-dropcap {
+  min-height: 3.2em;
+  display: flow-root;
+}
+
+.source-text-dropcap {
+  float: left;
+  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  font-size: 3.2em;
+  line-height: 0.82;
+  font-weight: 700;
+  color: var(--gold);
+  padding: 0.14em 0.16em 0.1em;
+  margin: 0.04em 0.14em -0.08em 0;
+  border-radius: 12px;
+  border: 1px solid var(--border-light);
+  background:
+    linear-gradient(180deg, var(--gold-faint), transparent 85%),
+    linear-gradient(180deg, rgba(255,255,255,0.2), transparent);
+  box-shadow: 0 10px 24px var(--shadow);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.18);
+}
+
+.source-text-dropcap-inline {
+  float: none;
+  display: inline-block;
+  vertical-align: -0.18em;
+  font-size: 2.4em;
+  line-height: 0.8;
+  margin: 0 0.08em 0 0;
+  padding: 0.08em 0.12em 0.06em;
+}
+
 /* Highlights */
 .hl-0 { background:rgba(201,168,76,0.25);border-bottom:2px solid var(--gold-light);border-radius:2px;padding:1px 0;cursor:pointer; }
 .hl-1 { background:rgba(122,46,30,0.12);border-bottom:2px solid var(--accent);border-radius:2px;padding:1px 0;cursor:pointer; }

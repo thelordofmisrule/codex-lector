@@ -11,14 +11,35 @@ function metaBadgeStyle() {
     gap: 6,
     padding: "4px 8px",
     borderRadius: 999,
-    border: "1px solid var(--border)",
+    border: "1px solid var(--border-light)",
     fontSize: 11,
     letterSpacing: 1,
     textTransform: "uppercase",
-    color: "var(--text-light)",
+    color: "var(--text)",
     fontFamily: "var(--font-display)",
-    background: "rgba(255,255,255,0.4)",
+    background: "var(--surface-hover)",
   };
+}
+
+function SourceDropCap({ letter, inline = false }) {
+  if (!letter) return null;
+  return (
+    <span className={`source-text-dropcap${inline ? " source-text-dropcap-inline" : ""}`}>
+      {letter}
+    </span>
+  );
+}
+
+function SourceParagraph({ text, decorativeInitial }) {
+  return (
+    <p
+      className={decorativeInitial ? "source-text-paragraph source-text-paragraph-dropcap" : "source-text-paragraph"}
+      style={{ margin: "0 0 18px", color: "var(--text)", lineHeight: 1.9, fontSize: 17 }}
+    >
+      {decorativeInitial && <SourceDropCap letter={decorativeInitial} />}
+      {text}
+    </p>
+  );
 }
 
 function RenderBlocks({ blocks }) {
@@ -26,11 +47,16 @@ function RenderBlocks({ blocks }) {
     if (block.type === "verse") {
       return (
         <div key={`verse-${index}`} style={{ marginBottom: 18, paddingLeft: 14, borderLeft: "2px solid var(--border-light)" }}>
-          {block.lines.map((line, lineIndex) => (
-            <div key={`line-${lineIndex}`} style={{ fontFamily: "var(--font-fell)", fontSize: 18, lineHeight: 1.75, color: "var(--text)" }}>
-              {line}
-            </div>
-          ))}
+          {block.lines.map((line, lineIndex) => {
+            const text = typeof line === "string" ? line : line?.text || "";
+            const decorativeInitial = typeof line === "string" ? "" : line?.decorativeInitial || "";
+            return (
+              <div key={`line-${lineIndex}`} style={{ fontFamily: "var(--font-fell)", fontSize: 18, lineHeight: 1.75, color: "var(--text)" }}>
+                {decorativeInitial && <SourceDropCap letter={decorativeInitial} inline />}
+                {text}
+              </div>
+            );
+          })}
         </div>
       );
     }
@@ -58,11 +84,7 @@ function RenderBlocks({ blocks }) {
       );
     }
 
-    return (
-      <p key={`paragraph-${index}`} style={{ margin: "0 0 18px", color: "var(--text)", lineHeight: 1.9, fontSize: 17 }}>
-        {block.text}
-      </p>
-    );
+    return <SourceParagraph key={`paragraph-${index}`} text={block.text} decorativeInitial={block.decorativeInitial} />;
   });
 }
 

@@ -9,30 +9,31 @@ import {
   getCrosscuttingBookshelfSources,
 } from "../lib/shakespeareBookshelf";
 
-function badgeStyle() {
+function badgeStyle(tone = "neutral") {
+  const isAccent = tone === "accent";
   return {
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
     padding: "4px 8px",
     borderRadius: 999,
-    border: "1px solid var(--border)",
+    border: `1px solid ${isAccent ? "var(--border)" : "var(--border-light)"}`,
     fontSize: 11,
     letterSpacing: 1,
     textTransform: "uppercase",
-    color: "var(--text-light)",
+    color: isAccent ? "var(--gold)" : "var(--text)",
     fontFamily: "var(--font-display)",
-    background: "rgba(255,255,255,0.4)",
+    background: isAccent ? "var(--gold-faint)" : "var(--surface-hover)",
   };
 }
 
 function SourceMeta({ source }) {
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-      <span style={badgeStyle()}>{source.shelfType}</span>
-      {source.localXml && <span style={badgeStyle()}>Local EEBO XML</span>}
+      <span style={badgeStyle("accent")}>{source.shelfType}</span>
+      {source.localXml && <span style={badgeStyle("accent")}>Local EEBO XML</span>}
       {source.tcpIds?.length > 0 && (
-        <span style={badgeStyle()}>
+        <span style={badgeStyle("accent")}>
           TCP {source.tcpIds.join(", ")}
         </span>
       )}
@@ -145,9 +146,9 @@ export default function BookshelfPage() {
           The books, chronicles, poems, plays, and other witnesses that fed Shakespeare's own works, organized by the Codex Lector text they helped shape.
         </p>
         <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
-          <span style={badgeStyle()}>{BOOKSHELF_WORKS.length} Shakespeare works mapped</span>
-          <span style={badgeStyle()}>{BOOKSHELF_SOURCE_COUNT} source texts and traditions</span>
-          <span style={badgeStyle()}>{BOOKSHELF_LOCAL_XML_COUNT} local EEBO-TCP XML texts already identified</span>
+          <span style={badgeStyle("accent")}>{BOOKSHELF_WORKS.length} Shakespeare works mapped</span>
+          <span style={badgeStyle("accent")}>{BOOKSHELF_SOURCE_COUNT} source texts and traditions</span>
+          <span style={badgeStyle("accent")}>{BOOKSHELF_LOCAL_XML_COUNT} local EEBO-TCP XML texts already identified</span>
         </div>
       </div>
 

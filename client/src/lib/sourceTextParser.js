@@ -15,6 +15,7 @@ const BLOCK_TAGS = new Set([
 ]);
 
 const DIV_TAGS = new Set(["div", "div1", "div2", "div3", "div4", "div5"]);
+const DECORATIVE_INITIAL_RE = /decorinit/i;
 const SKIP_TAGS = new Set([
   "cb",
   "desc",
@@ -55,13 +56,21 @@ function cleanupText(text) {
     .trim();
 }
 
-function textFromNode(node) {
+function isDecorativeInitialNode(node) {
+  if (!node || node.nodeType !== 1) return false;
+  return DECORATIVE_INITIAL_RE.test(
+    `${node.getAttribute?.("rend") || ""} ${node.getAttribute?.("type") || ""}`,
+  );
+}
+
+function textFromNode(node, options = {}) {
   if (!node) return "";
   if (node.nodeType === 3) return node.nodeValue || "";
   if (node.nodeType !== 1) return "";
 
   const tag = localName(node);
   if (!tag || SKIP_TAGS.has(tag)) return "";
+  if (options.skipDecorativeInitial && isDecorativeInitialNode(node)) return "";
   if (tag === "gap") return "…";
   if (tag === "g") return node.textContent || G_REF_TEXT[node.getAttribute("ref")] || "";
   if (tag === "choice") {
@@ -69,12 +78,45 @@ function textFromNode(node) {
       const childTag = localName(child);
       return childTag === "reg" || childTag === "corr" || childTag === "expan";
     });
-    return textFromNode(preferred || directChildren(node)[0]);
+    return textFromNode(preferred || directChildren(node)[0], options);
   }
   if (tag === "lb") return " ";
 
-  const parts = Array.from(node.childNodes || []).map((child) => textFromNode(child));
+  const parts = Array.from(node.childNodes || []).map((child) => textFromNode(child, options));
   return cleanupText(parts.join(" "));
+}
+
+function findLeadingDecorativeInitial(node) {
+  for (const child of Array.from(node?.childNodes || [])) {
+    if (child?.nodeType === 3) {
+      if ((child.nodeValue || "").trim()) return null;
+      continue;
+    }
+
+    if (child?.nodeType !== 1) continue;
+
+    const tag = localName(child);
+    if (!tag || SKIP_TAGS.has(tag) || tag === "lb" || tag === "pb" || tag === "cb") {
+      continue;
+    }
+
+    if (isDecorativeInitialNode(child)) {
+      const text = cleanupText(textFromNode(child));
+      return text ? text.charAt(0) : null;
+    }
+
+    const nestedInitial = findLeadingDecorativeInitial(child);
+    if (nestedInitial !== undefined) return nestedInitial;
+
+    if (cleanupText(textFromNode(child))) return null;
+  }
+
+  return undefined;
+}
+
+function extractDecorativeInitial(node) {
+  const result = findLeadingDecorativeInitial(node);
+  return typeof result === "string" ? result : "";
 }
 
 function prettifyLabel(value) {
@@ -92,7 +134,12 @@ function collectVerseLines(node) {
   const direct = directChildren(node).filter((child) => localName(child) === "l");
   const lineNodes = direct.length ? direct : descendantsByLocalName(node, "l");
   return lineNodes
-    .map((lineNode) => textFromNode(lineNode))
+    .map((lineNode) => {
+      const decorativeInitial = extractDecorativeInitial(lineNode);
+      const text = textFromNode(lineNode, { skipDecorativeInitial: Boolean(decorativeInitial) });
+      if (!text && !decorativeInitial) return null;
+      return { text, decorativeInitial };
+    })
     .filter(Boolean);
 }
 
@@ -124,8 +171,9 @@ function extractBlocks(nodes) {
     if (!tag || DIV_TAGS.has(tag) || tag === "head" || tag === "pb" || tag === "cb") continue;
 
     if (tag === "l") {
-      const text = textFromNode(node);
-      if (text) looseLines.push(text);
+      const decorativeInitial = extractDecorativeInitial(node);
+      const text = textFromNode(node, { skipDecorativeInitial: Boolean(decorativeInitial) });
+      if (text || decorativeInitial) looseLines.push({ text, decorativeInitial });
       continue;
     }
 
@@ -150,13 +198,15 @@ function extractBlocks(nodes) {
     }
 
     if (BLOCK_TAGS.has(tag)) {
-      const text = textFromNode(node);
-      if (text) blocks.push({ type: "paragraph", text });
+      const decorativeInitial = extractDecorativeInitial(node);
+      const text = textFromNode(node, { skipDecorativeInitial: Boolean(decorativeInitial) });
+      if (text || decorativeInitial) blocks.push({ type: "paragraph", text, decorativeInitial });
       continue;
     }
 
-    const text = textFromNode(node);
-    if (text) blocks.push({ type: "paragraph", text });
+    const decorativeInitial = extractDecorativeInitial(node);
+    const text = textFromNode(node, { skipDecorativeInitial: Boolean(decorativeInitial) });
+    if (text || decorativeInitial) blocks.push({ type: "paragraph", text, decorativeInitial });
   }
 
   flushLooseLines();
