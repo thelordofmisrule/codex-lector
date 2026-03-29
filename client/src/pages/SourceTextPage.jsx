@@ -50,6 +50,11 @@ function SourceParagraph({ text, decorativeInitial }) {
   );
 }
 
+function isCollapsibleContentsSection(section) {
+  const joined = [section?.title, ...(section?.path || [])].filter(Boolean).join(" ");
+  return /table of|contents?/i.test(joined);
+}
+
 function findPrintModeCandidate(parsed) {
   if (!parsed?.sections?.length) return null;
 
@@ -446,22 +451,56 @@ export default function SourceTextPage() {
 
       <div style={{ display: "grid", gap: 18 }}>
         {(parsed?.sections || []).map((section) => (
-          <section key={section.key} style={{ padding: 22, background: "var(--surface)", border: "1px solid var(--border-light)", borderRadius: 16 }}>
-            <div style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 8 }}>
-              {section.path.join(" · ")}
-            </div>
-            <h2 style={{ margin: "0 0 14px", fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 400, color: "var(--accent)" }}>
-              {section.title}
-            </h2>
-            <RenderBlocks
-              blocks={section.blocks}
-              printMode={printMode}
-              printCandidate={printCandidate}
-              sectionKey={section.key}
-              relatedWorks={relatedWorks}
-              bookshelfSource={bookshelfSource}
-            />
-          </section>
+          isCollapsibleContentsSection(section) ? (
+            <details
+              key={section.key}
+              style={{ padding: 22, background: "var(--surface)", border: "1px solid var(--border-light)", borderRadius: 16 }}
+            >
+              <summary
+                style={{
+                  cursor: "pointer",
+                  listStyle: "none",
+                }}
+              >
+                <div style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 8 }}>
+                  {section.path.join(" · ")}
+                </div>
+                <h2 style={{ margin: "0 0 8px", fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 400, color: "var(--accent)" }}>
+                  {section.title}
+                </h2>
+                <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-fell)", fontStyle: "italic" }}>
+                  {section.blocks.length} content block{section.blocks.length === 1 ? "" : "s"} hidden
+                </div>
+              </summary>
+              <div style={{ marginTop: 18 }}>
+                <RenderBlocks
+                  blocks={section.blocks}
+                  printMode={printMode}
+                  printCandidate={printCandidate}
+                  sectionKey={section.key}
+                  relatedWorks={relatedWorks}
+                  bookshelfSource={bookshelfSource}
+                />
+              </div>
+            </details>
+          ) : (
+            <section key={section.key} style={{ padding: 22, background: "var(--surface)", border: "1px solid var(--border-light)", borderRadius: 16 }}>
+              <div style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 8 }}>
+                {section.path.join(" · ")}
+              </div>
+              <h2 style={{ margin: "0 0 14px", fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 400, color: "var(--accent)" }}>
+                {section.title}
+              </h2>
+              <RenderBlocks
+                blocks={section.blocks}
+                printMode={printMode}
+                printCandidate={printCandidate}
+                sectionKey={section.key}
+                relatedWorks={relatedWorks}
+                bookshelfSource={bookshelfSource}
+              />
+            </section>
+          )
         ))}
       </div>
     </div>
