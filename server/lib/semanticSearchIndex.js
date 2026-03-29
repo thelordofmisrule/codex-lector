@@ -2,8 +2,18 @@ const {
   embedTexts,
   getSemanticEmbeddingConfig,
   isSemanticEmbeddingConfigured,
+  SEMANTIC_EMBED_REQUEST_VERSION,
 } = require("./semanticEmbeddings");
-const { buildSemanticScaffoldForWork } = require("./semanticSearchChunks");
+const {
+  buildSemanticScaffoldForWork,
+  SEMANTIC_SCAFFOLD_VERSION,
+} = require("./semanticSearchChunks");
+
+const SEMANTIC_INDEX_BUILD_VERSION = [
+  "1",
+  SEMANTIC_SCAFFOLD_VERSION,
+  SEMANTIC_EMBED_REQUEST_VERSION,
+].join(":");
 
 function packEmbedding(values) {
   const array = Float32Array.from(values || []);
@@ -453,6 +463,7 @@ async function rebuildSemanticSearchIndex(db, options = {}) {
 }
 
 module.exports = {
+  SEMANTIC_INDEX_BUILD_VERSION,
   cosineSimilarity,
   ensureSemanticSearchSchema,
   getSemanticSearchStatus(db) {

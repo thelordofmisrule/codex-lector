@@ -9,7 +9,11 @@ const Database = require("better-sqlite3");
 const fs = require("fs");
 const crypto = require("crypto");
 const { ensureSearchSchema, rebuildSearchIndex } = require("../server/lib/workSearchIndex");
-const { ensureSemanticSearchSchema, rebuildSemanticSearchIndex } = require("../server/lib/semanticSearchIndex");
+const {
+  ensureSemanticSearchSchema,
+  rebuildSemanticSearchIndex,
+  SEMANTIC_INDEX_BUILD_VERSION,
+} = require("../server/lib/semanticSearchIndex");
 const { getSemanticEmbeddingConfig } = require("../server/lib/semanticEmbeddings");
 const { ensureSourceTextSchema } = require("../server/lib/sourceTexts");
 const { GLOSSARY_SEED, GLOSSARY_OVERRIDE_SEED } = require("../server/data/glossarySeed");
@@ -1276,16 +1280,11 @@ if (shouldRebuildSearch) {
 }
 
 const semanticConfig = getSemanticEmbeddingConfig();
-const semanticCodeSignature = digestParts([
-  digestFile(path.join(__dirname, "..", "server", "lib", "semanticEmbeddings.js")),
-  digestFile(path.join(__dirname, "..", "server", "lib", "semanticSearchChunks.js")),
-  digestFile(path.join(__dirname, "..", "server", "lib", "semanticSearchIndex.js")),
-]);
 const semanticStateSignature = digestParts([
   "semantic-search-v2",
   String(searchInputState.works || 0),
   String(searchInputState.max_fetched_at || ""),
-  semanticCodeSignature,
+  SEMANTIC_INDEX_BUILD_VERSION,
   semanticConfig.provider,
   semanticConfig.model,
   String(semanticConfig.dimensions),
@@ -1293,15 +1292,20 @@ const semanticStateSignature = digestParts([
 const semanticStateKey = "semantic_search_signature";
 const storedSemanticSignature = getSetupState.get(semanticStateKey)?.value || "";
 const indexedSemanticChunks = Number(db.prepare("SELECT COUNT(*) AS count FROM semantic_search_chunks").get().count || 0);
+const forceSemanticRebuild = String(process.env.FORCE_SEMANTIC_REBUILD || "") === "1";
 const shouldRebuildSemantic = (
   semanticConfig.available
   && (
-    storedSemanticSignature !== semanticStateSignature
+    forceSemanticRebuild
+    || storedSemanticSignature !== semanticStateSignature
     || (Number(searchInputState.works || 0) > 0 && indexedSemanticChunks === 0)
   )
 );
 
 if (shouldRebuildSemantic) {
+  if (forceSemanticRebuild) {
+    console.log("Forcing semantic search rebuild because FORCE_SEMANTIC_REBUILD=1.");
+  }
   rebuildSemanticSearchIndex(db, { logger: console })
     .then((summary) => {
       if (!summary.skipped) {

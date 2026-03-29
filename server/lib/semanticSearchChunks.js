@@ -4,6 +4,7 @@ const MAX_SECTION_LINES = 24;
 const MAX_SECTION_CHARS = 1600;
 const PASSAGE_WINDOW_LINES = 6;
 const PASSAGE_STRIDE_LINES = 4;
+const SEMANTIC_SCAFFOLD_VERSION = "1";
 
 function formatLineForChunk(row, previousSpeaker = "") {
   const speaker = String(row.speaker || "").trim();
@@ -189,4 +190,5 @@ function buildSemanticScaffoldForWork(work) {
 
 module.exports = {
   buildSemanticScaffoldForWork,
+  SEMANTIC_SCAFFOLD_VERSION,
 };

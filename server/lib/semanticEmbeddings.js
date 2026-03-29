@@ -7,6 +7,7 @@ const MODEL_OVERRIDE = String(process.env.SEMANTIC_SEARCH_EMBED_MODEL || "").tri
 const parsedDimensions = parseInt(process.env.SEMANTIC_SEARCH_EMBED_DIMENSIONS || "", 10);
 const EMBEDDING_BATCH_SIZE = 64;
 const VOYAGE_ALLOWED_DIMENSIONS = [256, 512, 1024, 2048];
+const SEMANTIC_EMBED_REQUEST_VERSION = "1";
 
 function resolveProvider() {
   if (PROVIDER_OVERRIDE === "openai" && OPENAI_API_KEY) return "openai";
@@ -147,6 +148,7 @@ const resolvedConfig = getSemanticEmbeddingConfig();
 module.exports = {
   EMBEDDING_DIMENSIONS: resolvedConfig.dimensions,
   EMBEDDING_MODEL: resolvedConfig.model,
+  SEMANTIC_EMBED_REQUEST_VERSION,
   getSemanticEmbeddingConfig,
   embedTexts,
   isSemanticEmbeddingConfigured,
