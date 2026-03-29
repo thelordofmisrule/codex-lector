@@ -9,8 +9,13 @@ const PRINT_BODY_FONT_SIZE = 20;
 const PRINT_LINE_HEIGHT = 33;
 const PRINT_DROP_CAP_LINES = 4;
 const PRINT_DROP_CAP_GAP = 16;
+const PRINT_NOTE_FONT_SIZE = 14;
+const PRINT_NOTE_LINE_HEIGHT = 20;
+const PRINT_NOTE_TOP = 38;
+const PRINT_NOTE_GAP = 18;
 const PRINT_BODY_FONT = `${PRINT_BODY_FONT_SIZE}px "IM Fell English"`;
 const PRINT_DROP_CAP_FONT = `700 ${Math.round(PRINT_LINE_HEIGHT * 4.1)}px "Cinzel Decorative"`;
+const PRINT_NOTE_FONT = `600 ${PRINT_NOTE_FONT_SIZE}px "Cormorant Garamond"`;
 
 function metaBadgeStyle() {
   return {
@@ -85,6 +90,9 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
   const [layout, setLayout] = useState({
     lines: [],
     height: PRINT_DROP_CAP_LINES * PRINT_LINE_HEIGHT,
+    noteWidth: 0,
+    noteHeight: 0,
+    noteLines: [],
     ready: false,
   });
 
@@ -118,6 +126,9 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
           setLayout({
             lines: [],
             height: PRINT_DROP_CAP_LINES * PRINT_LINE_HEIGHT,
+            noteWidth: 0,
+            noteHeight: 0,
+            noteLines: [],
             ready: false,
           });
         }
@@ -134,6 +145,11 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
 
       const preparedBody = prepareWithSegments(text, PRINT_BODY_FONT);
       const preparedDropCap = prepareWithSegments(decorativeInitial, PRINT_DROP_CAP_FONT);
+      const noteLabel = relatedWorks.slice(0, 3).map((work) => work.title).join(" · ") || bookshelfSource?.title || "Bookshelf source";
+      const noteText = bookshelfSource?.author
+        ? `${bookshelfSource.author}. ${noteLabel}`
+        : noteLabel;
+      const preparedNote = prepareWithSegments(noteText, PRINT_NOTE_FONT);
       let dropCapWidth = 0;
 
       walkLineRanges(preparedDropCap, 9999, (line) => {
@@ -144,21 +160,41 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
         Math.max(150, Math.ceil(dropCapWidth) + PRINT_DROP_CAP_GAP),
         Math.max(150, Math.floor(frameWidth * 0.44)),
       );
+      const noteWidth = Math.min(
+        Math.max(180, Math.floor(frameWidth * 0.27)),
+        Math.max(180, Math.floor(frameWidth * 0.34)),
+      );
+      const noteLines = [];
+      let noteHeight = 0;
+      walkLineRanges(preparedNote, noteWidth - 24, () => {
+        noteHeight += PRINT_NOTE_LINE_HEIGHT;
+      });
+      let noteCursor = { segmentIndex: 0, graphemeIndex: 0 };
+      while (true) {
+        const line = layoutNextLine(preparedNote, noteCursor, noteWidth - 24);
+        if (line === null) break;
+        noteLines.push(line.text);
+        noteCursor = line.end;
+      }
 
       const lines = [];
       let cursor = { segmentIndex: 0, graphemeIndex: 0 };
       let lineIndex = 0;
 
       while (true) {
-        const availableWidth = lineIndex < PRINT_DROP_CAP_LINES
-          ? Math.max(160, frameWidth - insetWidth)
-          : frameWidth;
+        const lineTop = lineIndex * PRINT_LINE_HEIGHT;
+        const leftInset = lineIndex < PRINT_DROP_CAP_LINES ? insetWidth : 0;
+        const noteActive = lineTop + PRINT_LINE_HEIGHT > PRINT_NOTE_TOP
+          && lineTop < PRINT_NOTE_TOP + noteHeight + 20;
+        const rightInset = noteActive ? noteWidth + PRINT_NOTE_GAP : 0;
+        const availableWidth = frameWidth - leftInset - rightInset;
+        if (availableWidth < 160) break;
         const line = layoutNextLine(preparedBody, cursor, availableWidth);
         if (line === null) break;
         lines.push({
           text: line.text,
-          top: lineIndex * PRINT_LINE_HEIGHT,
-          left: lineIndex < PRINT_DROP_CAP_LINES ? insetWidth : 0,
+          top: lineTop,
+          left: leftInset,
         });
         cursor = line.end;
         lineIndex += 1;
@@ -167,7 +203,14 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
       if (!ignore) {
         setLayout({
           lines,
-          height: Math.max(lineIndex * PRINT_LINE_HEIGHT, PRINT_DROP_CAP_LINES * PRINT_LINE_HEIGHT),
+          height: Math.max(
+            lineIndex * PRINT_LINE_HEIGHT,
+            PRINT_DROP_CAP_LINES * PRINT_LINE_HEIGHT,
+            PRINT_NOTE_TOP + noteHeight,
+          ),
+          noteWidth,
+          noteHeight,
+          noteLines,
           ready: true,
         });
       }
@@ -199,6 +242,19 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
           <div className="source-text-print-dropcap">
             {decorativeInitial}
           </div>
+          {layout.ready && layout.noteLines.length > 0 && (
+            <aside
+              className="source-text-print-note"
+              style={{ top: PRINT_NOTE_TOP, width: layout.noteWidth }}
+            >
+              <div className="source-text-print-note-kicker">Marginal Note</div>
+              {layout.noteLines.map((line, index) => (
+                <div key={`print-note-line-${index}`} className="source-text-print-note-line">
+                  {line}
+                </div>
+              ))}
+            </aside>
+          )}
           {layout.ready ? (
             layout.lines.map((line, index) => (
               <div

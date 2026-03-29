@@ -325,6 +325,35 @@ a:hover { text-decoration:underline; }
   white-space: nowrap;
 }
 
+.source-text-print-note {
+  position: absolute;
+  right: 0;
+  z-index: 2;
+  padding: 10px 12px 12px;
+  border-left: 2px solid var(--gold);
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+  background: linear-gradient(180deg, var(--gold-faint), rgba(255,255,255,0.14));
+  box-shadow: 0 12px 20px var(--shadow);
+}
+
+.source-text-print-note-kicker {
+  margin-bottom: 6px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-family: var(--font-display);
+}
+
+.source-text-print-note-line {
+  font-family: 'Cormorant Garamond', 'IM Fell English', serif;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 .source-text-print-fallback {
   position: relative;
   z-index: 1;
@@ -345,6 +374,14 @@ a:hover { text-decoration:underline; }
   .source-text-print-line {
     position: static;
     white-space: normal;
+  }
+
+  .source-text-print-note {
+    position: relative;
+    top: auto !important;
+    right: auto;
+    width: auto !important;
+    margin: 0 0 14px;
   }
 }
 
