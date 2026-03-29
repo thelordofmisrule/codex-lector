@@ -90,7 +90,7 @@ function textFromNode(node, options = {}) {
   if (tag === "lb") return " ";
 
   const parts = Array.from(node.childNodes || []).map((child) => textFromNode(child, options));
-  return cleanupText(parts.join(" "));
+  return cleanupText(parts.join(""));
 }
 
 function findLeadingDecorativeInitial(node) {
