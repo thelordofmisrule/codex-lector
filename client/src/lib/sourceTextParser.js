@@ -1,0 +1,271 @@
+const BLOCK_TAGS = new Set([
+  "argument",
+  "byline",
+  "closer",
+  "dateline",
+  "epigraph",
+  "item",
+  "opener",
+  "p",
+  "q",
+  "quote",
+  "salute",
+  "signed",
+  "trailer",
+]);
+
+const DIV_TAGS = new Set(["div", "div1", "div2", "div3", "div4", "div5"]);
+const SKIP_TAGS = new Set([
+  "cb",
+  "desc",
+  "figure",
+  "figdesc",
+  "fw",
+  "note",
+  "pb",
+  "ref",
+]);
+
+const G_REF_TEXT = {
+  "char:EOLhyphen": "",
+  "char:abque": "que",
+  "char:cmbAbbrStroke": "",
+  "char:punc": "▪",
+  "char:V": "V",
+  "char:v": "v",
+};
+
+function localName(node) {
+  return String(node?.localName || node?.nodeName || "")
+    .replace(/^.*:/, "")
+    .toLowerCase();
+}
+
+function directChildren(node) {
+  return Array.from(node?.childNodes || []).filter((child) => child?.nodeType === 1);
+}
+
+function cleanupText(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/([([{])\s+/g, "$1")
+    .replace(/\s+([)\]}])/g, "$1")
+    .replace(/\s+'/g, "'")
+    .trim();
+}
+
+function textFromNode(node) {
+  if (!node) return "";
+  if (node.nodeType === 3) return node.nodeValue || "";
+  if (node.nodeType !== 1) return "";
+
+  const tag = localName(node);
+  if (!tag || SKIP_TAGS.has(tag)) return "";
+  if (tag === "gap") return "…";
+  if (tag === "g") return node.textContent || G_REF_TEXT[node.getAttribute("ref")] || "";
+  if (tag === "choice") {
+    const preferred = directChildren(node).find((child) => {
+      const childTag = localName(child);
+      return childTag === "reg" || childTag === "corr" || childTag === "expan";
+    });
+    return textFromNode(preferred || directChildren(node)[0]);
+  }
+  if (tag === "lb") return " ";
+
+  const parts = Array.from(node.childNodes || []).map((child) => textFromNode(child));
+  return cleanupText(parts.join(" "));
+}
+
+function prettifyLabel(value) {
+  const raw = cleanupText(String(value || "").replace(/[_-]+/g, " "));
+  if (!raw) return "";
+  return raw.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function descendantsByLocalName(node, name) {
+  return Array.from(node?.getElementsByTagName("*") || [])
+    .filter((child) => localName(child) === String(name || "").toLowerCase());
+}
+
+function collectVerseLines(node) {
+  const direct = directChildren(node).filter((child) => localName(child) === "l");
+  const lineNodes = direct.length ? direct : descendantsByLocalName(node, "l");
+  return lineNodes
+    .map((lineNode) => textFromNode(lineNode))
+    .filter(Boolean);
+}
+
+function extractListItems(node) {
+  const items = directChildren(node).filter((child) => localName(child) === "item");
+  return items.map((item) => textFromNode(item)).filter(Boolean);
+}
+
+function extractSpeech(node) {
+  const speakerNode = directChildren(node).find((child) => localName(child) === "speaker");
+  const speaker = textFromNode(speakerNode);
+  const blocks = extractBlocks(directChildren(node).filter((child) => localName(child) !== "speaker"));
+  if (!speaker && !blocks.length) return null;
+  return { type: "speech", speaker, blocks };
+}
+
+function extractBlocks(nodes) {
+  const blocks = [];
+  let looseLines = [];
+
+  const flushLooseLines = () => {
+    if (!looseLines.length) return;
+    blocks.push({ type: "verse", lines: looseLines });
+    looseLines = [];
+  };
+
+  for (const node of nodes || []) {
+    const tag = localName(node);
+    if (!tag || DIV_TAGS.has(tag) || tag === "head" || tag === "pb" || tag === "cb") continue;
+
+    if (tag === "l") {
+      const text = textFromNode(node);
+      if (text) looseLines.push(text);
+      continue;
+    }
+
+    flushLooseLines();
+
+    if (tag === "lg") {
+      const lines = collectVerseLines(node);
+      if (lines.length) blocks.push({ type: "verse", lines });
+      continue;
+    }
+
+    if (tag === "list") {
+      const items = extractListItems(node);
+      if (items.length) blocks.push({ type: "list", items });
+      continue;
+    }
+
+    if (tag === "sp") {
+      const speech = extractSpeech(node);
+      if (speech) blocks.push(speech);
+      continue;
+    }
+
+    if (BLOCK_TAGS.has(tag)) {
+      const text = textFromNode(node);
+      if (text) blocks.push({ type: "paragraph", text });
+      continue;
+    }
+
+    const text = textFromNode(node);
+    if (text) blocks.push({ type: "paragraph", text });
+  }
+
+  flushLooseLines();
+  return blocks;
+}
+
+function headingForNode(node, fallback = "") {
+  const headNodes = directChildren(node).filter((child) => localName(child) === "head");
+  const heading = headNodes.map((child) => textFromNode(child)).filter(Boolean).join(" — ");
+  if (heading) return heading;
+  const type = node.getAttribute("type") || node.getAttribute("subtype") || "";
+  return fallback || prettifyLabel(type || localName(node));
+}
+
+function pushSection(sections, partLabel, path, blocks) {
+  if (!blocks.length) return;
+  const displayPath = [partLabel, ...path].filter(Boolean);
+  sections.push({
+    key: displayPath.join(" / ").toLowerCase().replace(/[^a-z0-9]+/g, "-") || `section-${sections.length + 1}`,
+    title: path[path.length - 1] || partLabel || `Section ${sections.length + 1}`,
+    path: displayPath,
+    blocks,
+  });
+}
+
+function processDiv(node, sections, partLabel, ancestry = []) {
+  const heading = headingForNode(node);
+  const nextPath = heading ? [...ancestry, heading] : ancestry;
+  const children = directChildren(node);
+  const nonDivChildren = children.filter((child) => !DIV_TAGS.has(localName(child)));
+  const blocks = extractBlocks(nonDivChildren);
+  pushSection(sections, partLabel, nextPath, blocks);
+
+  children
+    .filter((child) => DIV_TAGS.has(localName(child)))
+    .forEach((child) => processDiv(child, sections, partLabel, nextPath));
+}
+
+function collectTextNodes(root) {
+  return Array.from(root.getElementsByTagName("*"))
+    .filter((node) => localName(node) === "text")
+    .filter((node) => directChildren(node).some((child) => {
+      const tag = localName(child);
+      return tag === "front" || tag === "body" || tag === "back" || DIV_TAGS.has(tag);
+    }));
+}
+
+function extractPartSections(node, partLabel, sections) {
+  const children = directChildren(node);
+  const divChildren = children.filter((child) => DIV_TAGS.has(localName(child)));
+  const nonDivChildren = children.filter((child) => !DIV_TAGS.has(localName(child)) && localName(child) !== "head");
+  const heading = headingForNode(node, partLabel);
+
+  const blocks = extractBlocks(nonDivChildren);
+  pushSection(sections, partLabel, heading && heading !== partLabel ? [heading] : [], blocks);
+  divChildren.forEach((child) => processDiv(child, sections, partLabel, []));
+}
+
+function titleFromXml(root) {
+  const titles = Array.from(root.getElementsByTagName("*"))
+    .filter((node) => localName(node) === "title")
+    .map((node) => textFromNode(node))
+    .filter(Boolean);
+  return titles[0] || "Source Text";
+}
+
+export function parseSourceTextXML(xmlString) {
+  const doc = new DOMParser().parseFromString(xmlString, "application/xml");
+  const parserError = doc.getElementsByTagName("parsererror")[0];
+  if (parserError) {
+    return {
+      title: "Source Text",
+      sections: [{
+        key: "error",
+        title: "Parse Error",
+        path: ["Parse Error"],
+        blocks: [{ type: "paragraph", text: "This EEBO-TCP file could not be parsed in the browser." }],
+      }],
+    };
+  }
+
+  const root = doc.documentElement;
+  const textNodes = collectTextNodes(root);
+  const sections = [];
+
+  (textNodes.length ? textNodes : [root]).forEach((textNode) => {
+    const partNodes = directChildren(textNode).filter((child) => {
+      const tag = localName(child);
+      return tag === "front" || tag === "body" || tag === "back";
+    });
+    if (!partNodes.length) {
+      const blocks = extractBlocks(directChildren(textNode));
+      pushSection(sections, "", [], blocks);
+      return;
+    }
+    partNodes.forEach((partNode) => {
+      const tag = localName(partNode);
+      const partLabel = prettifyLabel(tag);
+      extractPartSections(partNode, partLabel, sections);
+    });
+  });
+
+  return {
+    title: titleFromXml(root),
+    sections: sections.length ? sections : [{
+      key: "empty",
+      title: "Empty Text",
+      path: ["Empty Text"],
+      blocks: [{ type: "paragraph", text: "No readable content was found in this source text." }],
+    }],
+  };
+}

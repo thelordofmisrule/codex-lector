@@ -209,3 +209,7 @@ export const gallery = {
 export const quoteImages = {
   forWork:slug=>req(`/quote-images/${encodeURIComponent(slug)}`),
 };
+export const sourceTexts = {
+  list:(sourceId="")=>req(`/source-texts${sourceId ? `?source=${encodeURIComponent(sourceId)}` : ""}`),
+  get:identifier=>req(`/source-texts/${encodeURIComponent(identifier)}`),
+};

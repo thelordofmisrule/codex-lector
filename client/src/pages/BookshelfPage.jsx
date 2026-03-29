@@ -69,6 +69,15 @@ function SourceCard({ source, note }) {
         </div>
       )}
       <SourceMeta source={source} />
+      {source.tcpIds?.length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+          {source.tcpIds.map((tcpId) => (
+            <Link key={`${source.id}-${tcpId}`} className="btn btn-secondary btn-sm" to={`/source-texts/${tcpId.toLowerCase()}`}>
+              {source.tcpIds.length > 1 ? `Open ${tcpId}` : "Open in Codex"}
+            </Link>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -133,7 +142,7 @@ export default function BookshelfPage() {
           Shakespeare's Bookshelf
         </h1>
         <p style={{ fontFamily: "var(--font-fell)", fontSize: 18, fontStyle: "italic", color: "var(--text-muted)", lineHeight: 1.8, maxWidth: 760, margin: "0 auto 18px" }}>
-          A first pass at the books, chronicles, poems, plays, and other witnesses that fed Shakespeare's own works, organized by the Codex Lector text they helped shape.
+          The books, chronicles, poems, plays, and other witnesses that fed Shakespeare's own works, organized by the Codex Lector text they helped shape.
         </p>
         <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={badgeStyle()}>{BOOKSHELF_WORKS.length} Shakespeare works mapped</span>

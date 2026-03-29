@@ -30,6 +30,7 @@ const GalleryPage = lazy(() => import("./pages/GalleryPage"));
 const YearOfShakespearePage = lazy(() => import("./pages/YearOfShakespearePage"));
 const LucreceSourcesPage = lazy(() => import("./pages/LucreceSourcesPage"));
 const BookshelfPage = lazy(() => import("./pages/BookshelfPage"));
+const SourceTextPage = lazy(() => import("./pages/SourceTextPage"));
 
 function RouteFallback() {
   return <div style={{ padding:60, textAlign:"center" }}><div className="spinner" /></div>;
@@ -66,6 +67,7 @@ export default function App() {
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/gallery" element={<GalleryPage />} />
             <Route path="/bookshelf" element={<BookshelfPage />} />
+            <Route path="/source-texts/:identifier" element={<SourceTextPage />} />
             <Route path="/year-of-shakespeare" element={<YearOfShakespearePage />} />
             <Route path="/sources/lucrece" element={<LucreceSourcesPage />} />
             <Route path="/layers/:id" element={<LayerDetailPage />} />

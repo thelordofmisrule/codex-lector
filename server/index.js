@@ -13,6 +13,7 @@ const { passport } = require("./passport");
 const db = require("./db");
 const { initBackupScheduler } = require("./backupScheduler");
 const { INDEXNOW_KEY } = require("./indexNow");
+const { ensureSourceTextSchema } = require("./lib/sourceTexts");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,6 +24,7 @@ const GOOGLE_VERIFICATION = (process.env.GOOGLE_SITE_VERIFICATION || "").replace
 const BING_VERIFICATION = (process.env.BING_SITE_VERIFICATION || "").replace(/^msvalidate\.01=/, "");
 const STATIC_SOCIAL_IMAGE = process.env.SOCIAL_IMAGE_URL || process.env.OG_IMAGE_URL || "";
 const DEFAULT_SOCIAL_IMAGE = "/social-card.png";
+ensureSourceTextSchema(db);
 
 if (process.env.NODE_ENV === "production") {
   // Required so secure session cookies survive TLS termination at the reverse proxy.
@@ -84,6 +86,7 @@ app.use("/api/glossary", require("./routes/glossary"));
 app.use("/api/chat", require("./routes/chat"));
 app.use("/api/gallery", require("./routes/gallery"));
 app.use("/api/quote-images", require("./routes/quoteImages"));
+app.use("/api/source-texts", require("./routes/sourceTexts"));
 app.get("/api/health", (req,res) => res.json({ status:"ok" }));
 app.use("/media", express.static(path.join(__dirname, "..", "data", "media"), {
   etag: true,
@@ -197,6 +200,7 @@ app.get("/sitemap.xml", (req, res) => {
   const threads = db.prepare("SELECT id FROM forum_threads ORDER BY created_at DESC LIMIT 100").all();
   const layers = db.prepare("SELECT id,created_at FROM annotation_layers WHERE is_public=1 ORDER BY created_at DESC").all();
   const annots = db.prepare("SELECT id,created_at FROM annotations WHERE is_global=1 ORDER BY created_at DESC LIMIT 500").all();
+  const sourceTexts = db.prepare("SELECT slug, updated_at FROM source_texts ORDER BY updated_at DESC").all();
 
   const urls = [
     `<url><loc>${SITE_URL}/</loc><priority>1.0</priority></url>`,
@@ -211,6 +215,7 @@ app.get("/sitemap.xml", (req, res) => {
     `<url><loc>${SITE_URL}/gallery</loc><priority>0.7</priority></url>`,
     `<url><loc>${SITE_URL}/bookshelf</loc><priority>0.7</priority></url>`,
     `<url><loc>${SITE_URL}/sources/lucrece</loc><priority>0.6</priority></url>`,
+    ...sourceTexts.map((item) => `<url><loc>${SITE_URL}/source-texts/${item.slug}</loc>${xmlDate(item.updated_at) ? `<lastmod>${xmlDate(item.updated_at)}</lastmod>` : ""}<priority>0.5</priority></url>`),
     ...works.map(w => `<url><loc>${SITE_URL}/read/${w.slug}</loc><priority>0.9</priority></url>`),
     ...posts.map(p => `<url><loc>${SITE_URL}/blog/${p.id}</loc>${xmlDate(p.created_at) ? `<lastmod>${xmlDate(p.created_at)}</lastmod>` : ""}<priority>0.6</priority></url>`),
     ...threads.map(t => `<url><loc>${SITE_URL}/forum/${t.id}</loc><priority>0.5</priority></url>`),
@@ -579,6 +584,38 @@ if (process.env.NODE_ENV === "production") {
     <meta name="twitter:title" content="Sources of Lucrece" />
     <meta name="twitter:description" content="${esc(desc)}" />
     <title>Sources of Lucrece — ${SITE_NAME}</title>`;
+    res.send(renderHtml(meta));
+  });
+
+  app.get("/source-texts/:identifier", (req, res) => {
+    const raw = String(req.params.identifier || "").trim();
+    const entry = db.prepare(`
+      SELECT title, author, tcp_id, slug
+      FROM source_texts
+      WHERE slug=? COLLATE NOCASE OR tcp_id=? COLLATE NOCASE
+      LIMIT 1
+    `).get(raw.toLowerCase(), raw.toUpperCase());
+    if (!entry) return res.send(renderHtml(defaultMeta(`${SITE_URL}/source-texts/${raw}`)));
+
+    const title = esc(entry.title);
+    const author = esc(entry.author || "EEBO-TCP source text");
+    const url = `${SITE_URL}/source-texts/${entry.slug}`;
+    const desc = `${entry.title} on Codex Lector's Bookshelf, available as an EEBO-TCP source text.${entry.author ? ` ${entry.author}.` : ""}`;
+    const imageUrl = socialImageUrl("", `${entry.title} — ${SITE_NAME}`, desc);
+    const meta = `
+    <meta name="description" content="${esc(desc)}" />
+    <link rel="canonical" href="${url}" />
+    ${verificationMeta()}
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="${title} — ${SITE_NAME}" />
+    <meta property="og:description" content="${esc(desc)}" />
+    <meta property="og:url" content="${url}" />
+    <meta property="og:site_name" content="${SITE_NAME}" />
+    ${socialImageMeta(imageUrl, `${entry.title} on ${SITE_NAME}`)}
+    <meta name="twitter:title" content="${title}" />
+    <meta name="twitter:description" content="${esc(desc)}" />
+    <meta name="author" content="${author}" />
+    <title>${title} — ${SITE_NAME}</title>`;
     res.send(renderHtml(meta));
   });
 

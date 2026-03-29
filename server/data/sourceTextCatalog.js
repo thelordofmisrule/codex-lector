@@ -1,0 +1,31 @@
+const SOURCE_TEXT_TCP_MAP = {
+  A01997: "gower-confessio-amantis",
+  A01998: "gower-confessio-amantis",
+  A02143: "greene-pandosto",
+  A02151: "greene-pandosto",
+  A02595: "hall-union",
+  A02750: "harsnett-impostures",
+  A03435: "brooke-romeus-and-juliet",
+  A04243: "james-daemonologie",
+  A04520: "troublesome-reign-king-john",
+  A05206: "king-leir",
+  A06173: "lodge-rosalynde",
+  A06181: "lodge-scillaes-metamorphosis",
+  A08649: "ovid-metamorphoses",
+  A08838: "painter-palace-of-pleasure",
+  A08840: "painter-palace-of-pleasure",
+  A09802: "plutarch-lives",
+  A10675: "geneva-bible",
+  A19821: "daniel-civil-wars",
+  A20800: "apuleius-golden-ass",
+  A68197: "holinshed-chronicles",
+  A68198: "holinshed-chronicles",
+  A68202: "holinshed-chronicles",
+  A68278: "troublesome-reign-king-john",
+  A68475: "montaigne-essays",
+  A68653: "riche-farewell",
+};
+
+module.exports = {
+  SOURCE_TEXT_TCP_MAP,
+};

@@ -608,7 +608,7 @@ const SOURCE_RECORDS = [
   },
   {
     id: "chaucer-corpus",
-    title: "Chaucer more broadly",
+    title: "Chaucer across the canon",
     author: "Geoffrey Chaucer",
     dateLabel: "14th century",
     shelfType: "Poetic background",
@@ -616,7 +616,7 @@ const SOURCE_RECORDS = [
   },
   {
     id: "spenser-corpus",
-    title: "Spenser more broadly",
+    title: "Spenser across the canon",
     author: "Edmund Spenser",
     dateLabel: "Late 16th century",
     shelfType: "Poetic background",
@@ -624,7 +624,7 @@ const SOURCE_RECORDS = [
   },
   {
     id: "sidney-corpus",
-    title: "Sidney more broadly",
+    title: "Sidney across the canon",
     author: "Philip Sidney",
     dateLabel: "Late 16th century",
     shelfType: "Poetic background",
@@ -1109,4 +1109,14 @@ export function getCrosscuttingBookshelfSources() {
   return CROSSCUTTING_SOURCE_IDS
     .map((id) => SOURCE_MAP.get(id))
     .filter(Boolean);
+}
+
+export function getBookshelfSourceById(sourceId) {
+  return SOURCE_MAP.get(String(sourceId || "").trim()) || null;
+}
+
+export function getBookshelfWorksForSource(sourceId) {
+  const rawSourceId = String(sourceId || "").trim();
+  if (!rawSourceId) return [];
+  return BOOKSHELF_WORKS.filter((entry) => (entry.sources || []).some((item) => item.sourceId === rawSourceId));
 }
