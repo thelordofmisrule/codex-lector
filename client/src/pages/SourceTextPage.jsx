@@ -53,11 +53,7 @@ function SourceParagraph({ text, decorativeInitial }) {
 function findPrintModeCandidate(parsed) {
   if (!parsed?.sections?.length) return null;
 
-  const preferredSections = parsed.sections
-    .filter((section) => section.path.some((part) => /body/i.test(part)))
-    .concat(parsed.sections.filter((section) => !section.path.some((part) => /body/i.test(part))));
-
-  for (const section of preferredSections) {
+  for (const section of parsed.sections) {
     for (let blockIndex = 0; blockIndex < (section.blocks || []).length; blockIndex += 1) {
       const block = section.blocks[blockIndex];
       if (
