@@ -327,12 +327,12 @@ a:hover { text-decoration:underline; }
 
 .source-text-print-note {
   position: absolute;
-  right: 0;
   z-index: 2;
   padding: 10px 12px 12px;
   touch-action: none;
   user-select: none;
   border-left: 2px solid var(--gold);
+  border-right: 1px solid var(--border-light);
   border-top: 1px solid var(--border-light);
   border-bottom: 1px solid var(--border-light);
   background: linear-gradient(180deg, var(--gold-faint), rgba(255,255,255,0.14));

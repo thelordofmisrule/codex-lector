@@ -14,10 +14,34 @@ const PRINT_NOTE_LINE_HEIGHT = 20;
 const PRINT_NOTE_TOP = 38;
 const PRINT_NOTE_GAP = 18;
 const PRINT_NOTE_BOX_CHROME = 42;
-const PRINT_NOTE_MAX_TOP = 320;
+const PRINT_NOTE_STAGE_MIN_HEIGHT = 560;
+const PRINT_MIN_SLOT_WIDTH = 84;
 const PRINT_BODY_FONT = `${PRINT_BODY_FONT_SIZE}px "IM Fell English"`;
 const PRINT_DROP_CAP_FONT = `700 ${Math.round(PRINT_LINE_HEIGHT * 4.1)}px "Cinzel Decorative"`;
 const PRINT_NOTE_FONT = `600 ${PRINT_NOTE_FONT_SIZE}px "Cormorant Garamond"`;
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function carveTextLineSlots(base, blocked) {
+  let slots = [base];
+  for (const interval of blocked) {
+    const next = [];
+    for (const slot of slots) {
+      if (interval.right <= slot.left || interval.left >= slot.right) {
+        next.push(slot);
+        continue;
+      }
+      if (interval.left > slot.left) next.push({ left: slot.left, right: interval.left });
+      if (interval.right < slot.right) next.push({ left: interval.right, right: slot.right });
+    }
+    slots = next;
+  }
+  return slots
+    .filter((slot) => slot.right - slot.left >= PRINT_MIN_SLOT_WIDTH)
+    .sort((a, b) => a.left - b.left);
+}
 
 function metaBadgeStyle() {
   return {
@@ -90,13 +114,16 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
   const frameRef = useRef(null);
   const dragRef = useRef(null);
   const [frameWidth, setFrameWidth] = useState(0);
-  const [noteTop, setNoteTop] = useState(PRINT_NOTE_TOP);
+  const [notePosition, setNotePosition] = useState({ left: null, top: PRINT_NOTE_TOP });
   const [noteDragging, setNoteDragging] = useState(false);
   const [layout, setLayout] = useState({
     lines: [],
     height: PRINT_DROP_CAP_LINES * PRINT_LINE_HEIGHT,
     noteWidth: 0,
     noteHeight: 0,
+    noteLeft: 0,
+    noteTop: PRINT_NOTE_TOP,
+    noteTopLimit: PRINT_NOTE_STAGE_MIN_HEIGHT,
     noteLines: [],
     ready: false,
   });
@@ -125,8 +152,14 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
   useEffect(() => {
     const handlePointerMove = (event) => {
       if (!dragRef.current) return;
+      const nextLeft = dragRef.current.startLeft + (event.clientX - dragRef.current.startX);
       const nextTop = dragRef.current.startTop + (event.clientY - dragRef.current.startY);
-      setNoteTop(Math.max(0, Math.min(PRINT_NOTE_MAX_TOP, nextTop)));
+      const maxLeft = Math.max(0, frameWidth - layout.noteWidth);
+      const maxTop = Math.max(0, layout.noteTopLimit);
+      setNotePosition({
+        left: clamp(nextLeft, 0, maxLeft),
+        top: clamp(nextTop, 0, maxTop),
+      });
     };
 
     const handlePointerUp = () => {
@@ -143,7 +176,7 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, []);
+  }, [frameWidth, layout.height, layout.noteHeight, layout.noteWidth]);
 
   useEffect(() => {
     let ignore = false;
@@ -156,6 +189,9 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
             height: PRINT_DROP_CAP_LINES * PRINT_LINE_HEIGHT,
             noteWidth: 0,
             noteHeight: 0,
+            noteLeft: 0,
+            noteTop: PRINT_NOTE_TOP,
+            noteTopLimit: PRINT_NOTE_STAGE_MIN_HEIGHT,
             noteLines: [],
             ready: false,
           });
@@ -197,6 +233,10 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
       walkLineRanges(preparedNote, noteWidth - 24, () => {
         noteHeight += PRINT_NOTE_LINE_HEIGHT;
       });
+      let baseBodyLineCount = 0;
+      walkLineRanges(preparedBody, Math.max(240, frameWidth - 24), () => {
+        baseBodyLineCount += 1;
+      });
       let noteCursor = { segmentIndex: 0, graphemeIndex: 0 };
       while (true) {
         const line = layoutNextLine(preparedNote, noteCursor, noteWidth - 24);
@@ -205,6 +245,23 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
         noteCursor = line.end;
       }
       const noteBoxHeight = noteHeight + PRINT_NOTE_BOX_CHROME;
+      const noteTopLimit = Math.max(
+        0,
+        Math.max(
+          PRINT_NOTE_STAGE_MIN_HEIGHT,
+          baseBodyLineCount * PRINT_LINE_HEIGHT + 140,
+        ) - noteBoxHeight,
+      );
+      const resolvedNoteLeft = clamp(
+        notePosition.left == null ? frameWidth - noteWidth : notePosition.left,
+        0,
+        Math.max(0, frameWidth - noteWidth),
+      );
+      const resolvedNoteTop = clamp(
+        notePosition.top,
+        0,
+        noteTopLimit,
+      );
 
       const lines = [];
       let cursor = { segmentIndex: 0, graphemeIndex: 0 };
@@ -212,20 +269,46 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
 
       while (true) {
         const lineTop = lineIndex * PRINT_LINE_HEIGHT;
-        const leftInset = lineIndex < PRINT_DROP_CAP_LINES ? insetWidth : 0;
-        const noteActive = lineTop + PRINT_LINE_HEIGHT > noteTop
-          && lineTop < noteTop + noteBoxHeight;
-        const rightInset = noteActive ? noteWidth + PRINT_NOTE_GAP : 0;
-        const availableWidth = Math.max(160, frameWidth - leftInset - rightInset);
-        const line = layoutNextLine(preparedBody, cursor, availableWidth);
-        if (line === null) break;
-        lines.push({
-          text: line.text,
-          top: lineTop,
-          left: leftInset,
-        });
-        cursor = line.end;
+        const bandTop = lineTop;
+        const bandBottom = lineTop + PRINT_LINE_HEIGHT;
+        const blocked = [];
+
+        if (lineIndex < PRINT_DROP_CAP_LINES) {
+          blocked.push({
+            left: 0,
+            right: insetWidth,
+          });
+        }
+
+        if (bandBottom > resolvedNoteTop && bandTop < resolvedNoteTop + noteBoxHeight) {
+          blocked.push({
+            left: Math.max(0, resolvedNoteLeft - PRINT_NOTE_GAP),
+            right: Math.min(frameWidth, resolvedNoteLeft + noteWidth + PRINT_NOTE_GAP),
+          });
+        }
+
+        const slots = carveTextLineSlots({ left: 0, right: frameWidth }, blocked);
+        if (slots.length === 0) {
+          lineIndex += 1;
+          continue;
+        }
+
+        let lineExhausted = false;
+        for (const slot of slots) {
+          const line = layoutNextLine(preparedBody, cursor, slot.right - slot.left);
+          if (line === null) {
+            lineExhausted = true;
+            break;
+          }
+          lines.push({
+            text: line.text,
+            top: lineTop,
+            left: slot.left,
+          });
+          cursor = line.end;
+        }
         lineIndex += 1;
+        if (lineExhausted) break;
       }
 
       if (!ignore) {
@@ -234,10 +317,13 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
           height: Math.max(
             lineIndex * PRINT_LINE_HEIGHT,
             PRINT_DROP_CAP_LINES * PRINT_LINE_HEIGHT,
-            noteTop + noteBoxHeight,
+            resolvedNoteTop + noteBoxHeight,
           ),
           noteWidth,
           noteHeight: noteBoxHeight,
+          noteLeft: resolvedNoteLeft,
+          noteTop: resolvedNoteTop,
+          noteTopLimit,
           noteLines,
           ready: true,
         });
@@ -248,7 +334,7 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
     return () => {
       ignore = true;
     };
-  }, [decorativeInitial, frameWidth, noteTop, text]);
+  }, [decorativeInitial, frameWidth, notePosition.left, notePosition.top, text]);
 
   const runningHead = relatedWorks?.[0]?.title || bookshelfSource?.title || "Source Shelf";
 
@@ -273,14 +359,24 @@ function SourcePrintOpening({ decorativeInitial, text, relatedWorks, bookshelfSo
           {layout.ready && layout.noteLines.length > 0 && (
             <aside
               className="source-text-print-note"
-              style={{ top: noteTop, width: layout.noteWidth, cursor: noteDragging ? "grabbing" : "grab" }}
+              style={{
+                top: layout.noteTop,
+                left: layout.noteLeft,
+                width: layout.noteWidth,
+                cursor: noteDragging ? "grabbing" : "grab",
+              }}
               onPointerDown={(event) => {
-                dragRef.current = { startY: event.clientY, startTop: noteTop };
+                dragRef.current = {
+                  startX: event.clientX,
+                  startY: event.clientY,
+                  startLeft: layout.noteLeft,
+                  startTop: layout.noteTop,
+                };
                 setNoteDragging(true);
                 event.preventDefault();
               }}
             >
-              <div className="source-text-print-note-kicker">Marginal Note · Drag</div>
+              <div className="source-text-print-note-kicker">Marginal Note · Drag Anywhere</div>
               {layout.noteLines.map((line, index) => (
                 <div key={`print-note-line-${index}`} className="source-text-print-note-line">
                   {line}
