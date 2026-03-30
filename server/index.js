@@ -14,6 +14,7 @@ const db = require("./db");
 const { initBackupScheduler } = require("./backupScheduler");
 const { INDEXNOW_KEY } = require("./indexNow");
 const { ensureSourceTextSchema } = require("./lib/sourceTexts");
+const { ensureReaderIllustrationSchema } = require("./lib/readerIllustrations");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -25,6 +26,7 @@ const BING_VERIFICATION = (process.env.BING_SITE_VERIFICATION || "").replace(/^m
 const STATIC_SOCIAL_IMAGE = process.env.SOCIAL_IMAGE_URL || process.env.OG_IMAGE_URL || "";
 const DEFAULT_SOCIAL_IMAGE = "/social-card.png";
 ensureSourceTextSchema(db);
+ensureReaderIllustrationSchema(db);
 
 if (process.env.NODE_ENV === "production") {
   // Required so secure session cookies survive TLS termination at the reverse proxy.
@@ -87,6 +89,7 @@ app.use("/api/chat", require("./routes/chat"));
 app.use("/api/gallery", require("./routes/gallery"));
 app.use("/api/quote-images", require("./routes/quoteImages"));
 app.use("/api/source-texts", require("./routes/sourceTexts"));
+app.use("/api/reader-illustrations", require("./routes/readerIllustrations"));
 app.get("/api/health", (req,res) => res.json({ status:"ok" }));
 app.use("/media", express.static(path.join(__dirname, "..", "data", "media"), {
   etag: true,

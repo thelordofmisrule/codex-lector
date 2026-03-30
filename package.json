@@ -17,6 +17,7 @@
     "rollback": "bash scripts/rollback-release.sh",
     "import": "node scripts/import-texts.js",
     "import-eebo": "node scripts/import-source-texts.js",
+    "import-reader-illustrations": "node scripts/import-reader-illustrations.js",
     "import-commons-gallery": "node scripts/import-commons-gallery.js",
     "import-places": "node scripts/import-places-json.js",
     "import-places-enrichment": "node scripts/import-places-enrichment.js",

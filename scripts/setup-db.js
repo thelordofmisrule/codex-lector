@@ -16,6 +16,7 @@ const {
 } = require("../server/lib/semanticSearchIndex");
 const { getSemanticEmbeddingConfig } = require("../server/lib/semanticEmbeddings");
 const { ensureSourceTextSchema } = require("../server/lib/sourceTexts");
+const { ensureReaderIllustrationSchema } = require("../server/lib/readerIllustrations");
 const { GLOSSARY_SEED, GLOSSARY_OVERRIDE_SEED } = require("../server/data/glossarySeed");
 const { normalizeGlossaryTerm } = require("../server/lib/glossary");
 const { compareWorkPreference } = require("../server/lib/workCatalog");
@@ -27,6 +28,7 @@ if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 const db = new Database(path.join(dir, "codex.db"));
 db.pragma("journal_mode = WAL");
 ensureSourceTextSchema(db);
+ensureReaderIllustrationSchema(db);
 
 function digestParts(parts) {
   const hash = crypto.createHash("sha1");

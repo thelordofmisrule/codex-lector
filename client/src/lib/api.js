@@ -213,3 +213,6 @@ export const sourceTexts = {
   list:(sourceId="")=>req(`/source-texts${sourceId ? `?source=${encodeURIComponent(sourceId)}` : ""}`),
   get:identifier=>req(`/source-texts/${encodeURIComponent(identifier)}`),
 };
+export const readerIllustrations = {
+  forWork:slug=>req(`/reader-illustrations/${encodeURIComponent(slug)}`),
+};

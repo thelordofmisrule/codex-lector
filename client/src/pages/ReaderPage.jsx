@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
-import { works as worksApi, annotations as annotsApi, discussions as discApi, bookmarks as bmApi, progress as progApi, researchTray as researchTrayApi, layers as layersApi, analytics as analyticsApi, prosody as prosodyApi } from "../lib/api";
+import { works as worksApi, annotations as annotsApi, discussions as discApi, bookmarks as bmApi, progress as progApi, researchTray as researchTrayApi, layers as layersApi, analytics as analyticsApi, prosody as prosodyApi, readerIllustrations as readerIllustrationsApi } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import { parsePlayShakespeareXML } from "../lib/textParser";
@@ -67,6 +67,12 @@ function getWorkPrintDownloads(title, slug) {
   return [];
 }
 
+function objectPositionStyle(x = 50, y = 50) {
+  const clampedX = Number.isFinite(Number(x)) ? Math.max(0, Math.min(100, Number(x))) : 50;
+  const clampedY = Number.isFinite(Number(y)) ? Math.max(0, Math.min(100, Number(y))) : 50;
+  return `${clampedX}% ${clampedY}%`;
+}
+
 function normalizeEntityTerm(text) {
   return String(text || "")
     .normalize("NFD")
@@ -94,6 +100,8 @@ const DEFAULT_READER_VISIBILITY = {
   showGlobal: true,
   showPersonal: true,
   showWaypoints: true,
+  showIllustrations: true,
+  illustrationArtist: "all",
   noteTypes: Object.fromEntries(ANNOT_TYPES.map((kind) => [String(kind.color), true])),
   layers: {},
 };
@@ -105,6 +113,10 @@ function loadReaderVisibility() {
       showGlobal: raw?.showGlobal !== false,
       showPersonal: raw?.showPersonal !== false,
       showWaypoints: raw?.showWaypoints !== false,
+      showIllustrations: raw?.showIllustrations !== false,
+      illustrationArtist: typeof raw?.illustrationArtist === "string" && raw.illustrationArtist.trim()
+        ? raw.illustrationArtist
+        : "all",
       noteTypes: {
         ...DEFAULT_READER_VISIBILITY.noteTypes,
         ...(raw?.noteTypes && typeof raw.noteTypes === "object" ? raw.noteTypes : {}),
@@ -318,6 +330,11 @@ function ReaderVisibilityPanel({
   visibility,
   onToggleGlobal,
   onTogglePersonal,
+  illustrationCount,
+  illustrationArtists,
+  selectedIllustrationArtist,
+  onToggleIllustrations,
+  onSelectIllustrationArtist,
   typeCounts,
   onToggleType,
   globalCount,
@@ -393,6 +410,69 @@ function ReaderVisibilityPanel({
             )}
           </div>
         </section>
+
+        {illustrationCount > 0 && (
+          <section>
+            <div style={{ fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 8 }}>
+              Illustrations
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "8px 10px", border: "1px solid var(--border-light)", borderRadius: 8 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={visibility.showIllustrations !== false}
+                    onChange={(event) => onToggleIllustrations(event.target.checked)}
+                  />
+                  <span>
+                    <span style={{ display: "block", color: "var(--text)" }}>Contextual illustrations</span>
+                    <span style={{ fontSize: 12, color: "var(--text-light)" }}>Show curated VISA plates and act headers inside the play.</span>
+                  </span>
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-light)" }}>{illustrationCount}</span>
+              </label>
+
+              {illustrationArtists.length > 0 && (
+                <div style={{ padding: "10px 12px", border: "1px solid var(--border-light)", borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, color: "var(--text-light)", marginBottom: 8 }}>
+                    Illustrator or edition
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => onSelectIllustrationArtist("all")}
+                      style={{
+                        background: selectedIllustrationArtist === "all" ? "var(--gold)" : "var(--surface)",
+                        color: selectedIllustrationArtist === "all" ? "var(--gold-contrast)" : "var(--text-muted)",
+                        border: "1px solid var(--border-light)",
+                        fontFamily: "var(--font-display)",
+                        letterSpacing: 1,
+                      }}
+                    >
+                      All
+                    </button>
+                    {illustrationArtists.map((artist) => (
+                      <button
+                        key={artist.key}
+                        className="btn btn-sm"
+                        onClick={() => onSelectIllustrationArtist(artist.key)}
+                        style={{
+                          background: selectedIllustrationArtist === artist.key ? "var(--gold)" : "var(--surface)",
+                          color: selectedIllustrationArtist === artist.key ? "var(--gold-contrast)" : "var(--text-muted)",
+                          border: "1px solid var(--border-light)",
+                          fontFamily: "var(--font-display)",
+                          letterSpacing: 1,
+                        }}
+                      >
+                        {artist.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         <section>
           <div style={{ fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 8 }}>
@@ -1296,10 +1376,76 @@ function AnnotatedLine({ lineId, text, annotsByLine, showAnnots, userId, isAdmin
   );
 }
 
+function ReaderIllustrationSection({ title = "", items = [] }) {
+  if (!items?.length) return null;
+  return (
+    <section style={{ margin: "14px 0 22px" }}>
+      {title && (
+        <div style={{ textAlign: "center", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 10 }}>
+          {title}
+        </div>
+      )}
+      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+        {items.map((placement) => {
+          const image = placement.image || {};
+          const label = placement.caption || image.title || "Illustration";
+          return (
+            <figure
+              key={placement.id}
+              style={{
+                margin: 0,
+                background: "var(--surface)",
+                border: "1px solid var(--border-light)",
+                borderRadius: 14,
+                overflow: "hidden",
+                boxShadow: "0 10px 24px var(--shadow)",
+              }}
+            >
+              <a
+                href={image.pageUrl || image.imageUrl}
+                target="_blank"
+                rel="noopener"
+                style={{ display: "block", textDecoration: "none" }}
+              >
+                <img
+                  src={image.imageUrl}
+                  alt={label}
+                  loading="lazy"
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    aspectRatio: "16 / 10",
+                    objectFit: "cover",
+                    objectPosition: objectPositionStyle(image.thumbX, image.thumbY),
+                    background: "var(--bg-dark)",
+                  }}
+                />
+              </a>
+              <figcaption style={{ padding: "12px 14px 14px" }}>
+                <div style={{ fontSize: 11, letterSpacing: 1.6, textTransform: "uppercase", color: "var(--gold)", fontFamily: "var(--font-display)", marginBottom: 6 }}>
+                  {placement.artistLabel || image.artist || "VISA"}
+                </div>
+                <div style={{ color: "var(--text)", lineHeight: 1.6, marginBottom: 6 }}>
+                  {label}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-light)", lineHeight: 1.6 }}>
+                  {image.year ? `${image.year} · ` : ""}{image.sourceLabel || "Victorian Illustrated Shakespeare Archive"}
+                </div>
+              </figcaption>
+            </figure>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 /* ─── Play view ─── */
-function PlayView({ data, showAnnots, annotsByLine, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, bookmark, showWaypoints, waypointsByIndex, onLookupTap, onOpenAnnotationPanel }) {
+function PlayView({ data, showAnnots, annotsByLine, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, bookmark, showWaypoints, waypointsByIndex, onLookupTap, onOpenAnnotationPanel, illustrations = [] }) {
   let lineNum = 0;
   let readingIndex = 0;
+  let actNumber = 0;
+  const dramatisIllustrations = illustrations.filter((item) => item.placementKind === "dramatis");
   return (
     <>
       {data.dramatis && (
@@ -1308,9 +1454,21 @@ function PlayView({ data, showAnnots, annotsByLine, userId, isAdmin, canPublishG
           <div className="reader-dramatis-body" style={{ marginTop:10, fontSize:14, lineHeight:1.8, fontFamily:"var(--font-fell)" }} dangerouslySetInnerHTML={{ __html:data.dramatis }} />
         </details>
       )}
+      <ReaderIllustrationSection title="Dramatis Illustrations" items={dramatisIllustrations} />
       <div style={{ marginBottom:32 }}>
         {data.lines.map((item, idx) => {
-          if (item.type==="act") return <h2 key={idx} className="reader-act-heading" style={{ textAlign:"center", fontFamily:"var(--font-display)", fontSize:16, fontWeight:400, letterSpacing:4, margin:"44px 0 14px", color:"var(--accent)", borderTop:"1px solid var(--border-light)", borderBottom:"1px solid var(--border-light)", padding:"12px 0", textTransform:"uppercase" }}>{item.text}</h2>;
+          if (item.type==="act") {
+            actNumber += 1;
+            const actIllustrations = illustrations.filter((placement) => (
+              placement.placementKind !== "dramatis" && placement.actNumber === actNumber
+            ));
+            return (
+              <div key={idx}>
+                <h2 className="reader-act-heading" style={{ textAlign:"center", fontFamily:"var(--font-display)", fontSize:16, fontWeight:400, letterSpacing:4, margin:"44px 0 14px", color:"var(--accent)", borderTop:"1px solid var(--border-light)", borderBottom:"1px solid var(--border-light)", padding:"12px 0", textTransform:"uppercase" }}>{item.text}</h2>
+                <ReaderIllustrationSection title={`Act ${actNumber} Illustrations`} items={actIllustrations} />
+              </div>
+            );
+          }
           if (item.type==="scene") return <h3 key={idx} className="reader-scene-heading" style={{ textAlign:"center", fontSize:15, fontWeight:400, fontStyle:"italic", color:"var(--text-muted)", margin:"24px 0 12px", letterSpacing:1, fontFamily:"var(--font-fell)" }}>{item.text}</h3>;
           if (item.type==="stagedir") return <div key={idx} className="reader-stage-direction" style={{ textAlign:"center", fontStyle:"italic", color:"var(--text-muted)", margin:"8px 0", fontSize:"0.9em", fontFamily:"var(--font-fell)" }}>[{item.text}]</div>;
           if (item.type==="speech") return (
@@ -1442,6 +1600,7 @@ export default function ReaderPage() {
   const [prosodyOverrides, setProsodyOverrides] = useState({});
   const [prosodyNote, setProsodyNote] = useState(null);
   const [prosodyEditor, setProsodyEditor] = useState(null);
+  const [readerIllustrations, setReaderIllustrations] = useState({ placements: [], artists: [] });
   const [readerInspectorPinned, setReaderInspectorPinned] = useState(false);
   const [semanticSearchEnabled, setSemanticSearchEnabled] = useState(false);
   const progressRef = useRef({ maxLine:0, total:0, slug:null });
@@ -1695,13 +1854,18 @@ export default function ReaderPage() {
       user ? bmApi.forWork(slug).catch(()=>null) : Promise.resolve(null),
       user ? layersApi.list().catch(()=>[]) : Promise.resolve([]),
       prosodyApi.forWork(slug).catch(()=>({ overrides: [] })),
+      readerIllustrationsApi.forWork(slug).catch(()=>({ placements: [], artists: [] })),
     ])
-      .then(([w,a,d,bm,layers,prosodyData]) => {
+      .then(([w,a,d,bm,layers,prosodyData,illustrationData]) => {
         setWork(w); setAnnots(a); setDisc(d);
         if(bm) setBookmark(bm.line_id);
         setLayerCatalog(layers || []);
         setMyLayers((layers||[]).filter(l => l.isOwner));
         setProsodyOverrides(Object.fromEntries((prosodyData?.overrides || []).map((item) => [item.lineKey, item])));
+        setReaderIllustrations({
+          placements: Array.isArray(illustrationData?.placements) ? illustrationData.placements : [],
+          artists: Array.isArray(illustrationData?.artists) ? illustrationData.artists : [],
+        });
       })
       .catch(e => {
         console.error(e);
@@ -2317,6 +2481,15 @@ export default function ReaderPage() {
   const waypointsByIndex = Object.fromEntries(readingWaypoints.map((waypoint) => [waypoint.lineIndex, waypoint]));
   const printDownloads = getWorkPrintDownloads(parsed.title || work.title, slug);
   const isLucrece = slug === "rape-of-lucrece";
+  const availableIllustrationArtists = readerIllustrations.artists || [];
+  const activeIllustrationArtist = availableIllustrationArtists.some((artist) => artist.key === readerVisibility.illustrationArtist)
+    ? readerVisibility.illustrationArtist
+    : "all";
+  const visibleIllustrations = readerVisibility.showIllustrations === false
+    ? []
+    : (readerIllustrations.placements || []).filter((placement) => (
+      activeIllustrationArtist === "all" || placement.artistKey === activeIllustrationArtist
+    ));
   const dismissReaderHint = () => {
     localStorage.setItem("codex-reader-hint-dismissed", "true");
     setShowReaderHint(false);
@@ -2425,6 +2598,11 @@ export default function ReaderPage() {
             visibility={readerVisibility}
             onToggleGlobal={(checked) => setReaderVisibility((prev) => ({ ...prev, showGlobal: checked }))}
             onTogglePersonal={(checked) => setReaderVisibility((prev) => ({ ...prev, showPersonal: checked }))}
+            illustrationCount={(readerIllustrations.placements || []).length}
+            illustrationArtists={availableIllustrationArtists}
+            selectedIllustrationArtist={activeIllustrationArtist}
+            onToggleIllustrations={(checked) => setReaderVisibility((prev) => ({ ...prev, showIllustrations: checked }))}
+            onSelectIllustrationArtist={(artistKey) => setReaderVisibility((prev) => ({ ...prev, illustrationArtist: artistKey }))}
             typeCounts={typeCounts}
             onToggleType={(color, checked) => setReaderVisibility((prev) => ({
               ...prev,
@@ -2581,7 +2759,7 @@ export default function ReaderPage() {
             waypointsByIndex={waypointsByIndex}
             onOpenAnnotationPanel={openAnnotationInspector}
           />
-        : <PlayView data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={openAnnotationInspector} />
+        : <PlayView data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={openAnnotationInspector} illustrations={visibleIllustrations} />
       }
 
       {annotationPanel && (
