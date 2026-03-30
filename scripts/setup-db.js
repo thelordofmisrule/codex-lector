@@ -1102,13 +1102,16 @@ for (const row of listAllQuoteImageTags.all()) {
   }
 }
 
-const quoteArtSeedSignature = digestFile(path.join(__dirname, "..", "server", "data", "shakespeare_commons_images.json"));
+const quoteArtSeedSignature = digestParts([
+  digestFile(path.join(__dirname, "..", "server", "data", "shakespeare_commons_images.json")),
+  digestFile(path.join(__dirname, "..", "server", "data", "shakespeare_visa_images.json")),
+]);
 const quoteArtWorkSignature = digestParts(
   workRecords
     .map((row) => `${row.slug}|${row.title}|${row.category}`)
     .sort(),
 );
-const quoteArtSignature = digestParts(["quote-art-v2", quoteArtSeedSignature, quoteArtWorkSignature]);
+const quoteArtSignature = digestParts(["quote-art-v3", quoteArtSeedSignature, quoteArtWorkSignature]);
 const quoteArtStateKey = "quote_art_seed_signature";
 const storedQuoteArtSignature = getSetupState.get(quoteArtStateKey)?.value || "";
 const existingQuoteCollections = Number(db.prepare("SELECT COUNT(*) AS count FROM quote_image_collections").get().count || 0);
