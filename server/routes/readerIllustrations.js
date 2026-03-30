@@ -23,11 +23,12 @@ r.get("/:slug", (req, res) => {
   const slug = String(req.params.slug || "").trim();
   if (!slug) return res.status(400).json({ error: "Work slug required." });
 
-  const work = db.prepare("SELECT slug, title, family_slug FROM works WHERE slug=?").get(slug);
+  const work = db.prepare("SELECT slug, title FROM works WHERE slug=?").get(slug);
   if (!work) return res.status(404).json({ error: "Work not found." });
 
   const workLookup = buildWorkLookup();
   const familySlugs = equivalentWorkSlugs(work.slug, workLookup);
+  const familySlug = familySlugs[0] || work.slug;
   const placeholders = familySlugs.map(() => "?").join(", ");
   const rows = db.prepare(`
     SELECT
@@ -101,7 +102,7 @@ r.get("/:slug", (req, res) => {
   return res.json({
     workSlug: work.slug,
     workTitle: work.title,
-    familySlug: work.family_slug || "",
+    familySlug,
     placements,
     artists: [...artists.values()].sort((a, b) => a.label.localeCompare(b.label)),
   });
