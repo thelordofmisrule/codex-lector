@@ -1,0 +1,1069 @@
+{
+  "meta": {
+    "generated": "2026-03-30",
+    "source": "Victorian Illustrated Shakespeare Archive (shakespeareillustration.org)",
+    "license": "Creative Commons (see shakespeareillustration.org for details)",
+    "attribution": "Michael John Goodman, The Victorian Illustrated Shakespeare Archive"
+  },
+  "works": {
+    "Antony and Cleopatra": {
+      "workSlug": "antony-and-cleopatra",
+      "category": "https://shakespeareillustration.org/category/play/antony-and-cleopatra/",
+      "notes": "VISA illustrations for Antony and Cleopatra. 83 total per VISA category count; this file contains records extractable from the paginated category listing. Kenny Meadows records are incomplete (only 1 of ~19 captured due to pagination limits).",
+      "tags": [
+        "visa",
+        "victorian-illustration"
+      ],
+      "images": [
+        {
+          "title": "Cleopatra and Caesar",
+          "artist": "Various (Imperial Edition)",
+          "year": "c.1870s",
+          "edition": "Imperial Edition",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2024/02/01/cleopatra-and-caesar/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2024/02/Imperial-Editon-37-copy-2.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:imperial-edition",
+            "character:cleopatra"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra",
+          "artist": "Various (John Dicks pub.)",
+          "year": "c.1870s",
+          "edition": "John Dicks",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2021/07/06/antony-and-cleopatra-3/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2021/07/JD35-2.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-dicks",
+            "character:marc-antony",
+            "character:cleopatra"
+          ]
+        },
+        {
+          "title": "Cleopatra",
+          "artist": "Various",
+          "year": "c.1850s",
+          "edition": "Heroines of Shakspeare",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2020/08/02/cleopatra-3/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2020/07/Heroines-of-Shakspeare-Cleopatra-illustration-37-2.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:heroines-of-shakspeare",
+            "character:cleopatra",
+            "motif:portraits"
+          ]
+        },
+        {
+          "title": "Plumpy Bacchus",
+          "artist": "John Gilbert",
+          "year": "c.1860s",
+          "edition": "Songs & Sonnets of Shakespeare",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2020/07/15/plumpy-bacchus/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2020/07/John-Gilbert-Songs-and-Sonnets-of-Shakespeare-Illustration-10-1.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:songs-&-sonnets-of-shakespeare",
+            "motif:drink"
+          ]
+        },
+        {
+          "title": "Miss Glyn as Cleopatra",
+          "artist": "Various (John Tallis pub.)",
+          "year": "c.1850s",
+          "edition": "John Tallis",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2020/07/07/miss-glyn-as-cleopatra/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2020/07/25JTTragediesAnthonyandCleo1-2.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-tallis",
+            "character:cleopatra",
+            "motif:actors",
+            "motif:portraits"
+          ]
+        },
+        {
+          "title": "The Death of Antony",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/13/the-death-of-antony-2/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousspecial312.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:4",
+            "character:marc-antony",
+            "character:cleopatra",
+            "motif:death"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Tailpiece",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/antony-and-cleopatra-tailpiece/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc202.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:5",
+            "motif:tailpieces"
+          ]
+        },
+        {
+          "title": "Cleopatra, Charmian and the Death of Iras",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/cleopatra-charmian-and-the-death-of-iras/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc192.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:5",
+            "character:cleopatra",
+            "character:charmian",
+            "motif:death"
+          ]
+        },
+        {
+          "title": "Cleopatra and Clown with Basket",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/cleopatra-and-clown-with-basket/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc182.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:5",
+            "character:cleopatra",
+            "motif:baskets-boxes",
+            "motif:clowns-jesters"
+          ]
+        },
+        {
+          "title": "Caesar and the Sword of Antony",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/caesar-and-the-sword-of-antony/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc172.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:5",
+            "motif:swords"
+          ]
+        },
+        {
+          "title": "Cleopatra and Antony",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/cleopatra-and-antony-2/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc162.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:4",
+            "character:marc-antony",
+            "character:cleopatra"
+          ]
+        },
+        {
+          "title": "Cleopatra",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/cleopatra-2/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc152.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:4",
+            "character:cleopatra"
+          ]
+        },
+        {
+          "title": "Antony and Forces",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/antony-and-forces/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc142.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:4",
+            "character:marc-antony",
+            "motif:soldiers",
+            "motif:army"
+          ]
+        },
+        {
+          "title": "Thyreus and Cleopatra",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/thyreus-and-cleopatra/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc132.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:3",
+            "character:cleopatra"
+          ]
+        },
+        {
+          "title": "Cleopatra and Antony",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/cleopatra-and-antony/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc122.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:3",
+            "character:marc-antony",
+            "character:cleopatra"
+          ]
+        },
+        {
+          "title": "Octavia and Octavius Caesar",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/octavia-and-octavius-caesar/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc113.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:3"
+          ]
+        },
+        {
+          "title": "Octavius Caesar, Antony and Octavia",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/octavius-caesar-antony-and-octavia/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc102.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:2",
+            "character:marc-antony"
+          ]
+        },
+        {
+          "title": "Ventidius and the Body of the King",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/ventidius-and-the-body-of-the-king/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc92.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:3",
+            "motif:death"
+          ]
+        },
+        {
+          "title": "Antony",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/antony/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc82.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:2",
+            "character:marc-antony"
+          ]
+        },
+        {
+          "title": "Cleopatra and Messenger",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/cleopatra-and-messenger/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc72.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:2",
+            "character:cleopatra"
+          ]
+        },
+        {
+          "title": "Octavius Caesar and Antony",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/octavius-caesar-and-antony/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc62.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:2",
+            "character:marc-antony"
+          ]
+        },
+        {
+          "title": "Lepidus, Octavius Caesar and Messenger",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/lepidus-octavius-caesar-and-messenger/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc52.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:1"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/antony-and-cleopatra-2/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc42.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:1",
+            "character:marc-antony",
+            "character:cleopatra"
+          ]
+        },
+        {
+          "title": "Soothsayer, Alexas, Charmian and Iras",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/soothsayer-alexas-charmian-and-iras/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc32.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "act:1",
+            "character:charmian"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Full Page Introductory Illustration",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/antony-and-cleopatra-full-page-introductory-illustration-4/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc22.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "character:marc-antony",
+            "character:cleopatra"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Full Page Introductory Illustration",
+          "artist": "H.C. Selous",
+          "year": "1864-1868",
+          "edition": "H.C. Selous",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/08/11/antony-and-cleopatra-full-page-introductory-illustration-3/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/08/hcselousaandc112.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:hc-selous",
+            "character:marc-antony",
+            "character:cleopatra"
+          ]
+        },
+        {
+          "title": "Augustus – From a Gold Coin in the British Museum",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/augustus-from-a-gold-coin-in-the-british-museum/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc162.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "motif:coins",
+            "motif:portraits"
+          ]
+        },
+        {
+          "title": "Alexandria – From an original Sketch",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/alexandria-from-an-original-sketch/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc152.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "motif:views"
+          ]
+        },
+        {
+          "title": "Interior of an Egyptian Monument",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/interior-of-an-egyptian-monument/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc142.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "motif:pillars"
+          ]
+        },
+        {
+          "title": "Pyramid and Sphynx",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/pyramid-and-sphynx/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc132.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "motif:views"
+          ]
+        },
+        {
+          "title": "Pompey’s Pillar",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/pompeys-pillar/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc122.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "motif:pillars",
+            "motif:views"
+          ]
+        },
+        {
+          "title": "Ancient Egyptian Palace – From a Sketch made at Medinet Abou, part of the ancient Thebes",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/ancient-egyptian-palace-from-a-sketch-made-at-medinet-abou-part-of-the-ancient-thebes/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc112.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "motif:castles-palaces",
+            "motif:views"
+          ]
+        },
+        {
+          "title": "Cleopatra’s Needle",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/cleopatras-needle/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc102.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "motif:views"
+          ]
+        },
+        {
+          "title": "Prow of Roman Gallery – From a Baso Relievo",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/prow-of-roman-gallery-from-a-baso-relievo-forming-a-portion-of-a-frieze-found-at-palestrina/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc92.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "motif:ships-boats"
+          ]
+        },
+        {
+          "title": "Promontory of Actium",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/promontory-of-actium/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc82.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "act:3",
+            "motif:sea",
+            "motif:views"
+          ]
+        },
+        {
+          "title": "'The barge she sat in'",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/the-barge-she-sat-in/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc72.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "act:2",
+            "character:cleopatra",
+            "motif:ships-boats",
+            "motif:water"
+          ]
+        },
+        {
+          "title": "Room in Pompey’s House – A Restoration from Pompeii",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/room-in-pompeys-house-a-restoration-from-pompeii/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc62.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "motif:pillars"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra – From a Silver Coin in the British Museum",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/antony-and-cleopatra-from-a-silver-coin-in-the-british-museum/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc52.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "character:marc-antony",
+            "character:cleopatra",
+            "motif:coins",
+            "motif:portraits"
+          ]
+        },
+        {
+          "title": "Atrium of Caesar’s House – a Restoration from Pompeii",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/atrium-of-caesars-house-a-restoration-from-pompeii/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc42.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "motif:pillars"
+          ]
+        },
+        {
+          "title": "Room in Cleopatra’s Palace",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/room-in-cleopatras-palace/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc32.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "act:1",
+            "character:cleopatra",
+            "motif:pillars"
+          ]
+        },
+        {
+          "title": "Border: Egyptian and Roman Ornaments",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/border-egyptian-and-roman-ornaments/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc22.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "motif:headpieces"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Full Page Introductory Illustration",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/antony-and-cleopatra-full-page-introductory-illustration-2/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckaandc17.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "character:marc-antony",
+            "character:cleopatra"
+          ]
+        },
+        {
+          "title": "Roman Tomb and Fragments",
+          "artist": "Various (Charles Knight ed.)",
+          "year": "1839-1842",
+          "edition": "Charles Knight",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2016/07/06/roman-tomb-and-fragments/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2016/07/ckcor182.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:charles-knight",
+            "motif:tombs"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Act V Tailpiece",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-and-cleopatra-act-v-tailpiece-2/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac212.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:5",
+            "motif:tailpieces"
+          ]
+        },
+        {
+          "title": "Clown with Basket",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/clown-with-basket/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac202.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:5",
+            "motif:baskets-boxes",
+            "motif:clowns-jesters"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Act V Header",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-and-cleopatra-act-v-header-2/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac192.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:5"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Act IV Tailpiece",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-and-cleopatra-act-iv-header-2/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac182.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:4",
+            "motif:tailpieces"
+          ]
+        },
+        {
+          "title": "Antony, Eros and Guards",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-eros-and-guards/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac172.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:4",
+            "character:marc-antony",
+            "motif:soldiers",
+            "motif:swords"
+          ]
+        },
+        {
+          "title": "Enobarbus and Sentinels",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/enobarbus-and-sentinels/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac162.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:4",
+            "motif:soldiers",
+            "motif:night"
+          ]
+        },
+        {
+          "title": "Antony, Cleopatra and Charmian",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-cleopatra-and-eros/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac152.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:4",
+            "character:marc-antony",
+            "character:cleopatra",
+            "character:charmian"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Act IV Header",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-and-cleopatra-act-iv-header/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac142.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:4"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Act III Tailpiece",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-and-cleopatra-act-iii-tailpiece/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac132.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:3",
+            "motif:tailpieces"
+          ]
+        },
+        {
+          "title": "Antony, Cleopatra, Charmian, Iras and Eros",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-cleopatra-charmian-iras-and-eros/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac122.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:3",
+            "character:marc-antony",
+            "character:cleopatra",
+            "character:charmian"
+          ]
+        },
+        {
+          "title": "Antony and Octavia",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-and-cleopatra/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac112.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:3",
+            "character:marc-antony"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Act III Header",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-and-cleopatra-act-iii-header/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac102.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:3"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Act II Tailpiece",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-and-cleopatra-act-ii-tailpiece/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac92.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:2",
+            "motif:tailpieces"
+          ]
+        },
+        {
+          "title": "Cleopatra Strikes the Messenger",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/cleopatra-strikes-the-messanger/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac82.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:2",
+            "character:cleopatra",
+            "motif:conflict"
+          ]
+        },
+        {
+          "title": "Antony, Caesar, Octavia and Soothsayer",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-caesar-octavia-and-soothsayer/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac72.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:2",
+            "character:marc-antony"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Act II Header",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-and-cleopatra-act-ii-header/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac62.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:2"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Act I Tailpiece",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-and-cleopatra-act-i-tailpiece/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac52.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:1",
+            "motif:tailpieces"
+          ]
+        },
+        {
+          "title": "Antony and Enobarbus",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-and-enobarbus/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac42.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:1",
+            "character:marc-antony"
+          ]
+        },
+        {
+          "title": "Charmian, Iras, Alexas and Soothsayer",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/charmian-iras-alexas-and-soothsayer/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac32.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:1",
+            "character:charmian"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Act I Header",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-and-cleopatra-act-i-header/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgmac25.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "act:1"
+          ]
+        },
+        {
+          "title": "Antony and Cleopatra Full Page Introductory Illustration",
+          "artist": "John Gilbert",
+          "year": "1856-1860",
+          "edition": "John Gilbert",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/02/09/antony-and-cleopatra-full-page-introductory-illustration/",
+          "download": "https://i0.wp.com/shakespeareillustration.org/wp-content/uploads/2015/02/jgac1.jpg",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:john-gilbert",
+            "character:marc-antony",
+            "character:cleopatra"
+          ]
+        },
+        {
+          "title": "Antony And Cleopatra Dramatis Personae",
+          "artist": "Kenny Meadows",
+          "year": "1843-1846",
+          "edition": "Kenny Meadows",
+          "sourceLabel": "The Victorian Illustrated Shakespeare Archive (VISA)",
+          "page": "https://shakespeareillustration.org/2015/01/26/anthony-and-cleopatra-dramatis-personae/",
+          "download": "",
+          "tags": [
+            "visa",
+            "victorian-illustration",
+            "artist:kenny-meadows",
+            "motif:statues"
+          ]
+        }
+      ]
+    }
+  }
+}

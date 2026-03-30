@@ -1,4 +1,11 @@
-const QUOTE_IMAGE_SEED = require("../data/shakespeare_commons_images.json");
+const COMMONS_QUOTE_IMAGE_SEED = require("../data/shakespeare_commons_images.json");
+
+let VISA_QUOTE_IMAGE_SEED = { works: {} };
+try {
+  VISA_QUOTE_IMAGE_SEED = require("../data/shakespeare_visa_images.json");
+} catch {
+  VISA_QUOTE_IMAGE_SEED = { works: {} };
+}
 
 function normalizeQuoteImageWorkKey(value) {
   return String(value || "")
@@ -21,9 +28,9 @@ function normalizeSeedTags(value) {
     .filter(Boolean);
 }
 
-function quoteImageSeedCollections() {
-  const works = QUOTE_IMAGE_SEED?.works && typeof QUOTE_IMAGE_SEED.works === "object"
-    ? QUOTE_IMAGE_SEED.works
+function collectionsFromSeed(seed) {
+  const works = seed?.works && typeof seed.works === "object"
+    ? seed.works
     : {};
 
   return Object.entries(works).map(([workTitle, entry]) => ({
@@ -47,6 +54,52 @@ function quoteImageSeedCollections() {
       })).filter((image) => image.pageUrl || image.imageUrl)
       : [],
   })).filter((entry) => entry.workKey);
+}
+
+function mergeCollections(collections) {
+  const merged = new Map();
+
+  collections.forEach((collection) => {
+    const existing = merged.get(collection.workKey);
+    if (!existing) {
+      merged.set(collection.workKey, {
+        ...collection,
+        tags: [...collection.tags],
+        images: [...collection.images],
+      });
+      return;
+    }
+
+    const imageRefs = new Set(
+      existing.images.map((image) => image.pageUrl || image.imageUrl).filter(Boolean),
+    );
+
+    existing.tags = [...new Set([...existing.tags, ...collection.tags])];
+    existing.notes = [existing.notes, collection.notes].filter(Boolean).join("\n\n");
+    if (!existing.categoryUrl && collection.categoryUrl) existing.categoryUrl = collection.categoryUrl;
+
+    collection.images.forEach((image) => {
+      const ref = image.pageUrl || image.imageUrl;
+      if (ref && imageRefs.has(ref)) return;
+      if (ref) imageRefs.add(ref);
+      existing.images.push({ ...image });
+    });
+  });
+
+  return [...merged.values()].map((collection) => ({
+    ...collection,
+    images: collection.images.map((image, index) => ({
+      ...image,
+      sortOrder: index,
+    })),
+  }));
+}
+
+function quoteImageSeedCollections() {
+  return mergeCollections([
+    ...collectionsFromSeed(COMMONS_QUOTE_IMAGE_SEED),
+    ...collectionsFromSeed(VISA_QUOTE_IMAGE_SEED),
+  ]);
 }
 
 module.exports = {
