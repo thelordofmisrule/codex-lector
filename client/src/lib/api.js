@@ -215,4 +215,6 @@ export const sourceTexts = {
 };
 export const readerIllustrations = {
   forWork:slug=>req(`/reader-illustrations/${encodeURIComponent(slug)}`),
+  create:data=>req("/reader-illustrations",{method:"POST",body:JSON.stringify(data)}),
+  update:(id,data)=>req(`/reader-illustrations/${id}`,{method:"PUT",body:JSON.stringify(data)}),
 };

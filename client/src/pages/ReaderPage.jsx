@@ -73,6 +73,10 @@ function objectPositionStyle(x = 50, y = 50) {
   return `${clampedX}% ${clampedY}%`;
 }
 
+function isVisaReaderImage(image = {}) {
+  return String(image.sourceLabel || "").includes("Victorian Illustrated Shakespeare Archive");
+}
+
 function normalizeEntityTerm(text) {
   return String(text || "")
     .normalize("NFD")
@@ -252,6 +256,19 @@ function compactExcerpt(text, limit = 180) {
   if (!value) return "";
   if (value.length <= limit) return value;
   return `${value.slice(0, limit - 1).trimEnd()}…`;
+}
+
+const ILLUSTRATION_PLACEMENT_OPTIONS = [
+  { id: "dramatis", label: "Dramatis" },
+  { id: "act_start", label: "Start of Act" },
+  { id: "act_end", label: "End of Act" },
+  { id: "line_anchor", label: "At Line" },
+  { id: "featured_plate", label: "Featured Plate" },
+  { id: "supplementary", label: "Supplementary" },
+];
+
+function placementKindLabel(kind) {
+  return ILLUSTRATION_PLACEMENT_OPTIONS.find((option) => option.id === kind)?.label || "Illustration";
 }
 
 function extractWordAtOffset(text, offset) {
@@ -1376,61 +1393,104 @@ function AnnotatedLine({ lineId, text, annotsByLine, showAnnots, userId, isAdmin
   );
 }
 
-function ReaderIllustrationSection({ title = "", items = [] }) {
+function ReaderIllustrationSection({ title = "", items = [], isAdmin = false, onEditPlacement = null, compact = false }) {
   if (!items?.length) return null;
   return (
-    <section style={{ margin: "14px 0 22px" }}>
+    <section style={{ margin: compact ? "8px 0 14px" : "18px 0 30px" }}>
       {title && (
         <div style={{ textAlign: "center", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 10 }}>
           {title}
         </div>
       )}
-      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+      <div style={{ display: "grid", gap: compact ? 14 : 20 }}>
         {items.map((placement) => {
           const image = placement.image || {};
           const label = placement.caption || image.title || "Illustration";
+          const visa = isVisaReaderImage(image);
+          const hasRenderableImage = !!String(image.imageUrl || "").trim();
           return (
             <figure
               key={placement.id}
               style={{
                 margin: 0,
-                background: "var(--surface)",
-                border: "1px solid var(--border-light)",
-                borderRadius: 14,
-                overflow: "hidden",
-                boxShadow: "0 10px 24px var(--shadow)",
+                display: "grid",
+                gap: 10,
+                justifyItems: "center",
               }}
             >
               <a
                 href={image.pageUrl || image.imageUrl}
                 target="_blank"
                 rel="noopener"
-                style={{ display: "block", textDecoration: "none" }}
+                style={{
+                  display: "block",
+                  textDecoration: "none",
+                  width: "min(100%, 700px)",
+                  border: "1px solid rgba(112, 86, 49, 0.18)",
+                  boxShadow: "0 20px 44px rgba(0,0,0,0.08)",
+                  background: visa ? "linear-gradient(180deg, #f7efd9 0%, #eadfc5 100%)" : "var(--surface)",
+                }}
               >
                 <img
-                  src={image.imageUrl}
+                  src={hasRenderableImage ? image.imageUrl : undefined}
                   alt={label}
                   loading="lazy"
                   style={{
-                    display: "block",
+                    display: hasRenderableImage ? "block" : "none",
                     width: "100%",
-                    aspectRatio: "16 / 10",
-                    objectFit: "cover",
+                    maxHeight: compact ? 360 : 620,
+                    objectFit: "contain",
                     objectPosition: objectPositionStyle(image.thumbX, image.thumbY),
-                    background: "var(--bg-dark)",
+                    background: visa ? "linear-gradient(180deg, #f7efd9 0%, #eadfc5 100%)" : "var(--surface)",
+                    padding: visa ? (compact ? 10 : 16) : 0,
                   }}
                 />
+                {!hasRenderableImage && (
+                  <div
+                    style={{
+                      width: "100%",
+                      minHeight: compact ? 220 : 320,
+                      display: "grid",
+                      placeItems: "center",
+                      background: "linear-gradient(180deg, #f5ecd8 0%, #e8dcc0 100%)",
+                      color: "#5f4c2a",
+                      fontSize: 12,
+                      letterSpacing: 1.2,
+                      textTransform: "uppercase",
+                      textAlign: "center",
+                      padding: 18,
+                    }}
+                  >
+                    Image unavailable from VISA record
+                  </div>
+                )}
               </a>
-              <figcaption style={{ padding: "12px 14px 14px" }}>
-                <div style={{ fontSize: 11, letterSpacing: 1.6, textTransform: "uppercase", color: "var(--gold)", fontFamily: "var(--font-display)", marginBottom: 6 }}>
-                  {placement.artistLabel || image.artist || "VISA"}
-                </div>
-                <div style={{ color: "var(--text)", lineHeight: 1.6, marginBottom: 6 }}>
+              <figcaption style={{ width: "min(100%, 700px)", textAlign: "center" }}>
+                <div style={{ color: "var(--text)", lineHeight: 1.7, fontSize: compact ? 14 : 15 }}>
                   {label}
                 </div>
-                <div style={{ fontSize: 12, color: "var(--text-light)", lineHeight: 1.6 }}>
-                  {image.year ? `${image.year} · ` : ""}{image.sourceLabel || "Victorian Illustrated Shakespeare Archive"}
-                </div>
+                <details style={{ marginTop: 8 }}>
+                  <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--text-light)", fontFamily: "var(--font-display)", letterSpacing: 1.2, textTransform: "uppercase" }}>
+                    About this illustration
+                  </summary>
+                  <div style={{ marginTop: 8, fontSize: 13, color: "var(--text-light)", lineHeight: 1.7, display: "grid", gap: 3 }}>
+                    <div>{placement.artistLabel || image.artist || "VISA"}</div>
+                    <div>{image.year ? `${image.year} · ` : ""}{image.sourceLabel || "Victorian Illustrated Shakespeare Archive"}</div>
+                    <div>{placementKindLabel(placement.placementKind)}</div>
+                    {(image.pageUrl || image.imageUrl) && (
+                      <div>
+                        <a href={image.pageUrl || image.imageUrl} target="_blank" rel="noopener">Source record</a>
+                      </div>
+                    )}
+                  </div>
+                </details>
+                {isAdmin && onEditPlacement && (
+                  <div style={{ marginTop: 10, display: "flex", justifyContent: "center" }}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => onEditPlacement(placement)}>
+                      Place Illustration
+                    </button>
+                  </div>
+                )}
               </figcaption>
             </figure>
           );
@@ -1440,12 +1500,188 @@ function ReaderIllustrationSection({ title = "", items = [] }) {
   );
 }
 
+function IllustrationPlacementEditor({
+  open = false,
+  placement = null,
+  draft = null,
+  currentViewportLine = 0,
+  currentViewportAct = 0,
+  lineContext = "",
+  saving = false,
+  onChange,
+  onApplyCurrentLine,
+  onApplyCurrentActStart,
+  onApplyCurrentActEnd,
+  onSave,
+  onClose,
+}) {
+  if (!open || !placement || !draft) return null;
+  const image = placement.image || {};
+  const label = placement.caption || image.title || "Illustration";
+  const currentActLabel = currentViewportAct > 0 ? `Act ${currentViewportAct}` : "No act in view";
+  const currentLineLabel = currentViewportLine > 0 ? `Line ${currentViewportLine}` : "No line in view";
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.42)", zIndex: 170 }} />
+      <div
+        style={{
+          position: "fixed",
+          inset: "min(6vh, 48px) min(24px, 4vw)",
+          maxWidth: 720,
+          margin: "0 auto",
+          background: "var(--surface)",
+          border: "1px solid var(--border-light)",
+          borderRadius: 16,
+          boxShadow: "0 26px 60px rgba(0,0,0,0.24)",
+          padding: 20,
+          zIndex: 171,
+          overflowY: "auto",
+          maxHeight: "88vh",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 12, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: 1.6, textTransform: "uppercase", color: "var(--gold)", fontFamily: "var(--font-display)", marginBottom: 4 }}>
+              Illustration Placement
+            </div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 20, color: "var(--accent)" }}>{label}</div>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Close</button>
+        </div>
+
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+            <button className="btn btn-secondary btn-sm" onClick={onApplyCurrentActStart} disabled={currentViewportAct < 1}>
+              Start of {currentActLabel}
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={onApplyCurrentActEnd} disabled={currentViewportAct < 1}>
+              End of {currentActLabel}
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={onApplyCurrentLine} disabled={currentViewportLine < 1}>
+              At {currentLineLabel}
+            </button>
+          </div>
+
+          {lineContext && (
+            <div style={{ padding: "10px 12px", border: "1px solid var(--border-light)", borderRadius: 10, color: "var(--text-light)", fontSize: 13, lineHeight: 1.7 }}>
+              <strong style={{ color: "var(--text)" }}>{currentLineLabel}:</strong> {lineContext}
+            </div>
+          )}
+
+          <label style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "var(--text-light)", textTransform: "uppercase", letterSpacing: 1.2 }}>Placement</span>
+            <select className="input" value={draft.placementKind} onChange={(event) => onChange({ placementKind: event.target.value })}>
+              {ILLUSTRATION_PLACEMENT_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+
+          {(draft.placementKind === "act_start" || draft.placementKind === "act_end") && (
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 12, color: "var(--text-light)", textTransform: "uppercase", letterSpacing: 1.2 }}>Act Number</span>
+              <input className="input" type="number" min="1" value={draft.actNumber} onChange={(event) => onChange({ actNumber: event.target.value })} />
+            </label>
+          )}
+
+          {draft.placementKind === "line_anchor" && (
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, color: "var(--text-light)", textTransform: "uppercase", letterSpacing: 1.2 }}>Line Number</span>
+                <input className="input" type="number" min="1" value={draft.lineStart} onChange={(event) => onChange({ lineStart: event.target.value })} />
+              </label>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, color: "var(--text-light)", textTransform: "uppercase", letterSpacing: 1.2 }}>Act Number</span>
+                <input className="input" type="number" min="1" value={draft.actNumber} onChange={(event) => onChange({ actNumber: event.target.value })} />
+              </label>
+            </div>
+          )}
+
+          <label style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "var(--text-light)", textTransform: "uppercase", letterSpacing: 1.2 }}>Caption</span>
+            <input className="input" value={draft.caption} onChange={(event) => onChange({ caption: event.target.value })} />
+          </label>
+
+          <label style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "var(--text-light)", textTransform: "uppercase", letterSpacing: 1.2 }}>Sort Order</span>
+            <input className="input" type="number" value={draft.sortOrder} onChange={(event) => onChange({ sortOrder: event.target.value })} />
+          </label>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
+            <button className="btn btn-primary" onClick={onSave} disabled={saving}>
+              {saving ? "Saving..." : "Save Placement"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 /* ─── Play view ─── */
-function PlayView({ data, showAnnots, annotsByLine, userId, isAdmin, canPublishGlobal, editAnnot, deleteAnnot, bookmark, showWaypoints, waypointsByIndex, onLookupTap, onOpenAnnotationPanel, illustrations = [] }) {
+function PlayView({
+  data,
+  showAnnots,
+  annotsByLine,
+  userId,
+  isAdmin,
+  canPublishGlobal,
+  editAnnot,
+  deleteAnnot,
+  bookmark,
+  showWaypoints,
+  waypointsByIndex,
+  onLookupTap,
+  onOpenAnnotationPanel,
+  illustrations = [],
+  onEditIllustrationPlacement = null,
+}) {
   let lineNum = 0;
   let readingIndex = 0;
   let actNumber = 0;
-  const dramatisIllustrations = illustrations.filter((item) => item.placementKind === "dramatis");
+  const placementsByKind = {
+    dramatis: [],
+    featured: [],
+    supplementary: [],
+  };
+  const actStarts = new Map();
+  const actEnds = new Map();
+  const lineAnchors = new Map();
+
+  illustrations.forEach((placement) => {
+    if (placement.placementKind === "dramatis") placementsByKind.dramatis.push(placement);
+    else if (placement.placementKind === "supplementary") placementsByKind.supplementary.push(placement);
+    else if (placement.placementKind === "act_start") {
+      const key = placement.actNumber || 0;
+      const list = actStarts.get(key) || [];
+      list.push(placement);
+      actStarts.set(key, list);
+    } else if (placement.placementKind === "act_end") {
+      const key = placement.actNumber || 0;
+      const list = actEnds.get(key) || [];
+      list.push(placement);
+      actEnds.set(key, list);
+    } else if (placement.placementKind === "line_anchor") {
+      const key = placement.lineStart || 0;
+      const list = lineAnchors.get(key) || [];
+      list.push(placement);
+      lineAnchors.set(key, list);
+    } else {
+      placementsByKind.featured.push(placement);
+    }
+  });
+
+  const sortPlacements = (items = []) => [...items].sort((left, right) => (
+    (left.sortOrder || 0) - (right.sortOrder || 0)
+      || String(left.caption || left.image?.title || "").localeCompare(String(right.caption || right.image?.title || ""))
+      || (left.id - right.id)
+  ));
+
+  const dramatisIllustrations = sortPlacements(placementsByKind.dramatis);
+  const featuredIllustrations = sortPlacements(placementsByKind.featured.filter((item) => (item.actNumber || 0) === 0 && (item.lineStart || 0) === 0));
+  const supplementaryIllustrations = sortPlacements(placementsByKind.supplementary);
   return (
     <>
       {data.dramatis && (
@@ -1454,18 +1690,19 @@ function PlayView({ data, showAnnots, annotsByLine, userId, isAdmin, canPublishG
           <div className="reader-dramatis-body" style={{ marginTop:10, fontSize:14, lineHeight:1.8, fontFamily:"var(--font-fell)" }} dangerouslySetInnerHTML={{ __html:data.dramatis }} />
         </details>
       )}
-      <ReaderIllustrationSection title="Dramatis Illustrations" items={dramatisIllustrations} />
+      <ReaderIllustrationSection title="Dramatis Illustrations" items={dramatisIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} compact />
+      <ReaderIllustrationSection title="Frontispieces and Featured Plates" items={featuredIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} compact />
       <div style={{ marginBottom:32 }}>
         {data.lines.map((item, idx) => {
           if (item.type==="act") {
+            const trailingActIllustrations = actNumber > 0 ? sortPlacements(actEnds.get(actNumber) || []) : [];
             actNumber += 1;
-            const actIllustrations = illustrations.filter((placement) => (
-              placement.placementKind !== "dramatis" && placement.actNumber === actNumber
-            ));
+            const actIllustrations = sortPlacements(actStarts.get(actNumber) || []);
             return (
               <div key={idx}>
+                <ReaderIllustrationSection title={`End of Act ${actNumber - 1}`} items={trailingActIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} compact />
                 <h2 className="reader-act-heading" style={{ textAlign:"center", fontFamily:"var(--font-display)", fontSize:16, fontWeight:400, letterSpacing:4, margin:"44px 0 14px", color:"var(--accent)", borderTop:"1px solid var(--border-light)", borderBottom:"1px solid var(--border-light)", padding:"12px 0", textTransform:"uppercase" }}>{item.text}</h2>
-                <ReaderIllustrationSection title={`Act ${actNumber} Illustrations`} items={actIllustrations} />
+                <ReaderIllustrationSection title={`Act ${actNumber} Illustrations`} items={actIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} compact />
               </div>
             );
           }
@@ -1483,8 +1720,10 @@ function PlayView({ data, showAnnots, annotsByLine, userId, isAdmin, canPublishG
                 const lineId = `l-${idx}-${li}`;
                 readingIndex += 1;
                 const waypoint = showWaypoints ? waypointsByIndex[readingIndex] : null;
+                const anchoredIllustrations = sortPlacements(lineAnchors.get(lineNum) || []);
                 return (
                   <div key={lineId}>
+                    <ReaderIllustrationSection items={anchoredIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} />
                     <AnnotatedLine lineId={lineId} text={line.text} annotsByLine={annotsByLine}
                       showAnnots={showAnnots} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot}
                       lineNum={lineNum} showNum={hasXmlN || lineNum%5===0} isBookmarked={bookmark===lineId} prosodyMode="off" onLookupTap={(event) => onLookupTap?.(event, lineId)}
@@ -1497,6 +1736,17 @@ function PlayView({ data, showAnnots, annotsByLine, userId, isAdmin, canPublishG
           );
           return null;
         })}
+        <ReaderIllustrationSection title={`End of Act ${actNumber}`} items={sortPlacements(actEnds.get(actNumber) || [])} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} compact />
+        {supplementaryIllustrations.length > 0 && (
+          <details style={{ marginTop: 26, border: "1px solid var(--border-light)", borderRadius: 12, background: "var(--surface)", padding: "10px 14px" }}>
+            <summary className="reader-summary" style={{ fontFamily:"var(--font-display)", fontSize:12, letterSpacing:2, cursor:"pointer", color:"var(--text-muted)" }}>
+              Supplementary Illustrations
+            </summary>
+            <div style={{ marginTop: 12 }}>
+              <ReaderIllustrationSection items={supplementaryIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} compact />
+            </div>
+          </details>
+        )}
       </div>
     </>
   );
@@ -1601,6 +1851,8 @@ export default function ReaderPage() {
   const [prosodyNote, setProsodyNote] = useState(null);
   const [prosodyEditor, setProsodyEditor] = useState(null);
   const [readerIllustrations, setReaderIllustrations] = useState({ placements: [], artists: [] });
+  const [placementEditor, setPlacementEditor] = useState(null);
+  const [savingPlacement, setSavingPlacement] = useState(false);
   const [readerInspectorPinned, setReaderInspectorPinned] = useState(false);
   const [semanticSearchEnabled, setSemanticSearchEnabled] = useState(false);
   const progressRef = useRef({ maxLine:0, total:0, slug:null });
@@ -1612,6 +1864,13 @@ export default function ReaderPage() {
     return buildPeopleGraphFromXML(work.content, work.title, work.category);
   }, [parsed?.type, work?.category, work?.content, work?.title]);
   const lineMetaIndex = parsed ? buildLineMetaIndex(parsed) : {};
+  const lineMetaByNumber = useMemo(() => {
+    const map = new Map();
+    Object.values(lineMetaIndex).forEach((meta) => {
+      if (meta?.lineNum && !map.has(meta.lineNum)) map.set(meta.lineNum, meta);
+    });
+    return map;
+  }, [lineMetaIndex]);
   const peopleTermIndex = useMemo(() => {
     const index = new Map();
     for (const person of peopleGraph?.people || []) {
@@ -1741,6 +2000,13 @@ export default function ReaderPage() {
     setWordLookup(nextLookup);
   }, []);
 
+  const applyReaderIllustrationData = useCallback((illustrationData) => {
+    setReaderIllustrations({
+      placements: Array.isArray(illustrationData?.placements) ? illustrationData.placements : [],
+      artists: Array.isArray(illustrationData?.artists) ? illustrationData.artists : [],
+    });
+  }, []);
+
   const openPlaceInspector = useCallback((nextPlace) => {
     setAnnotationPanel(null);
     setWordLookup(null);
@@ -1789,6 +2055,24 @@ export default function ReaderPage() {
     });
     return closestIndex + 1;
   }, []);
+
+  const getCurrentViewportLineMeta = useCallback(() => {
+    const lines = document.querySelectorAll("[data-lineid]");
+    if (!lines.length) return null;
+    const center = window.innerHeight / 2;
+    let closest = null;
+    let closestDist = Infinity;
+    lines.forEach((el) => {
+      const dist = Math.abs(el.getBoundingClientRect().top - center);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = el;
+      }
+    });
+    const lineId = closest?.dataset?.lineid || "";
+    if (!lineId) return null;
+    return { lineId, ...(lineMetaIndex[lineId] || {}) };
+  }, [lineMetaIndex]);
 
   useEffect(() => {
     if (!work?.id || trackedSlugRef.current === slug) return;
@@ -1842,6 +2126,7 @@ export default function ReaderPage() {
   useEffect(() => {
     setShowVisibilityPanel(false);
     setShowResearchTray(false);
+    setPlacementEditor(null);
     closeReaderInspector(false);
   }, [closeReaderInspector, slug]);
 
@@ -1862,17 +2147,14 @@ export default function ReaderPage() {
         setLayerCatalog(layers || []);
         setMyLayers((layers||[]).filter(l => l.isOwner));
         setProsodyOverrides(Object.fromEntries((prosodyData?.overrides || []).map((item) => [item.lineKey, item])));
-        setReaderIllustrations({
-          placements: Array.isArray(illustrationData?.placements) ? illustrationData.placements : [],
-          artists: Array.isArray(illustrationData?.artists) ? illustrationData.artists : [],
-        });
+        applyReaderIllustrationData(illustrationData);
       })
       .catch(e => {
         console.error(e);
         if (e?.status !== 404) toast?.error("Could not load this work. Please refresh.");
       })
       .finally(() => setLoading(false));
-  }, [slug, user, toast]);
+  }, [applyReaderIllustrationData, slug, user, toast]);
 
   // Track reading progress on scroll
   useEffect(() => {
@@ -2031,6 +2313,96 @@ export default function ReaderPage() {
       position,
     });
   }, [findCurrentWorkPersonMatch, isMobileViewport, openPlaceInspector, openWordInspector]);
+
+  const openIllustrationPlacementEditor = useCallback((placement) => {
+    if (!placement?.id) return;
+    setPlacementEditor({
+      placementId: placement.id,
+      label: placement.caption || placement.image?.title || "Illustration",
+      draft: {
+        placementKind: placement.placementKind || "featured_plate",
+        actNumber: String(placement.actNumber || ""),
+        lineStart: String(placement.lineStart || ""),
+        caption: placement.caption || placement.image?.title || "",
+        sortOrder: String(placement.sortOrder || 0),
+      },
+    });
+  }, []);
+
+  const updatePlacementDraft = useCallback((patch) => {
+    setPlacementEditor((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        draft: {
+          ...prev.draft,
+          ...patch,
+        },
+      };
+    });
+  }, []);
+
+  const applyPlacementToCurrentActStart = useCallback(() => {
+    const meta = getCurrentViewportLineMeta();
+    if (!meta?.actNum) {
+      toast?.error("Scroll inside an act first.");
+      return;
+    }
+    updatePlacementDraft({
+      placementKind: "act_start",
+      actNumber: String(meta.actNum),
+      lineStart: "",
+    });
+  }, [getCurrentViewportLineMeta, toast, updatePlacementDraft]);
+
+  const applyPlacementToCurrentActEnd = useCallback(() => {
+    const meta = getCurrentViewportLineMeta();
+    if (!meta?.actNum) {
+      toast?.error("Scroll inside an act first.");
+      return;
+    }
+    updatePlacementDraft({
+      placementKind: "act_end",
+      actNumber: String(meta.actNum),
+      lineStart: "",
+    });
+  }, [getCurrentViewportLineMeta, toast, updatePlacementDraft]);
+
+  const applyPlacementToCurrentLine = useCallback(() => {
+    const meta = getCurrentViewportLineMeta();
+    if (!meta?.lineNum) {
+      toast?.error("Scroll to the line where this plate should appear.");
+      return;
+    }
+    updatePlacementDraft({
+      placementKind: "line_anchor",
+      actNumber: String(meta.actNum || ""),
+      lineStart: String(meta.lineNum),
+    });
+  }, [getCurrentViewportLineMeta, toast, updatePlacementDraft]);
+
+  const saveIllustrationPlacement = useCallback(async () => {
+    if (!placementEditor?.placementId) return;
+    const draft = placementEditor.draft || {};
+    setSavingPlacement(true);
+    try {
+      await readerIllustrationsApi.update(placementEditor.placementId, {
+        placementKind: draft.placementKind,
+        actNumber: Number(draft.actNumber) || 0,
+        lineStart: Number(draft.lineStart) || 0,
+        caption: draft.caption,
+        sortOrder: Number(draft.sortOrder) || 0,
+      });
+      const refreshed = await readerIllustrationsApi.forWork(slug);
+      applyReaderIllustrationData(refreshed);
+      setPlacementEditor(null);
+      toast?.success("Illustration placement saved.");
+    } catch (error) {
+      toast?.error(error?.message || "Could not save illustration placement.");
+    } finally {
+      setSavingPlacement(false);
+    }
+  }, [applyReaderIllustrationData, placementEditor, slug, toast]);
 
   const openQuoteCapture = useCallback((selection) => {
     const startLineId = selection?.lineId || "";
@@ -2490,6 +2862,14 @@ export default function ReaderPage() {
     : (readerIllustrations.placements || []).filter((placement) => (
       activeIllustrationArtist === "all" || placement.artistKey === activeIllustrationArtist
     ));
+  const placementEditorPlacement = placementEditor
+    ? (readerIllustrations.placements || []).find((placement) => placement.id === placementEditor.placementId) || null
+    : null;
+  const placementEditorViewportMeta = placementEditor ? getCurrentViewportLineMeta() : null;
+  const placementEditorLineMeta = placementEditor?.draft?.lineStart
+    ? lineMetaByNumber.get(Number(placementEditor.draft.lineStart) || 0)
+    : null;
+  const placementEditorLineContext = compactExcerpt(placementEditorLineMeta?.text || placementEditorViewportMeta?.text || "", 220);
   const dismissReaderHint = () => {
     localStorage.setItem("codex-reader-hint-dismissed", "true");
     setShowReaderHint(false);
@@ -2759,8 +3139,24 @@ export default function ReaderPage() {
             waypointsByIndex={waypointsByIndex}
             onOpenAnnotationPanel={openAnnotationInspector}
           />
-        : <PlayView data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={openAnnotationInspector} illustrations={visibleIllustrations} />
+        : <PlayView data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={openAnnotationInspector} illustrations={visibleIllustrations} onEditIllustrationPlacement={isAdmin ? openIllustrationPlacementEditor : null} />
       }
+
+      <IllustrationPlacementEditor
+        open={!!placementEditor}
+        placement={placementEditorPlacement}
+        draft={placementEditor?.draft || null}
+        currentViewportLine={placementEditorViewportMeta?.lineNum || 0}
+        currentViewportAct={placementEditorViewportMeta?.actNum || 0}
+        lineContext={placementEditorLineContext}
+        saving={savingPlacement}
+        onChange={updatePlacementDraft}
+        onApplyCurrentLine={applyPlacementToCurrentLine}
+        onApplyCurrentActStart={applyPlacementToCurrentActStart}
+        onApplyCurrentActEnd={applyPlacementToCurrentActEnd}
+        onSave={saveIllustrationPlacement}
+        onClose={() => setPlacementEditor(null)}
+      />
 
       {annotationPanel && (
         <AnnotationPopover

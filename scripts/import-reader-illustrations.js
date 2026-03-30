@@ -2,7 +2,11 @@ const fs = require("fs");
 const path = require("path");
 try { require("dotenv").config({ path: path.join(__dirname, "..", ".env") }); } catch {}
 const db = require("../server/db");
-const { ensureReaderIllustrationSchema, normalizeIllustrationArtistKey } = require("../server/lib/readerIllustrations");
+const {
+  ensureReaderIllustrationSchema,
+  normalizeIllustrationArtistKey,
+  normalizePlacementKind,
+} = require("../server/lib/readerIllustrations");
 
 ensureReaderIllustrationSchema(db);
 
@@ -16,15 +20,6 @@ function loadManifest() {
   if (Array.isArray(parsed)) return parsed;
   if (Array.isArray(parsed?.placements)) return parsed.placements;
   return [];
-}
-
-function normalizePlacementKind(value) {
-  const raw = String(value || "").trim().toLowerCase();
-  if (!raw) return "featured_plate";
-  if (raw === "dramatis" || raw === "act_header" || raw === "scene_break" || raw === "featured_plate") {
-    return raw;
-  }
-  return "featured_plate";
 }
 
 function findImageId(entry) {
@@ -63,21 +58,24 @@ function findImageId(entry) {
 const workExists = db.prepare("SELECT slug FROM works WHERE slug=?");
 const upsertPlacement = db.prepare(`
   INSERT INTO reader_illustration_placements (
-    image_id, work_slug, placement_kind, act_number, scene_label, line_start, line_end, caption, artist_key, sort_order, updated_at
+    image_id, work_slug, placement_kind, act_number, scene_label, line_start, line_end, caption, artist_key, managed_source, manual_override, sort_order, updated_at
   ) VALUES (
-    @image_id, @work_slug, @placement_kind, @act_number, @scene_label, @line_start, @line_end, @caption, @artist_key, @sort_order, CURRENT_TIMESTAMP
+    @image_id, @work_slug, @placement_kind, @act_number, @scene_label, @line_start, @line_end, @caption, @artist_key, 'seed', 0, @sort_order, CURRENT_TIMESTAMP
   )
   ON CONFLICT(image_id, work_slug, placement_kind, act_number, scene_label, line_start, line_end)
   DO UPDATE SET
     caption=excluded.caption,
     artist_key=excluded.artist_key,
+    managed_source='seed',
     sort_order=excluded.sort_order,
     updated_at=CURRENT_TIMESTAMP
+  WHERE COALESCE(reader_illustration_placements.manual_override, 0) = 0
 `);
 
 function main() {
   const placements = loadManifest();
   let imported = 0;
+  const skipped = [];
 
   const tx = db.transaction(() => {
     for (const entry of placements) {
@@ -87,7 +85,12 @@ function main() {
 
       const imageId = findImageId(entry);
       if (!imageId) {
-        throw new Error(`Could not resolve image for placement in ${workSlug}: ${JSON.stringify(entry)}`);
+        skipped.push({
+          workSlug,
+          title: String(entry.title || entry.caption || "").trim(),
+          externalRef: String(entry.externalRef || entry.pageUrl || "").trim(),
+        });
+        continue;
       }
 
       upsertPlacement.run({
@@ -108,6 +111,12 @@ function main() {
 
   tx();
   console.log(`Imported reader illustration placements: ${imported}.`);
+  if (skipped.length) {
+    console.warn(`Skipped unresolved placements: ${skipped.length}.`);
+    skipped.slice(0, 20).forEach((entry) => {
+      console.warn(`- ${entry.workSlug}: ${entry.title || entry.externalRef || "unlabeled placement"}`);
+    });
+  }
 }
 
 main();
