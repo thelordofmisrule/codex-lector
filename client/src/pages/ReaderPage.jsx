@@ -1393,7 +1393,14 @@ function AnnotatedLine({ lineId, text, annotsByLine, showAnnots, userId, isAdmin
   );
 }
 
-function ReaderIllustrationSection({ title = "", items = [], isAdmin = false, onEditPlacement = null, compact = false }) {
+function ReaderIllustrationSection({
+  title = "",
+  items = [],
+  isAdmin = false,
+  onEditPlacement = null,
+  onOpenLightbox = null,
+  compact = false,
+}) {
   if (!items?.length) return null;
   return (
     <section style={{ margin: compact ? "8px 0 14px" : "18px 0 30px" }}>
@@ -1408,6 +1415,7 @@ function ReaderIllustrationSection({ title = "", items = [], isAdmin = false, on
           const label = placement.caption || image.title || "Illustration";
           const visa = isVisaReaderImage(image);
           const hasRenderableImage = !!String(image.imageUrl || "").trim();
+          const frameMaxWidth = compact ? "min(100%, 760px)" : "min(100%, 880px)";
           return (
             <figure
               key={placement.id}
@@ -1418,17 +1426,25 @@ function ReaderIllustrationSection({ title = "", items = [], isAdmin = false, on
                 justifyItems: "center",
               }}
             >
-              <a
-                href={image.pageUrl || image.imageUrl}
-                target="_blank"
-                rel="noopener"
+              <button
+                type="button"
+                onClick={() => {
+                  if (hasRenderableImage) onOpenLightbox?.(placement);
+                }}
+                aria-label={hasRenderableImage ? `View larger illustration: ${label}` : label}
                 style={{
                   display: "block",
-                  textDecoration: "none",
-                  width: "min(100%, 700px)",
-                  border: "1px solid rgba(112, 86, 49, 0.18)",
+                  width: "fit-content",
+                  maxWidth: frameMaxWidth,
+                  padding: 0,
+                  cursor: hasRenderableImage ? "zoom-in" : "default",
                   boxShadow: "0 20px 44px rgba(0,0,0,0.08)",
                   background: visa ? "linear-gradient(180deg, #f7efd9 0%, #eadfc5 100%)" : "var(--surface)",
+                  borderRadius: 0,
+                  textDecoration: "none",
+                  appearance: "none",
+                  border: "1px solid rgba(112, 86, 49, 0.18)",
+                  overflow: "hidden",
                 }}
               >
                 <img
@@ -1437,19 +1453,21 @@ function ReaderIllustrationSection({ title = "", items = [], isAdmin = false, on
                   loading="lazy"
                   style={{
                     display: hasRenderableImage ? "block" : "none",
-                    width: "100%",
-                    maxHeight: compact ? 360 : 620,
+                    width: "auto",
+                    maxWidth: "100%",
+                    height: "auto",
+                    maxHeight: compact ? 560 : 860,
                     objectFit: "contain",
                     objectPosition: objectPositionStyle(image.thumbX, image.thumbY),
                     background: visa ? "linear-gradient(180deg, #f7efd9 0%, #eadfc5 100%)" : "var(--surface)",
-                    padding: visa ? (compact ? 10 : 16) : 0,
+                    padding: visa ? (compact ? 12 : 18) : 0,
                   }}
                 />
                 {!hasRenderableImage && (
                   <div
                     style={{
-                      width: "100%",
-                      minHeight: compact ? 220 : 320,
+                      width: compact ? "min(100%, 500px)" : "min(100%, 640px)",
+                      minHeight: compact ? 260 : 360,
                       display: "grid",
                       placeItems: "center",
                       background: "linear-gradient(180deg, #f5ecd8 0%, #e8dcc0 100%)",
@@ -1464,8 +1482,8 @@ function ReaderIllustrationSection({ title = "", items = [], isAdmin = false, on
                     Image unavailable from VISA record
                   </div>
                 )}
-              </a>
-              <figcaption style={{ width: "min(100%, 700px)", textAlign: "center" }}>
+              </button>
+              <figcaption style={{ width: frameMaxWidth, textAlign: "center" }}>
                 <div style={{ color: "var(--text)", lineHeight: 1.7, fontSize: compact ? 14 : 15 }}>
                   {label}
                 </div>
@@ -1497,6 +1515,105 @@ function ReaderIllustrationSection({ title = "", items = [], isAdmin = false, on
         })}
       </div>
     </section>
+  );
+}
+
+function ReaderIllustrationLightbox({ placement = null, onClose }) {
+  if (!placement) return null;
+  const image = placement.image || {};
+  const label = placement.caption || image.title || "Illustration";
+  const visa = isVisaReaderImage(image);
+  const imageUrl = image.localMediaUrl || image.imageUrl || image.originalImageUrl || "";
+
+  return (
+    <div
+      onClick={onClose}
+      role="button"
+      tabIndex={-1}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1200,
+        background: "rgba(12, 12, 16, 0.84)",
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
+      }}
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        style={{
+          width: "min(1160px, 100%)",
+          maxHeight: "min(92vh, 1000px)",
+          background: "var(--surface)",
+          borderRadius: 20,
+          border: "1px solid var(--border-light)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.35)",
+          overflow: "hidden",
+          display: "grid",
+          gridTemplateRows: "auto minmax(0, 1fr)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, padding: "16px 18px 12px", borderBottom: "1px solid var(--border-light)" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 18, color: "var(--accent)", lineHeight: 1.3 }}>
+              {label}
+            </div>
+            {(placement.artistLabel || image.artist) && (
+              <div style={{ fontSize: 14, color: "var(--text)", marginTop: 6 }}>
+                {placement.artistLabel || image.artist}
+              </div>
+            )}
+            {(image.year || image.sourceLabel) && (
+              <div style={{ fontSize: 12, color: "var(--text-light)", marginTop: 2 }}>
+                {image.year ? `${image.year} · ` : ""}{image.sourceLabel || "Victorian Illustrated Shakespeare Archive"}
+              </div>
+            )}
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        <div style={{ overflow: "auto", padding: 18, display: "grid", gap: 14 }}>
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={label}
+              style={{
+                width: "100%",
+                maxHeight: "76vh",
+                objectFit: "contain",
+                display: "block",
+                background: visa ? "linear-gradient(180deg, #f7efd9 0%, #eadfc5 100%)" : "var(--bg)",
+                borderRadius: 14,
+                padding: visa ? 18 : 0,
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                minHeight: 360,
+                display: "grid",
+                placeItems: "center",
+                background: "linear-gradient(180deg, #f5ecd8 0%, #e8dcc0 100%)",
+                color: "#5f4c2a",
+                letterSpacing: 1.2,
+                textTransform: "uppercase",
+                borderRadius: 14,
+                textAlign: "center",
+                padding: 18,
+              }}
+            >
+              Image unavailable from VISA record
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1637,6 +1754,7 @@ function PlayView({
   onOpenAnnotationPanel,
   illustrations = [],
   onEditIllustrationPlacement = null,
+  onOpenIllustrationLightbox = null,
 }) {
   let lineNum = 0;
   let readingIndex = 0;
@@ -1690,8 +1808,8 @@ function PlayView({
           <div className="reader-dramatis-body" style={{ marginTop:10, fontSize:14, lineHeight:1.8, fontFamily:"var(--font-fell)" }} dangerouslySetInnerHTML={{ __html:data.dramatis }} />
         </details>
       )}
-      <ReaderIllustrationSection title="Dramatis Illustrations" items={dramatisIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} compact />
-      <ReaderIllustrationSection title="Frontispieces and Featured Plates" items={featuredIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} compact />
+      <ReaderIllustrationSection title="Dramatis Illustrations" items={dramatisIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} onOpenLightbox={onOpenIllustrationLightbox} compact />
+      <ReaderIllustrationSection title="Frontispieces and Featured Plates" items={featuredIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} onOpenLightbox={onOpenIllustrationLightbox} compact />
       <div style={{ marginBottom:32 }}>
         {data.lines.map((item, idx) => {
           if (item.type==="act") {
@@ -1700,9 +1818,9 @@ function PlayView({
             const actIllustrations = sortPlacements(actStarts.get(actNumber) || []);
             return (
               <div key={idx}>
-                <ReaderIllustrationSection title={`End of Act ${actNumber - 1}`} items={trailingActIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} compact />
+                <ReaderIllustrationSection title={`End of Act ${actNumber - 1}`} items={trailingActIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} onOpenLightbox={onOpenIllustrationLightbox} compact />
                 <h2 className="reader-act-heading" style={{ textAlign:"center", fontFamily:"var(--font-display)", fontSize:16, fontWeight:400, letterSpacing:4, margin:"44px 0 14px", color:"var(--accent)", borderTop:"1px solid var(--border-light)", borderBottom:"1px solid var(--border-light)", padding:"12px 0", textTransform:"uppercase" }}>{item.text}</h2>
-                <ReaderIllustrationSection title={`Act ${actNumber} Illustrations`} items={actIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} compact />
+                <ReaderIllustrationSection title={`Act ${actNumber} Illustrations`} items={actIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} onOpenLightbox={onOpenIllustrationLightbox} compact />
               </div>
             );
           }
@@ -1723,7 +1841,7 @@ function PlayView({
                 const anchoredIllustrations = sortPlacements(lineAnchors.get(lineNum) || []);
                 return (
                   <div key={lineId}>
-                    <ReaderIllustrationSection items={anchoredIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} />
+                    <ReaderIllustrationSection items={anchoredIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} onOpenLightbox={onOpenIllustrationLightbox} />
                     <AnnotatedLine lineId={lineId} text={line.text} annotsByLine={annotsByLine}
                       showAnnots={showAnnots} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot}
                       lineNum={lineNum} showNum={hasXmlN || lineNum%5===0} isBookmarked={bookmark===lineId} prosodyMode="off" onLookupTap={(event) => onLookupTap?.(event, lineId)}
@@ -1736,14 +1854,14 @@ function PlayView({
           );
           return null;
         })}
-        <ReaderIllustrationSection title={`End of Act ${actNumber}`} items={sortPlacements(actEnds.get(actNumber) || [])} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} compact />
+        <ReaderIllustrationSection title={`End of Act ${actNumber}`} items={sortPlacements(actEnds.get(actNumber) || [])} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} onOpenLightbox={onOpenIllustrationLightbox} compact />
         {supplementaryIllustrations.length > 0 && (
           <details style={{ marginTop: 26, border: "1px solid var(--border-light)", borderRadius: 12, background: "var(--surface)", padding: "10px 14px" }}>
             <summary className="reader-summary" style={{ fontFamily:"var(--font-display)", fontSize:12, letterSpacing:2, cursor:"pointer", color:"var(--text-muted)" }}>
               Supplementary Illustrations
             </summary>
             <div style={{ marginTop: 12 }}>
-              <ReaderIllustrationSection items={supplementaryIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} compact />
+              <ReaderIllustrationSection items={supplementaryIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} onOpenLightbox={onOpenIllustrationLightbox} compact />
             </div>
           </details>
         )}
@@ -1853,6 +1971,7 @@ export default function ReaderPage() {
   const [readerIllustrations, setReaderIllustrations] = useState({ placements: [], artists: [] });
   const [placementEditor, setPlacementEditor] = useState(null);
   const [savingPlacement, setSavingPlacement] = useState(false);
+  const [illustrationLightbox, setIllustrationLightbox] = useState(null);
   const [readerInspectorPinned, setReaderInspectorPinned] = useState(false);
   const [semanticSearchEnabled, setSemanticSearchEnabled] = useState(false);
   const progressRef = useRef({ maxLine:0, total:0, slug:null });
@@ -2127,8 +2246,23 @@ export default function ReaderPage() {
     setShowVisibilityPanel(false);
     setShowResearchTray(false);
     setPlacementEditor(null);
+    setIllustrationLightbox(null);
     closeReaderInspector(false);
   }, [closeReaderInspector, slug]);
+
+  useEffect(() => {
+    if (!illustrationLightbox) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setIllustrationLightbox(null);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [illustrationLightbox]);
 
   useEffect(() => {
     setLoading(true);
@@ -2327,6 +2461,11 @@ export default function ReaderPage() {
         sortOrder: String(placement.sortOrder || 0),
       },
     });
+  }, []);
+
+  const openIllustrationLightbox = useCallback((placement) => {
+    if (!placement) return;
+    setIllustrationLightbox(placement);
   }, []);
 
   const updatePlacementDraft = useCallback((patch) => {
@@ -3139,7 +3278,7 @@ export default function ReaderPage() {
             waypointsByIndex={waypointsByIndex}
             onOpenAnnotationPanel={openAnnotationInspector}
           />
-        : <PlayView data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={openAnnotationInspector} illustrations={visibleIllustrations} onEditIllustrationPlacement={isAdmin ? openIllustrationPlacementEditor : null} />
+        : <PlayView data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={openAnnotationInspector} illustrations={visibleIllustrations} onEditIllustrationPlacement={isAdmin ? openIllustrationPlacementEditor : null} onOpenIllustrationLightbox={openIllustrationLightbox} />
       }
 
       <IllustrationPlacementEditor
@@ -3156,6 +3295,11 @@ export default function ReaderPage() {
         onApplyCurrentActEnd={applyPlacementToCurrentActEnd}
         onSave={saveIllustrationPlacement}
         onClose={() => setPlacementEditor(null)}
+      />
+
+      <ReaderIllustrationLightbox
+        placement={illustrationLightbox}
+        onClose={() => setIllustrationLightbox(null)}
       />
 
       {annotationPanel && (
