@@ -42,6 +42,11 @@ function splitTags(raw) {
   )];
 }
 
+function pickEditorCard(items) {
+  const dueItems = dueChineseCards(items || []);
+  return dueItems[0] || (items || [])[0] || null;
+}
+
 const PINYIN_MODES = [
   { value: "hidden", label: "Off", note: "No pinyin prompts" },
   { value: "reveal", label: "Reveal", note: "Show it only when needed" },
@@ -218,9 +223,10 @@ export default function ChinesePage() {
       return;
     }
     const next = loadChineseStudyState();
+    const initialCard = pickEditorCard(next.items);
     setState(next);
-    setDraft(next.items[0] ? createChineseCard(next.items[0]) : createEmptyChineseCard());
-    setSelectedId(next.items[0]?.id || "");
+    setDraft(initialCard ? createChineseCard(initialCard) : createEmptyChineseCard());
+    setSelectedId(initialCard?.id || "");
     setLoaded(true);
   }, [canAccess]);
 
@@ -361,7 +367,11 @@ export default function ChinesePage() {
   const reviewCurrentCard = (rating) => {
     if (!currentCard) return;
     const updated = reviewChineseCard(currentCard, rating);
-    setState((prev) => upsertChineseStudyCard(prev, updated));
+    const next = upsertChineseStudyCard(state, updated);
+    const nextEditorCard = pickEditorCard(next.items);
+    setState(next);
+    setSelectedId(nextEditorCard?.id || "");
+    setDraft(nextEditorCard ? createChineseCard(nextEditorCard) : createEmptyChineseCard());
     toast?.success(`${currentCard.hanzi} marked ${rating}.`);
   };
 
