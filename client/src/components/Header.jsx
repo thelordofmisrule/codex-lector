@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { auth as authApi, chat as chatApi, notifications as notifApi } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
+import { canAccessChineseMode } from "../lib/privateFeatures";
 import AuthModal from "./AuthModal";
 
 const THEME_OPTIONS = [
@@ -36,6 +37,7 @@ export default function Header() {
   const nav = useNavigate();
   const loc = useLocation();
   const currentTheme = THEME_OPTIONS.find(option => option.id === themeMode) || THEME_OPTIONS[0];
+  const showChineseMode = canAccessChineseMode(user);
   const darkChrome = themeMode === "dark" || themeMode === "eva";
   const headerBackground = themeMode === "dark"
     ? "rgba(26,22,18,0.95)"
@@ -61,6 +63,7 @@ export default function Header() {
         { to:"/people", label:"People" },
         { to:"/places", label:"Places" },
         { to:"/gallery", label:"Gallery" },
+        ...(showChineseMode ? [{ to:"/chinese", label:"Chinese" }] : []),
         ...(user ? [{ to:"/my-research", label:"My Research" }] : []),
         { to:"/layers", label:"Layers" },
       ],
@@ -456,6 +459,9 @@ export default function Header() {
                     <button className="btn btn-ghost" onClick={()=>{nav("/my-bookmarks");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>🔖 My Bookmarks</button>
                     <button className="btn btn-ghost" onClick={()=>{nav("/my-research");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>🗂️ My Research</button>
                     <button className="btn btn-ghost" onClick={()=>{nav("/my-library");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>📊 My Library</button>
+                    {showChineseMode && (
+                      <button className="btn btn-ghost" onClick={()=>{nav("/chinese");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>汉 Chinese Mode</button>
+                    )}
                     <button className="btn btn-ghost" onClick={()=>{nav("/layers");setMenu(false);}} style={{ width:"100%", textAlign:"left", padding:"8px 12px", fontSize:14 }}>📚 Annotation Layers</button>
                     {user.isAdmin && (
                       <>
