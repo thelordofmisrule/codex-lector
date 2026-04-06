@@ -45,12 +45,10 @@ function splitTags(raw) {
 function StatCard({ label, value, note }) {
   return (
     <div
+      className="chinese-stat-card"
       style={{
         padding: "16px 18px",
         borderRadius: 16,
-        border: "1px solid var(--border-light)",
-        background: "linear-gradient(180deg, rgba(255,255,255,0.7) 0%, rgba(244,236,219,0.9) 100%)",
-        boxShadow: "0 12px 28px rgba(0,0,0,0.06)",
       }}
     >
       <div style={{ fontSize: 11, letterSpacing: 1.8, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 8 }}>
@@ -72,10 +70,9 @@ function ClipCard({ clip }) {
   const directVideo = isDirectVideo(clip.mediaUrl);
   return (
     <div
+      className="chinese-clip-card"
       style={{
-        border: "1px solid var(--border-light)",
         borderRadius: 14,
-        background: "var(--surface)",
         padding: 14,
         display: "grid",
         gap: 10,
@@ -136,11 +133,10 @@ function ClipCard({ clip }) {
 function ClipEditor({ clip, index, onChange, onRemove, disableRemove = false }) {
   return (
     <div
+      className="chinese-clip-editor"
       style={{
-        border: "1px solid var(--border-light)",
         borderRadius: 12,
         padding: 12,
-        background: "var(--surface)",
         display: "grid",
         gap: 8,
       }}
@@ -317,7 +313,7 @@ export default function ChinesePage() {
 
   if (!user) {
     return (
-      <div className="animate-in" style={{ maxWidth: 640, margin: "64px auto", padding: "0 24px", textAlign: "center" }}>
+      <div className="animate-in chinese-mode-locked" style={{ maxWidth: 640, margin: "64px auto", padding: "0 24px", textAlign: "center" }}>
         <h1 style={{ fontFamily: "var(--font-display)", fontSize: 28, color: "var(--accent)", marginBottom: 10 }}>Chinese Mode</h1>
         <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-fell)", fontStyle: "italic", lineHeight: 1.8 }}>
           Sign in to open your private Chinese study workspace.
@@ -328,7 +324,7 @@ export default function ChinesePage() {
 
   if (!canAccess) {
     return (
-      <div className="animate-in" style={{ maxWidth: 640, margin: "64px auto", padding: "0 24px", textAlign: "center" }}>
+      <div className="animate-in chinese-mode-locked" style={{ maxWidth: 640, margin: "64px auto", padding: "0 24px", textAlign: "center" }}>
         <h1 style={{ fontFamily: "var(--font-display)", fontSize: 28, color: "var(--accent)", marginBottom: 10 }}>Chinese Mode</h1>
         <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-fell)", fontStyle: "italic", lineHeight: 1.8 }}>
           This is a private study room and it is not enabled for your account.
@@ -342,8 +338,8 @@ export default function ChinesePage() {
   }
 
   return (
-    <div className="animate-in" style={{ maxWidth: 1220, margin: "0 auto", padding: "42px 24px 88px" }}>
-      <div style={{ maxWidth: 860, marginBottom: 28 }}>
+    <div className="animate-in chinese-mode-page" style={{ maxWidth: 1220, margin: "0 auto", padding: "42px 24px 88px" }}>
+      <div className="chinese-mode-hero" style={{ maxWidth: 860, marginBottom: 28 }}>
         <div style={{ fontSize: 12, letterSpacing: 4, textTransform: "uppercase", color: "var(--gold)", fontFamily: "var(--font-display)", marginBottom: 10 }}>
           Private Study Room
         </div>
@@ -355,7 +351,7 @@ export default function ChinesePage() {
         </p>
       </div>
 
-      <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", marginBottom: 28 }}>
+      <div className="chinese-mode-stats" style={{ display: "grid", gap: 14, marginBottom: 28 }}>
         <StatCard label="Due now" value={summary.due} note="Cards waiting in the review queue." />
         <StatCard label="New" value={summary.new} note="Fresh words you still need to anchor." />
         <StatCard label="Learning" value={summary.learning} note="Cards still cycling on shorter intervals." />
@@ -363,13 +359,11 @@ export default function ChinesePage() {
         <StatCard label="Reviewed today" value={summary.reviewedToday} note="Cards already touched in this session." />
       </div>
 
-      <div style={{ display: "grid", gap: 28, gridTemplateColumns: "minmax(0, 1.3fr) minmax(360px, 0.9fr)", alignItems: "start" }}>
+      <div className="chinese-mode-layout" style={{ display: "grid", gap: 28, alignItems: "start" }}>
         <section
+          className="chinese-panel chinese-panel-soft"
           style={{
-            border: "1px solid var(--border-light)",
             borderRadius: 20,
-            background: "linear-gradient(180deg, rgba(255,255,255,0.56) 0%, rgba(246,238,221,0.92) 100%)",
-            boxShadow: "0 18px 44px rgba(0,0,0,0.06)",
             padding: 22,
             display: "grid",
             gap: 18,
@@ -390,7 +384,7 @@ export default function ChinesePage() {
           </div>
 
           {!currentCard ? (
-            <div style={{ padding: "32px 18px", borderRadius: 18, background: "var(--surface)", border: "1px solid var(--border-light)", textAlign: "center" }}>
+            <div className="chinese-empty-state" style={{ padding: "32px 18px", borderRadius: 18, textAlign: "center" }}>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--accent)", marginBottom: 8 }}>
                 No cards due right now
               </div>
@@ -401,10 +395,9 @@ export default function ChinesePage() {
           ) : (
             <>
               <div
+                className="chinese-review-card"
                 style={{
                   borderRadius: 22,
-                  background: "var(--surface)",
-                  border: "1px solid var(--border-light)",
                   padding: "28px min(5vw, 34px)",
                   display: "grid",
                   gap: 18,
@@ -450,11 +443,10 @@ export default function ChinesePage() {
 
                       {(currentCard.example || currentCard.exampleTranslation) && (
                         <div
+                          className="chinese-example-box"
                           style={{
                             borderRadius: 16,
                             padding: 16,
-                            background: "rgba(180, 144, 64, 0.07)",
-                            border: "1px solid rgba(180, 144, 64, 0.16)",
                           }}
                         >
                           <div style={{ fontSize: 11, letterSpacing: 1.6, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 8 }}>
@@ -517,14 +509,12 @@ export default function ChinesePage() {
           )}
         </section>
 
-        <section style={{ display: "grid", gap: 18 }}>
+        <section className="chinese-mode-sidebar" style={{ display: "grid", gap: 18 }}>
           <div
+            className="chinese-panel"
             style={{
-              border: "1px solid var(--border-light)",
               borderRadius: 20,
-              background: "var(--surface)",
               padding: 20,
-              boxShadow: "0 16px 34px rgba(0,0,0,0.05)",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 12, marginBottom: 14 }}>
@@ -589,12 +579,10 @@ export default function ChinesePage() {
           </div>
 
           <div
+            className="chinese-panel"
             style={{
-              border: "1px solid var(--border-light)",
               borderRadius: 20,
-              background: "var(--surface)",
               padding: 20,
-              boxShadow: "0 16px 34px rgba(0,0,0,0.05)",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
@@ -614,7 +602,7 @@ export default function ChinesePage() {
                 No cards match that search yet.
               </div>
             ) : (
-              <div style={{ display: "grid", gap: 10 }}>
+              <div className="chinese-deck-list" style={{ display: "grid", gap: 10 }}>
                 {filteredItems.map((item) => {
                   const selected = item.id === selectedId;
                   const dueNow = new Date(item.dueAt || 0) <= new Date();
@@ -623,12 +611,11 @@ export default function ChinesePage() {
                       key={item.id}
                       type="button"
                       onClick={() => selectCardForEdit(item)}
+                      className={`chinese-deck-item${selected ? " is-selected" : ""}`}
                       style={{
                         textAlign: "left",
                         padding: "14px 16px",
                         borderRadius: 14,
-                        border: selected ? "1px solid var(--accent)" : "1px solid var(--border-light)",
-                        background: selected ? "var(--accent-faint)" : "var(--bg)",
                         cursor: "pointer",
                         display: "grid",
                         gap: 6,
