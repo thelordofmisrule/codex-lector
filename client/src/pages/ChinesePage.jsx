@@ -42,6 +42,34 @@ function splitTags(raw) {
   )];
 }
 
+const PINYIN_MODES = [
+  { value: "hidden", label: "Off", note: "No pinyin prompts" },
+  { value: "reveal", label: "Reveal", note: "Show it only when needed" },
+  { value: "always", label: "Always", note: "Keep pronunciation visible" },
+];
+
+function PinyinModeControl({ value, onChange }) {
+  return (
+    <div className="chinese-pinyin-control">
+      <div className="chinese-pinyin-control-label">Pinyin</div>
+      <div className="chinese-pinyin-segmented" role="tablist" aria-label="Pinyin display mode">
+        {PINYIN_MODES.map((mode) => (
+          <button
+            key={mode.value}
+            type="button"
+            className={`chinese-pinyin-segment${value === mode.value ? " is-active" : ""}`}
+            aria-pressed={value === mode.value}
+            onClick={() => onChange(mode.value)}
+            title={mode.note}
+          >
+            {mode.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function StatCard({ label, value, note }) {
   return (
     <div
@@ -66,7 +94,7 @@ function StatCard({ label, value, note }) {
   );
 }
 
-function ClipCard({ clip }) {
+function ClipCard({ clip, showPinyin }) {
   const directVideo = isDirectVideo(clip.mediaUrl);
   return (
     <div
@@ -90,8 +118,15 @@ function ClipCard({ clip }) {
       </div>
 
       {clip.quote && (
-        <div style={{ fontFamily: "var(--font-fell)", fontSize: 16, color: "var(--text)", lineHeight: 1.7 }}>
-          {clip.quote}
+        <div style={{ display: "grid", gap: 6 }}>
+          <div style={{ fontFamily: "\"Noto Serif SC\", var(--font-fell)", fontSize: 16, color: "var(--text)", lineHeight: 1.7 }}>
+            {clip.quote}
+          </div>
+          {showPinyin && clip.quotePinyin && (
+            <div className="chinese-pinyin-line">
+              {clip.quotePinyin}
+            </div>
+          )}
         </div>
       )}
 
@@ -152,6 +187,7 @@ function ClipEditor({ clip, index, onChange, onRemove, disableRemove = false }) 
 
       <input className="input" value={clip.title} onChange={(event) => onChange({ title: event.target.value })} placeholder="Clip label" />
       <textarea className="input" rows={2} value={clip.quote} onChange={(event) => onChange({ quote: event.target.value })} placeholder="Quote with the target word" style={{ resize: "vertical" }} />
+      <input className="input" value={clip.quotePinyin} onChange={(event) => onChange({ quotePinyin: event.target.value })} placeholder="Quote pinyin (tone marks preferred)" />
       <input className="input" value={clip.sourceLabel} onChange={(event) => onChange({ sourceLabel: event.target.value })} placeholder="Movie / show / scene" />
       <input className="input" value={clip.mediaUrl} onChange={(event) => onChange({ mediaUrl: event.target.value })} placeholder="Direct video URL or clip link" />
       <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
@@ -171,6 +207,7 @@ export default function ChinesePage() {
   const [state, setState] = useState({ items: [] });
   const [loaded, setLoaded] = useState(false);
   const [revealAnswer, setRevealAnswer] = useState(false);
+  const [revealPinyin, setRevealPinyin] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState(createEmptyChineseCard());
@@ -195,6 +232,13 @@ export default function ChinesePage() {
   const dueCards = useMemo(() => dueChineseCards(state.items), [state.items]);
   const summary = useMemo(() => summarizeChineseCards(state.items), [state.items]);
   const currentCard = dueCards[0] || null;
+  const pinyinMode = state.preferences?.pinyinMode || "reveal";
+  const currentCardHasExtraPinyin = !!(
+    currentCard?.pinyin
+    || currentCard?.examplePinyin
+    || currentCard?.clips?.some((clip) => clip.quotePinyin)
+  );
+  const showCurrentPinyin = pinyinMode === "always" || (pinyinMode === "reveal" && revealPinyin);
 
   const filteredItems = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -208,13 +252,20 @@ export default function ChinesePage() {
       || item.pinyin.toLowerCase().includes(needle)
       || item.gloss.toLowerCase().includes(needle)
       || item.example.toLowerCase().includes(needle)
+      || item.examplePinyin.toLowerCase().includes(needle)
+      || item.clips.some((clip) => (
+        clip.quote.toLowerCase().includes(needle)
+        || clip.quotePinyin.toLowerCase().includes(needle)
+        || clip.sourceLabel.toLowerCase().includes(needle)
+      ))
       || item.tags.some((tag) => tag.toLowerCase().includes(needle))
     ));
   }, [query, state.items]);
 
   useEffect(() => {
     setRevealAnswer(false);
-  }, [currentCard?.id]);
+    setRevealPinyin(pinyinMode === "always");
+  }, [currentCard?.id, pinyinMode]);
 
   const selectCardForEdit = (card) => {
     setSelectedId(card.id);
@@ -228,6 +279,17 @@ export default function ChinesePage() {
 
   const updateDraft = (patch) => {
     setDraft((prev) => createChineseCard({ ...prev, ...patch }));
+  };
+
+  const updatePinyinMode = (mode) => {
+    setState((prev) => ({
+      ...prev,
+      preferences: {
+        ...(prev?.preferences || {}),
+        pinyinMode: mode,
+      },
+    }));
+    setRevealPinyin(mode === "always");
   };
 
   const updateClip = (clipId, patch) => {
@@ -244,6 +306,7 @@ export default function ChinesePage() {
           id: `clip-${Date.now()}`,
           title: "",
           quote: "",
+          quotePinyin: "",
           sourceLabel: "",
           note: "",
           mediaUrl: "",
@@ -269,7 +332,7 @@ export default function ChinesePage() {
     const next = upsertChineseStudyCard(state, {
       ...draft,
       tags: splitTags(draft.tags?.join(", ")),
-      clips: draft.clips.filter((clip) => clip.title || clip.quote || clip.mediaUrl || clip.sourceLabel || clip.note || clip.sourceUrl),
+      clips: draft.clips.filter((clip) => clip.title || clip.quote || clip.quotePinyin || clip.mediaUrl || clip.sourceLabel || clip.note || clip.sourceUrl),
       dueAt: draft.dueAt || new Date().toISOString(),
     });
     setState(next);
@@ -347,7 +410,7 @@ export default function ChinesePage() {
           Chinese Mode
         </h1>
         <p style={{ margin: "14px 0 0", color: "var(--text-muted)", lineHeight: 1.8, fontSize: 16, maxWidth: 760 }}>
-          A private SRS workspace for learning Chinese vocabulary in context. Review a word, reveal its meaning and example sentence, then attach two or three movie or TV clips so the word gets learned through real speech rather than isolated flashcards.
+          A private SRS workspace for learning Chinese vocabulary in context. Review a word, control how much pinyin support you want, then anchor it with example sentences and movie or TV clips so the word gets learned through real speech rather than isolated flashcards.
         </p>
       </div>
 
@@ -378,9 +441,12 @@ export default function ChinesePage() {
                 {currentCard ? "Current card" : "Queue clear"}
               </div>
             </div>
-            <button className="btn btn-secondary btn-sm" onClick={copyDeckJson}>
-              Copy Deck JSON
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <PinyinModeControl value={pinyinMode} onChange={updatePinyinMode} />
+              <button className="btn btn-secondary btn-sm" onClick={copyDeckJson}>
+                Copy Deck JSON
+              </button>
+            </div>
           </div>
 
           {!currentCard ? (
@@ -416,12 +482,20 @@ export default function ChinesePage() {
                   <div style={{ fontFamily: "\"Noto Serif SC\", var(--font-display)", fontSize: "clamp(44px, 9vw, 84px)", color: "var(--accent)", lineHeight: 1.06, letterSpacing: 1 }}>
                     {currentCard.hanzi}
                   </div>
-                  {revealAnswer && currentCard.pinyin && (
-                    <div style={{ marginTop: 10, fontSize: 20, color: "var(--text-light)", letterSpacing: 0.8 }}>
+                  {showCurrentPinyin && currentCard.pinyin && (
+                    <div className="chinese-pinyin-line" style={{ marginTop: 10, fontSize: 20, letterSpacing: 0.8 }}>
                       {currentCard.pinyin}
                     </div>
                   )}
                 </div>
+
+                {pinyinMode === "reveal" && currentCardHasExtraPinyin && !showCurrentPinyin && (
+                  <div style={{ display: "flex", justifyContent: "center" }}>
+                    <button className="btn btn-ghost btn-sm chinese-inline-toggle" onClick={() => setRevealPinyin(true)}>
+                      Reveal pinyin
+                    </button>
+                  </div>
+                )}
 
                 {!revealAnswer ? (
                   <div style={{ display: "flex", justifyContent: "center" }}>
@@ -453,8 +527,15 @@ export default function ChinesePage() {
                             Sentence Context
                           </div>
                           {currentCard.example && (
-                            <div style={{ fontFamily: "\"Noto Serif SC\", var(--font-fell)", fontSize: 21, color: "var(--text)", lineHeight: 1.8 }}>
-                              {currentCard.example}
+                            <div style={{ display: "grid", gap: 8 }}>
+                              <div style={{ fontFamily: "\"Noto Serif SC\", var(--font-fell)", fontSize: 21, color: "var(--text)", lineHeight: 1.8 }}>
+                                {currentCard.example}
+                              </div>
+                              {showCurrentPinyin && currentCard.examplePinyin && (
+                                <div className="chinese-pinyin-line" style={{ fontSize: 15 }}>
+                                  {currentCard.examplePinyin}
+                                </div>
+                              )}
                             </div>
                           )}
                           {currentCard.exampleTranslation && (
@@ -478,7 +559,7 @@ export default function ChinesePage() {
                           </div>
                           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                             {currentCard.clips.map((clip) => (
-                              <ClipCard key={clip.id} clip={clip} />
+                              <ClipCard key={clip.id} clip={clip} showPinyin={showCurrentPinyin} />
                             ))}
                           </div>
                         </div>
@@ -523,7 +604,7 @@ export default function ChinesePage() {
                   {selectedId ? "Edit word" : "Add word"}
                 </div>
                 <div style={{ marginTop: 4, fontSize: 13, color: "var(--text-light)", lineHeight: 1.6 }}>
-                  Build the card around context first, then attach a few real clips.
+                  Build the card around context first, then attach a few real clips. Tone-marked pinyin works best here.
                 </div>
               </div>
               {selectedId && (
@@ -536,10 +617,11 @@ export default function ChinesePage() {
             <div style={{ display: "grid", gap: 10 }}>
               <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
                 <input className="input" value={draft.hanzi} onChange={(event) => updateDraft({ hanzi: event.target.value })} placeholder="Word" />
-                <input className="input" value={draft.pinyin} onChange={(event) => updateDraft({ pinyin: event.target.value })} placeholder="Pinyin" />
+                <input className="input" value={draft.pinyin} onChange={(event) => updateDraft({ pinyin: event.target.value })} placeholder="Pinyin (tone marks preferred)" />
               </div>
               <input className="input" value={draft.gloss} onChange={(event) => updateDraft({ gloss: event.target.value })} placeholder="Meaning / gloss" />
               <textarea className="input" rows={2} value={draft.example} onChange={(event) => updateDraft({ example: event.target.value })} placeholder="Example sentence" style={{ resize: "vertical" }} />
+              <input className="input" value={draft.examplePinyin} onChange={(event) => updateDraft({ examplePinyin: event.target.value })} placeholder="Example pinyin" />
               <textarea className="input" rows={2} value={draft.exampleTranslation} onChange={(event) => updateDraft({ exampleTranslation: event.target.value })} placeholder="Example translation" style={{ resize: "vertical" }} />
               <textarea className="input" rows={3} value={draft.notes} onChange={(event) => updateDraft({ notes: event.target.value })} placeholder="Usage notes, register, memory hooks" style={{ resize: "vertical" }} />
               <input className="input" value={draft.tags.join(", ")} onChange={(event) => updateDraft({ tags: splitTags(event.target.value) })} placeholder="Tags (comma separated)" />
@@ -626,8 +708,8 @@ export default function ChinesePage() {
                           <div style={{ fontFamily: "\"Noto Serif SC\", var(--font-display)", fontSize: 22, color: "var(--accent)", lineHeight: 1.1 }}>
                             {item.hanzi}
                           </div>
-                          {item.pinyin && (
-                            <div style={{ marginTop: 4, fontSize: 13, color: "var(--text-light)" }}>
+                          {pinyinMode === "always" && item.pinyin && (
+                            <div className="chinese-pinyin-line" style={{ marginTop: 4, fontSize: 13 }}>
                               {item.pinyin}
                             </div>
                           )}

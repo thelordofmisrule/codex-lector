@@ -358,6 +358,65 @@ a:hover { text-decoration:underline; }
   border: 1px solid var(--ch-border-light);
 }
 
+.chinese-pinyin-control {
+  display: grid;
+  gap: 8px;
+}
+
+.chinese-pinyin-control-label {
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--ch-text-light);
+  font-family: var(--font-display);
+  text-align: right;
+}
+
+.chinese-pinyin-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--ch-border-light);
+  background: rgba(255,255,255,0.38);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+.chinese-pinyin-segment {
+  border: none;
+  background: transparent;
+  color: var(--ch-text-light);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.chinese-pinyin-segment:hover {
+  color: var(--ch-accent);
+}
+
+.chinese-pinyin-segment.is-active {
+  background: var(--ch-accent);
+  color: #fffdf8;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.12);
+}
+
+.chinese-pinyin-line {
+  color: var(--ch-text-light);
+  letter-spacing: 0.4px;
+  line-height: 1.65;
+}
+
+.chinese-inline-toggle {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
 .chinese-clip-card,
 .chinese-clip-editor {
   border: 1px solid var(--ch-border-light);
@@ -370,6 +429,17 @@ a:hover { text-decoration:underline; }
 [data-theme="eva"] .chinese-clip-card,
 [data-theme="eva"] .chinese-clip-editor {
   background: rgba(255,255,255,0.02);
+}
+
+[data-theme="dark"] .chinese-pinyin-segmented,
+[data-theme="eva"] .chinese-pinyin-segmented {
+  background: rgba(255,255,255,0.03);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+[data-theme="dark"] .chinese-pinyin-segment.is-active,
+[data-theme="eva"] .chinese-pinyin-segment.is-active {
+  color: #0f1719;
 }
 
 .chinese-deck-item {
@@ -445,6 +515,10 @@ a:hover { text-decoration:underline; }
 @media (max-width: 980px) {
   .chinese-mode-layout {
     grid-template-columns: 1fr;
+  }
+
+  .chinese-pinyin-control-label {
+    text-align: left;
   }
 }
 

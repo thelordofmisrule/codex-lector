@@ -3,15 +3,17 @@ const STORAGE_KEY = "codex-chinese-study-v1";
 const SEEDED_ITEMS = [
   {
     hanzi: "结果",
-    pinyin: "jieguo",
+    pinyin: "jiéguǒ",
     gloss: "result; in the end",
     notes: "Useful both as a noun and as a discourse marker when someone is telling a story.",
     example: "我本来想早点回家，结果又加班到十一点。",
+    examplePinyin: "Wǒ běnlái xiǎng zǎodiǎn huí jiā, jiéguǒ yòu jiābān dào shíyī diǎn.",
     exampleTranslation: "I meant to get home early, but I ended up working overtime until eleven.",
     clips: [
       {
         title: "Office drama clip",
         quote: "结果老板突然说，今晚谁都别走。",
+        quotePinyin: "Jiéguǒ lǎobǎn tūrán shuō, jīnwǎn shéi dōu bié zǒu.",
         sourceLabel: "Workplace series",
         note: "Narrative pivot: the speaker sets up one expectation and then reverses it with 结果.",
         mediaUrl: "",
@@ -21,6 +23,7 @@ const SEEDED_ITEMS = [
       {
         title: "Rom-com argument",
         quote: "我等了你半天，结果你根本没来。",
+        quotePinyin: "Wǒ děng le nǐ bàntiān, jiéguǒ nǐ gēnběn méi lái.",
         sourceLabel: "Romantic comedy",
         note: "Often carries disappointment or frustration.",
         mediaUrl: "",
@@ -31,15 +34,17 @@ const SEEDED_ITEMS = [
   },
   {
     hanzi: "明白",
-    pinyin: "mingbai",
+    pinyin: "míngbai",
     gloss: "to understand; clear",
     notes: "Very high-frequency and more colloquial than 理解 in many situations.",
     example: "你先别急，我明白你的意思。",
+    examplePinyin: "Nǐ xiān bié jí, wǒ míngbai nǐ de yìsi.",
     exampleTranslation: "Don’t rush; I understand what you mean.",
     clips: [
       {
         title: "Police interrogation",
         quote: "你明白我现在在问什么吗？",
+        quotePinyin: "Nǐ míngbai wǒ xiànzài zài wèn shénme ma?",
         sourceLabel: "Crime drama",
         note: "Used to check understanding or establish seriousness.",
         mediaUrl: "",
@@ -50,15 +55,17 @@ const SEEDED_ITEMS = [
   },
   {
     hanzi: "难受",
-    pinyin: "nanshou",
+    pinyin: "nánshòu",
     gloss: "to feel awful; uncomfortable; distressed",
     notes: "Can be physical or emotional. A good word to learn through tone and context.",
     example: "听到这个消息以后，她心里特别难受。",
+    examplePinyin: "Tīng dào zhège xiāoxi yǐhòu, tā xīnlǐ tèbié nánshòu.",
     exampleTranslation: "After hearing the news, she felt terrible.",
     clips: [
       {
         title: "Hospital scene",
         quote: "我有点难受，想先躺一会儿。",
+        quotePinyin: "Wǒ yǒudiǎn nánshòu, xiǎng xiān tǎng yíhuìr.",
         sourceLabel: "Family drama",
         note: "Physical discomfort reading.",
         mediaUrl: "",
@@ -68,6 +75,7 @@ const SEEDED_ITEMS = [
       {
         title: "Breakup aftermath",
         quote: "你这样说，我真的很难受。",
+        quotePinyin: "Nǐ zhèyàng shuō, wǒ zhēnde hěn nánshòu.",
         sourceLabel: "Urban drama",
         note: "Emotional hurt reading.",
         mediaUrl: "",
@@ -106,11 +114,19 @@ function normalizeClip(clip = {}) {
     id: String(clip.id || makeId("clip")),
     title: String(clip.title || "").trim(),
     quote: String(clip.quote || "").trim(),
+    quotePinyin: String(clip.quotePinyin || "").trim(),
     sourceLabel: String(clip.sourceLabel || "").trim(),
     note: String(clip.note || "").trim(),
     mediaUrl: String(clip.mediaUrl || "").trim(),
     sourceUrl: String(clip.sourceUrl || "").trim(),
     startSeconds: Math.max(0, Number(clip.startSeconds) || 0),
+  };
+}
+
+function normalizePreferences(preferences = {}) {
+  const pinyinMode = String(preferences?.pinyinMode || "reveal");
+  return {
+    pinyinMode: ["hidden", "reveal", "always"].includes(pinyinMode) ? pinyinMode : "reveal",
   };
 }
 
@@ -123,6 +139,7 @@ export function createChineseCard(card = {}) {
     gloss: String(card.gloss || "").trim(),
     notes: String(card.notes || "").trim(),
     example: String(card.example || "").trim(),
+    examplePinyin: String(card.examplePinyin || "").trim(),
     exampleTranslation: String(card.exampleTranslation || "").trim(),
     tags: Array.isArray(card.tags)
       ? [...new Set(card.tags.map((tag) => String(tag || "").trim()).filter(Boolean))]
@@ -142,6 +159,7 @@ export function createChineseCard(card = {}) {
 function seededState() {
   return {
     items: SEEDED_ITEMS.map((item) => createChineseCard(item)),
+    preferences: normalizePreferences(),
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
@@ -152,6 +170,7 @@ function normalizeState(raw) {
   const items = Array.isArray(raw.items) ? raw.items.map(createChineseCard) : [];
   return {
     items,
+    preferences: normalizePreferences(raw.preferences),
     createdAt: String(raw.createdAt || nowIso()),
     updatedAt: String(raw.updatedAt || nowIso()),
   };
@@ -295,6 +314,7 @@ export function createEmptyChineseCard() {
     gloss: "",
     notes: "",
     example: "",
+    examplePinyin: "",
     exampleTranslation: "",
     tags: [],
     clips: [
@@ -304,4 +324,3 @@ export function createEmptyChineseCard() {
     state: "new",
   });
 }
-
