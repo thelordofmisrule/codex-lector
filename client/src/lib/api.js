@@ -9,6 +9,19 @@ async function req(path, opts={}) {
   }
   return d;
 }
+
+const workRequests = new Map();
+
+function getWork(slug) {
+  if (workRequests.has(slug)) return workRequests.get(slug);
+  const request = req(`/works/${slug}`).catch((error) => {
+    workRequests.delete(slug);
+    throw error;
+  });
+  workRequests.set(slug, request);
+  return request;
+}
+
 export const auth = {
   providers:()=>req("/auth/providers"),
   login:(u,p)=>req("/auth/login",{method:"POST",body:JSON.stringify({username:u,password:p})}),
@@ -22,7 +35,8 @@ export const auth = {
 };
 export const works = {
   list:()=>req("/works"),
-  get:s=>req(`/works/${s}`),
+  get:getWork,
+  prefetch:s=>getWork(s).catch(()=>null),
   semanticStatus:()=>req("/works/search/semantic/status"),
   searchText:(q, opts={})=>{
     const params = new URLSearchParams();

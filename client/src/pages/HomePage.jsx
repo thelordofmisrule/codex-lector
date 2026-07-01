@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { works as api } from "../lib/api";
 
@@ -11,13 +11,27 @@ const CATS = [
   { key:"apocrypha", label:"Apocrypha", icon:"❓" },
 ];
 
+const preloadReaderPage = () => import("./ReaderPage");
+
 export default function HomePage() {
   const nav = useNavigate();
+  const prefetchTimer = useRef(null);
   const [works, setWorks] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { api.list().then(setWorks).finally(()=>setLoading(false)); }, []);
+  useEffect(() => () => clearTimeout(prefetchTimer.current), []);
+
+  const scheduleReaderPrefetch = (slug) => {
+    clearTimeout(prefetchTimer.current);
+    prefetchTimer.current = setTimeout(() => {
+      preloadReaderPage();
+      api.prefetch(slug);
+    }, 120);
+  };
+
+  const cancelReaderPrefetch = () => clearTimeout(prefetchTimer.current);
 
   const filtered = search.trim() ? works.filter(w=>w.title.toLowerCase().includes(search.toLowerCase())) : works;
   const grouped = {};
@@ -84,8 +98,10 @@ export default function HomePage() {
                   textAlign:"left", fontSize:16, fontFamily:"var(--font-body)",
                   color:w.has_content?"var(--text)":"var(--text-light)", borderRadius:6,
                 }}
-                  onMouseEnter={e=>{e.currentTarget.style.background="var(--surface)";e.currentTarget.style.borderColor="var(--border-light)";}}
-                  onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="transparent";}}
+                  onMouseEnter={e=>{e.currentTarget.style.background="var(--surface)";e.currentTarget.style.borderColor="var(--border-light)";scheduleReaderPrefetch(w.slug);}}
+                  onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="transparent";cancelReaderPrefetch();}}
+                  onFocus={()=>{preloadReaderPage();api.prefetch(w.slug);}}
+                  onPointerDown={()=>{preloadReaderPage();api.prefetch(w.slug);}}
                 >
                   {w.title}
                   <span style={{ display:"inline-block", marginLeft:8, fontSize:10, letterSpacing:1, textTransform:"uppercase", color:"var(--text-light)", border:"1px solid var(--border-light)", borderRadius:999, padding:"1px 6px", verticalAlign:"middle" }}>

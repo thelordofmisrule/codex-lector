@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { startTransition, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { works as worksApi, annotations as annotsApi, discussions as discApi, bookmarks as bmApi, progress as progApi, researchTray as researchTrayApi, layers as layersApi, analytics as analyticsApi, prosody as prosodyApi, readerIllustrations as readerIllustrationsApi } from "../lib/api";
@@ -28,6 +28,8 @@ const PROSODY_MODES = [
 
 const MOBILE_READER_BREAKPOINT = 860;
 const DESKTOP_PINNED_INSPECTOR_SPACE = 412;
+const INITIAL_READER_ITEMS = 180;
+const READER_ITEM_CHUNK = 240;
 
 const WORK_PRINT_DOWNLOADS = {
   "the rape of lucrece": [
@@ -1755,7 +1757,35 @@ function PlayView({
   illustrations = [],
   onEditIllustrationPlacement = null,
   onOpenIllustrationLightbox = null,
+  renderAllInitially = false,
 }) {
+  const [visibleItemCount, setVisibleItemCount] = useState(() => (
+    renderAllInitially ? data.lines.length : Math.min(INITIAL_READER_ITEMS, data.lines.length)
+  ));
+  const allItemsVisible = visibleItemCount >= data.lines.length;
+
+  useEffect(() => {
+    if (renderAllInitially) {
+      setVisibleItemCount(data.lines.length);
+      return undefined;
+    }
+
+    let current = Math.min(INITIAL_READER_ITEMS, data.lines.length);
+    let timer = null;
+    setVisibleItemCount(current);
+
+    const appendNextChunk = () => {
+      current = Math.min(data.lines.length, current + READER_ITEM_CHUNK);
+      startTransition(() => setVisibleItemCount(current));
+      if (current < data.lines.length) timer = window.setTimeout(appendNextChunk, 40);
+    };
+
+    if (current < data.lines.length) timer = window.setTimeout(appendNextChunk, 80);
+    return () => {
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [data.lines, renderAllInitially]);
+
   let lineNum = 0;
   let readingIndex = 0;
   let actNumber = 0;
@@ -1811,7 +1841,7 @@ function PlayView({
       <ReaderIllustrationSection title="Dramatis Illustrations" items={dramatisIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} onOpenLightbox={onOpenIllustrationLightbox} compact />
       <ReaderIllustrationSection title="Frontispieces and Featured Plates" items={featuredIllustrations} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} onOpenLightbox={onOpenIllustrationLightbox} compact />
       <div style={{ marginBottom:32 }}>
-        {data.lines.map((item, idx) => {
+        {data.lines.slice(0, visibleItemCount).map((item, idx) => {
           if (item.type==="act") {
             const trailingActIllustrations = actNumber > 0 ? sortPlacements(actEnds.get(actNumber) || []) : [];
             actNumber += 1;
@@ -1827,7 +1857,7 @@ function PlayView({
           if (item.type==="scene") return <h3 key={idx} className="reader-scene-heading" style={{ textAlign:"center", fontSize:15, fontWeight:400, fontStyle:"italic", color:"var(--text-muted)", margin:"24px 0 12px", letterSpacing:1, fontFamily:"var(--font-fell)" }}>{item.text}</h3>;
           if (item.type==="stagedir") return <div key={idx} className="reader-stage-direction" style={{ textAlign:"center", fontStyle:"italic", color:"var(--text-muted)", margin:"8px 0", fontSize:"0.9em", fontFamily:"var(--font-fell)" }}>[{item.text}]</div>;
           if (item.type==="speech") return (
-            <div key={idx} style={{ marginBottom:12 }}>
+            <div key={idx} className="reader-speech-block" style={{ marginBottom:12 }}>
               {item.speaker && (
                 <div className="reader-speaker" style={{ fontFamily:"var(--font-display)", fontWeight:600, fontSize:13, letterSpacing:2, color:"var(--accent)", marginBottom:2, paddingLeft:48, textTransform:"uppercase" }}>{item.speaker}</div>
               )}
@@ -1854,8 +1884,13 @@ function PlayView({
           );
           return null;
         })}
-        <ReaderIllustrationSection title={`End of Act ${actNumber}`} items={sortPlacements(actEnds.get(actNumber) || [])} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} onOpenLightbox={onOpenIllustrationLightbox} compact />
-        {supplementaryIllustrations.length > 0 && (
+        {!allItemsVisible && (
+          <div style={{ padding:"20px 0", textAlign:"center", color:"var(--text-light)", fontSize:12, fontFamily:"var(--font-fell)", fontStyle:"italic" }}>
+            Preparing the rest of the text…
+          </div>
+        )}
+        {allItemsVisible && <ReaderIllustrationSection title={`End of Act ${actNumber}`} items={sortPlacements(actEnds.get(actNumber) || [])} isAdmin={isAdmin} onEditPlacement={onEditIllustrationPlacement} onOpenLightbox={onOpenIllustrationLightbox} compact />}
+        {allItemsVisible && supplementaryIllustrations.length > 0 && (
           <details style={{ marginTop: 26, border: "1px solid var(--border-light)", borderRadius: 12, background: "var(--surface)", padding: "10px 14px" }}>
             <summary className="reader-summary" style={{ fontFamily:"var(--font-display)", fontSize:12, letterSpacing:2, cursor:"pointer", color:"var(--text-muted)" }}>
               Supplementary Illustrations
@@ -1895,7 +1930,7 @@ function PoetryView({
   return (
     <div style={{ marginBottom:32 }}>
       {data.sections.map((sec, si) => (
-        <div key={si} style={{ marginBottom:28 }}>
+        <div key={si} className="reader-poetry-section" style={{ marginBottom:28 }}>
           {(sec.title || sec.heading) && <h3 style={{ fontFamily:"var(--font-display)", fontSize:16, letterSpacing:2, color:"var(--accent)", margin:"20px 0 10px", textAlign:"center" }}>{sec.title || sec.heading}</h3>}
           {sec.lines.map((line, li) => {
             if (line.type==="stagedir") return <div key={li} className="reader-stage-direction" style={{ textAlign:"center", fontStyle:"italic", color:"var(--text-muted)", margin:"4px 0", fontSize:"0.85em" }}>[{line.text}]</div>;
@@ -1977,12 +2012,16 @@ export default function ReaderPage() {
   const progressRef = useRef({ maxLine:0, total:0, slug:null });
   const trackedSlugRef = useRef("");
   const selectionLookupRef = useRef(0);
-  const parsed = work?.content ? parsePlayShakespeareXML(work.content, work.title, work.category) : null;
+  const parsed = useMemo(() => (
+    work?.content ? parsePlayShakespeareXML(work.content, work.title, work.category) : null
+  ), [work?.category, work?.content, work?.title]);
   const peopleGraph = useMemo(() => {
     if (!work?.content || parsed?.type !== "play") return null;
     return buildPeopleGraphFromXML(work.content, work.title, work.category);
   }, [parsed?.type, work?.category, work?.content, work?.title]);
-  const lineMetaIndex = parsed ? buildLineMetaIndex(parsed) : {};
+  const lineMetaIndex = useMemo(() => (
+    parsed ? buildLineMetaIndex(parsed) : {}
+  ), [parsed]);
   const lineMetaByNumber = useMemo(() => {
     const map = new Map();
     Object.values(lineMetaIndex).forEach((meta) => {
@@ -2264,31 +2303,80 @@ export default function ReaderPage() {
     };
   }, [illustrationLightbox]);
 
+  // The text is the critical path. Show it as soon as it arrives instead of
+  // waiting for annotations, discussions, illustrations, and account data.
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
+    setWork(null);
+
+    worksApi.get(slug)
+      .then((nextWork) => {
+        if (!cancelled) setWork(nextWork);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error(error);
+        if (error?.status !== 404) toast?.error("Could not load this work. Please refresh.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, toast]);
+
+  // Public reader extras hydrate after the play is already visible.
+  useEffect(() => {
+    let cancelled = false;
+    setDisc([]);
+    setProsodyOverrides({});
+    applyReaderIllustrationData({ placements: [], artists: [] });
+
     Promise.all([
-      worksApi.get(slug),
-      annotsApi.forWork(slug, "all").catch(()=>[]),
       discApi.forWork(slug).catch(()=>[]),
-      user ? bmApi.forWork(slug).catch(()=>null) : Promise.resolve(null),
-      user ? layersApi.list().catch(()=>[]) : Promise.resolve([]),
       prosodyApi.forWork(slug).catch(()=>({ overrides: [] })),
       readerIllustrationsApi.forWork(slug).catch(()=>({ placements: [], artists: [] })),
-    ])
-      .then(([w,a,d,bm,layers,prosodyData,illustrationData]) => {
-        setWork(w); setAnnots(a); setDisc(d);
-        if(bm) setBookmark(bm.line_id);
-        setLayerCatalog(layers || []);
-        setMyLayers((layers||[]).filter(l => l.isOwner));
-        setProsodyOverrides(Object.fromEntries((prosodyData?.overrides || []).map((item) => [item.lineKey, item])));
-        applyReaderIllustrationData(illustrationData);
-      })
-      .catch(e => {
-        console.error(e);
-        if (e?.status !== 404) toast?.error("Could not load this work. Please refresh.");
-      })
-      .finally(() => setLoading(false));
-  }, [applyReaderIllustrationData, slug, user, toast]);
+    ]).then(([discussionData, prosodyData, illustrationData]) => {
+      if (cancelled) return;
+      setDisc(discussionData);
+      setProsodyOverrides(Object.fromEntries((prosodyData?.overrides || []).map((item) => [item.lineKey, item])));
+      applyReaderIllustrationData(illustrationData);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyReaderIllustrationData, slug]);
+
+  // Wait for the session check before loading personalized annotations so the
+  // reader does not request the work again when auth state settles.
+  useEffect(() => {
+    if (!authReady) return undefined;
+    let cancelled = false;
+    setAnnots([]);
+    setBookmark(null);
+    setLayerCatalog([]);
+    setMyLayers([]);
+
+    Promise.all([
+      annotsApi.forWork(slug, "all").catch(()=>[]),
+      user ? bmApi.forWork(slug).catch(()=>null) : Promise.resolve(null),
+      user ? layersApi.list().catch(()=>[]) : Promise.resolve([]),
+    ]).then(([annotationData, bookmarkData, layers]) => {
+      if (cancelled) return;
+      setAnnots(annotationData);
+      setBookmark(bookmarkData?.line_id || null);
+      setLayerCatalog(layers || []);
+      setMyLayers((layers || []).filter((layer) => layer.isOwner));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, slug, user?.id]);
 
   // Track reading progress on scroll
   useEffect(() => {
@@ -3278,7 +3366,7 @@ export default function ReaderPage() {
             waypointsByIndex={waypointsByIndex}
             onOpenAnnotationPanel={openAnnotationInspector}
           />
-        : <PlayView data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={openAnnotationInspector} illustrations={visibleIllustrations} onEditIllustrationPlacement={isAdmin ? openIllustrationPlacementEditor : null} onOpenIllustrationLightbox={openIllustrationLightbox} />
+        : <PlayView key={work.id} data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={openAnnotationInspector} illustrations={visibleIllustrations} onEditIllustrationPlacement={isAdmin ? openIllustrationPlacementEditor : null} onOpenIllustrationLightbox={openIllustrationLightbox} renderAllInitially={!!(resumeLine || bookmark)} />
       }
 
       <IllustrationPlacementEditor
