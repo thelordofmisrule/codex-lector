@@ -887,7 +887,9 @@ r.get("/search/semantic", async (req, res) => {
 r.get("/:slug", (req, res) => {
   const w = db.prepare("SELECT * FROM works WHERE slug=?").get(req.params.slug);
   if (!w) return res.status(404).json({ error: "Not found." });
-  res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=3600");
+  // Canonical text changes only when the corpus is re-imported. Keep it in the
+  // browser cache so returning to a play does not transfer ~100 KB again.
+  res.set("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
   res.json(enrichWork(w, buildWorkLookup()));
 });
 

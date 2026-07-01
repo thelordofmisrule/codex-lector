@@ -2015,13 +2015,42 @@ export default function ReaderPage() {
   const parsed = useMemo(() => (
     work?.content ? parsePlayShakespeareXML(work.content, work.title, work.category) : null
   ), [work?.category, work?.content, work?.title]);
-  const peopleGraph = useMemo(() => {
-    if (!work?.content || parsed?.type !== "play") return null;
-    return buildPeopleGraphFromXML(work.content, work.title, work.category);
-  }, [parsed?.type, work?.category, work?.content, work?.title]);
-  const lineMetaIndex = useMemo(() => (
-    parsed ? buildLineMetaIndex(parsed) : {}
-  ), [parsed]);
+  const [peopleGraph, setPeopleGraph] = useState(null);
+  const [lineMetaIndex, setLineMetaIndex] = useState({});
+
+  // People relationships parse the full XML a second time, while the line
+  // index walks every line. Neither is needed to paint the opening page, so
+  // build both after the browser has had a chance to show the text.
+  useEffect(() => {
+    setPeopleGraph(null);
+    setLineMetaIndex({});
+    if (!parsed) return undefined;
+
+    let cancelled = false;
+    const buildReaderIndexes = () => {
+      if (cancelled) return;
+      const nextLineMetaIndex = buildLineMetaIndex(parsed);
+      const nextPeopleGraph = work?.content && parsed.type === "play"
+        ? buildPeopleGraphFromXML(work.content, work.title, work.category)
+        : null;
+      if (cancelled) return;
+      startTransition(() => {
+        setLineMetaIndex(nextLineMetaIndex);
+        setPeopleGraph(nextPeopleGraph);
+      });
+    };
+
+    const idleId = typeof window.requestIdleCallback === "function"
+      ? window.requestIdleCallback(buildReaderIndexes, { timeout: 2500 })
+      : window.setTimeout(buildReaderIndexes, 250);
+
+    return () => {
+      cancelled = true;
+      if (typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(idleId);
+      else window.clearTimeout(idleId);
+    };
+  }, [parsed, work?.category, work?.content, work?.title]);
+
   const lineMetaByNumber = useMemo(() => {
     const map = new Map();
     Object.values(lineMetaIndex).forEach((meta) => {
