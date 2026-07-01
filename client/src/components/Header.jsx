@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { auth as authApi, chat as chatApi, notifications as notifApi } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
 import { canAccessChineseMode } from "../lib/privateFeatures";
-import AuthModal from "./AuthModal";
+
+const AuthModal = lazy(() => import("./AuthModal"));
 
 const THEME_OPTIONS = [
   { id:"light", label:"Light", icon:"☀️", note:"Parchment and candlelight" },
@@ -492,7 +493,11 @@ export default function Header() {
           </div>
         </div>
       </header>
-      {showAuth && <AuthModal onClose={()=>setShowAuth(false)} />}
+      {showAuth && (
+        <Suspense fallback={null}>
+          <AuthModal onClose={()=>setShowAuth(false)} />
+        </Suspense>
+      )}
     </>
   );
 }

@@ -3,6 +3,7 @@ try { require("dotenv").config(); } catch {}
 require("./logger").initLogger();
 
 const express = require("express");
+const compression = require("compression");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const session = require("express-session");
@@ -34,6 +35,7 @@ if (process.env.NODE_ENV === "production") {
 }
 
 /* ── Middleware ── */
+app.use(compression());
 app.use(express.json({ limit:"50mb" }));
 app.use(cookieParser());
 
