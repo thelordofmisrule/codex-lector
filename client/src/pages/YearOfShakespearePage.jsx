@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { works as worksApi, progress as progressApi } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
+import { YEAR_READING_GUIDE_BY_WORK } from "../data/yearOfShakespeareReadingGuide";
 import {
   buildCalendarWorkLookup,
   YEAR_OF_SHAKESPEARE_ROWS,
@@ -20,8 +21,16 @@ export default function YearOfShakespearePage() {
   const [monthFilter, setMonthFilter] = useState("all");
   const [workLookup, setWorkLookup] = useState({});
   const [progressBySlug, setProgressBySlug] = useState({});
+  const pageTopRef = useRef(null);
+  const didJumpToTodayRef = useRef(false);
 
-  const rows = YEAR_OF_SHAKESPEARE_ROWS;
+  const rows = useMemo(
+    () => YEAR_OF_SHAKESPEARE_ROWS.map((row) => ({
+      ...row,
+      reason: YEAR_READING_GUIDE_BY_WORK[row.works] || row.reason,
+    })),
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +105,23 @@ export default function YearOfShakespearePage() {
     }, {});
   }, [filtered]);
 
+  useEffect(() => {
+    if (didJumpToTodayRef.current || !rows.some((row) => row.date === todayIso)) return undefined;
+    let secondFrame = null;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const todayRow = document.getElementById(`year-day-${todayIso}`);
+        if (!todayRow) return;
+        didJumpToTodayRef.current = true;
+        todayRow.scrollIntoView({ block: "center" });
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame !== null) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [rows, todayIso]);
+
   const uniqueWorks = useMemo(() => new Set(rows.map(r => r.works).filter(Boolean)).size, [rows]);
 
   const openWithResume = (slug) => {
@@ -105,7 +131,7 @@ export default function YearOfShakespearePage() {
   };
 
   return (
-    <div className="animate-in year-page" style={{ maxWidth: 1160, margin: "0 auto", padding: "40px 24px 56px" }}>
+    <div ref={pageTopRef} className="animate-in year-page" style={{ maxWidth: 1160, margin: "0 auto", padding: "40px 24px 56px" }}>
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontFamily: "var(--font-display)", fontSize: 12, letterSpacing: 4, textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
           Reading Program
@@ -114,7 +140,10 @@ export default function YearOfShakespearePage() {
           Year of Shakespeare (2026-2027)
         </h1>
         <p style={{ marginTop: 12, marginBottom: 0, color: "var(--text-muted)", lineHeight: 1.75, maxWidth: 860 }}>
-          A daily reading calendar mapped to seasonal arcs, anchor moments, and thematic progression across plays and poems.
+          Read Shakespeare across a full year, beginning on March 11, 2026. Each date pairs a play or poem with a seasonal theme, historical anniversary, feast day, or idea that gives the reading a wider context.
+        </p>
+        <p style={{ marginTop: 8, marginBottom: 0, color: "var(--text-muted)", lineHeight: 1.75, maxWidth: 860 }}>
+          Open the listed work and read at your own pace. Longer works span several dates, with markers inside the reader showing a manageable stopping point for each day.
         </p>
       </div>
 
@@ -140,7 +169,7 @@ export default function YearOfShakespearePage() {
           className="input"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Search work, anchor, or reason…"
+          placeholder="Search works, themes, or reading notes…"
           style={{ minWidth: 250 }}
         />
         <select className="input" value={kindFilter} onChange={e => setKindFilter(e.target.value)} style={{ minWidth: 170 }}>
@@ -187,10 +216,11 @@ export default function YearOfShakespearePage() {
                     .filter((action, idx, arr) => action?.slug && arr.findIndex(a => a.slug === action.slug) === idx);
                   const isToday = row.date === todayIso;
                   return (
-                    <div key={row.id} className="year-row" style={{
+                    <div id={`year-day-${row.date}`} key={row.id} className="year-row" style={{
                       padding: "12px 14px",
                       borderBottom: "1px solid var(--border-light)",
                       background: isToday ? "rgba(122,30,46,0.08)" : "transparent",
+                      scrollMarginTop: 24,
                     }}>
                       <div className="year-row-header" style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
                         <div className="year-row-date" style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
@@ -213,7 +243,7 @@ export default function YearOfShakespearePage() {
                       </div>
                       {row.anchor && (
                         <div style={{ color: "var(--gold)", fontSize: 13, marginBottom: 4 }}>
-                          Anchor: {row.anchor}
+                          Reading focus: {row.anchor}
                         </div>
                       )}
                       {row.reason && (
@@ -241,6 +271,23 @@ export default function YearOfShakespearePage() {
           ))}
         </div>
       )}
+
+      <button
+        className="btn btn-secondary btn-sm"
+        type="button"
+        aria-label="Back to the top of the calendar"
+        title="Back to top"
+        onClick={() => pageTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+        style={{
+          position: "fixed",
+          right: "clamp(12px, 2vw, 28px)",
+          bottom: 22,
+          zIndex: 90,
+          boxShadow: "0 6px 20px var(--shadow)",
+        }}
+      >
+        ↑ Top
+      </button>
     </div>
   );
 }
