@@ -28,6 +28,9 @@ const MOBILE_READER_BREAKPOINT = 860;
 const DESKTOP_PINNED_INSPECTOR_SPACE = 412;
 const INITIAL_READER_ITEMS = 60;
 const READER_ITEM_CHUNK = 120;
+// Keep the reader illustration system and placement data intact while the
+// presentation is being reconsidered. The standalone gallery is unaffected.
+const READER_ILLUSTRATIONS_ENABLED = false;
 
 const WORK_PRINT_DOWNLOADS = {
   "the rape of lucrece": [
@@ -2536,7 +2539,9 @@ export default function ReaderPage() {
       parsed?.type === "poetry"
         ? prosodyApi.forWork(slug).catch(()=>({ overrides: [] }))
         : Promise.resolve({ overrides: [] }),
-      readerIllustrationsApi.forWork(slug).catch(()=>({ placements: [], artists: [] })),
+      READER_ILLUSTRATIONS_ENABLED
+        ? readerIllustrationsApi.forWork(slug).catch(()=>({ placements: [], artists: [] }))
+        : Promise.resolve({ placements: [], artists: [] }),
     ]).then(([prosodyData, illustrationData]) => {
       if (cancelled) return;
       setProsodyOverrides(Object.fromEntries((prosodyData?.overrides || []).map((item) => [item.lineKey, item])));
@@ -3291,7 +3296,7 @@ export default function ReaderPage() {
   const activeIllustrationArtist = availableIllustrationArtists.some((artist) => artist.key === readerVisibility.illustrationArtist)
     ? readerVisibility.illustrationArtist
     : "all";
-  const visibleIllustrations = readerVisibility.showIllustrations === false
+  const visibleIllustrations = !READER_ILLUSTRATIONS_ENABLED || readerVisibility.showIllustrations === false
     ? []
     : (readerIllustrations.placements || []).filter((placement) => (
       activeIllustrationArtist === "all" || placement.artistKey === activeIllustrationArtist
@@ -3412,7 +3417,7 @@ export default function ReaderPage() {
             visibility={readerVisibility}
             onToggleGlobal={(checked) => setReaderVisibility((prev) => ({ ...prev, showGlobal: checked }))}
             onTogglePersonal={(checked) => setReaderVisibility((prev) => ({ ...prev, showPersonal: checked }))}
-            illustrationCount={(readerIllustrations.placements || []).length}
+            illustrationCount={READER_ILLUSTRATIONS_ENABLED ? (readerIllustrations.placements || []).length : 0}
             illustrationArtists={availableIllustrationArtists}
             selectedIllustrationArtist={activeIllustrationArtist}
             onToggleIllustrations={(checked) => setReaderVisibility((prev) => ({ ...prev, showIllustrations: checked }))}
@@ -3577,29 +3582,33 @@ export default function ReaderPage() {
             waypointsByIndex={waypointsByIndex}
             onOpenAnnotationPanel={openAnnotationInspector}
           />
-        : <PlayView key={work.id} data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={openAnnotationInspector} illustrations={visibleIllustrations} onEditIllustrationPlacement={isAdmin ? openIllustrationPlacementEditor : null} onOpenIllustrationLightbox={openIllustrationLightbox} initialVisibleItemCount={initialPlayItemCount} />
+        : <PlayView key={work.id} data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={openAnnotationInspector} illustrations={visibleIllustrations} onEditIllustrationPlacement={READER_ILLUSTRATIONS_ENABLED && isAdmin ? openIllustrationPlacementEditor : null} onOpenIllustrationLightbox={READER_ILLUSTRATIONS_ENABLED ? openIllustrationLightbox : null} initialVisibleItemCount={initialPlayItemCount} />
       }
 
-      <IllustrationPlacementEditor
-        open={!!placementEditor}
-        placement={placementEditorPlacement}
-        draft={placementEditor?.draft || null}
-        currentViewportLine={placementEditorViewportMeta?.lineNum || 0}
-        currentViewportAct={placementEditorViewportMeta?.actNum || 0}
-        lineContext={placementEditorLineContext}
-        saving={savingPlacement}
-        onChange={updatePlacementDraft}
-        onApplyCurrentLine={applyPlacementToCurrentLine}
-        onApplyCurrentActStart={applyPlacementToCurrentActStart}
-        onApplyCurrentActEnd={applyPlacementToCurrentActEnd}
-        onSave={saveIllustrationPlacement}
-        onClose={() => setPlacementEditor(null)}
-      />
+      {READER_ILLUSTRATIONS_ENABLED && (
+        <>
+          <IllustrationPlacementEditor
+            open={!!placementEditor}
+            placement={placementEditorPlacement}
+            draft={placementEditor?.draft || null}
+            currentViewportLine={placementEditorViewportMeta?.lineNum || 0}
+            currentViewportAct={placementEditorViewportMeta?.actNum || 0}
+            lineContext={placementEditorLineContext}
+            saving={savingPlacement}
+            onChange={updatePlacementDraft}
+            onApplyCurrentLine={applyPlacementToCurrentLine}
+            onApplyCurrentActStart={applyPlacementToCurrentActStart}
+            onApplyCurrentActEnd={applyPlacementToCurrentActEnd}
+            onSave={saveIllustrationPlacement}
+            onClose={() => setPlacementEditor(null)}
+          />
 
-      <ReaderIllustrationLightbox
-        placement={illustrationLightbox}
-        onClose={() => setIllustrationLightbox(null)}
-      />
+          <ReaderIllustrationLightbox
+            placement={illustrationLightbox}
+            onClose={() => setIllustrationLightbox(null)}
+          />
+        </>
+      )}
 
       {annotationPanel && (
         <AnnotationPopover
