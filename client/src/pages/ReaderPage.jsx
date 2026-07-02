@@ -1,24 +1,22 @@
-import { startTransition, useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { lazy, startTransition, Suspense, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { works as worksApi, annotations as annotsApi, discussions as discApi, bookmarks as bmApi, progress as progApi, researchTray as researchTrayApi, layers as layersApi, analytics as analyticsApi, prosody as prosodyApi, readerIllustrations as readerIllustrationsApi } from "../lib/api";
 import { useConfirm } from "../lib/ConfirmContext";
 import { useToast } from "../lib/ToastContext";
 import { parsePlayShakespeareXML } from "../lib/textParser";
-import { buildPeopleGraphFromXML } from "../lib/peopleGraph";
 import { preservedAnnotationTextStyle, quotedExcerpt, smartenAnnotationText } from "../lib/annotationFormat";
 import { findPlaceAwarenessMatch, warmPlaceAwarenessIndex } from "../lib/placeAwareness";
 import { analyzeProsodyLine, parseProsodyScan } from "../lib/prosody";
 import { clearResearchTray, loadResearchTray, removeResearchTrayItem, saveResearchTray, upsertResearchTrayItem } from "../lib/researchTray";
-import { hasBookshelfForWork } from "../lib/shakespeareBookshelf";
-import { YEAR_OF_SHAKESPEARE_ROWS, buildReadingWaypoints, getCalendarRowsForWork } from "../lib/yearOfShakespeare";
 import { ANNOTATION_KINDS as ANNOT_TYPES, DEFAULT_ANNOTATION_COLOR, getAnnotationColor, getAnnotationKind, getAnnotationKindId } from "../lib/annotationKinds";
-import PlaceAwareness from "../components/PlaceAwareness";
-import QuoteCaptureModal from "../components/QuoteCaptureModal";
 import ReaderOverlayShell from "../components/ReaderOverlayShell";
-import ResearchTray from "../components/ResearchTray";
-import ThreadedComments from "../components/ThreadedComments";
-import WordLookup from "../components/WordLookup";
+
+const PlaceAwareness = lazy(() => import("../components/PlaceAwareness"));
+const QuoteCaptureModal = lazy(() => import("../components/QuoteCaptureModal"));
+const ResearchTray = lazy(() => import("../components/ResearchTray"));
+const ThreadedComments = lazy(() => import("../components/ThreadedComments"));
+const WordLookup = lazy(() => import("../components/WordLookup"));
 
 const PROSODY_MODES = [
   { id: "off", label: "Off" },
@@ -28,8 +26,8 @@ const PROSODY_MODES = [
 
 const MOBILE_READER_BREAKPOINT = 860;
 const DESKTOP_PINNED_INSPECTOR_SPACE = 412;
-const INITIAL_READER_ITEMS = 180;
-const READER_ITEM_CHUNK = 240;
+const INITIAL_READER_ITEMS = 60;
+const READER_ITEM_CHUNK = 120;
 
 const WORK_PRINT_DOWNLOADS = {
   "the rape of lucrece": [
@@ -647,6 +645,103 @@ function countRenderableLines(data) {
     if (item.type !== "speech") return total;
     return total + (item.lines || []).filter((line) => line.type !== "stagedir" && line.text).length;
   }, 0);
+}
+
+function getInitialPlayItemCount(data, resumeLine, bookmark) {
+  if (!data?.lines?.length) return 0;
+  let target = Math.min(INITIAL_READER_ITEMS, data.lines.length);
+
+  const bookmarkMatch = String(bookmark || "").match(/^l-(\d+)-/);
+  if (bookmarkMatch) {
+    target = Math.max(target, Number(bookmarkMatch[1]) + 1);
+  }
+
+  if (resumeLine > 0) {
+    let renderedLines = 0;
+    let foundTarget = false;
+    for (let index = 0; index < data.lines.length; index += 1) {
+      const item = data.lines[index];
+      if (item.type === "speech") {
+        renderedLines += (item.lines || []).filter((line) => line.type !== "stagedir" && line.text).length;
+      }
+      if (renderedLines >= resumeLine) {
+        target = Math.max(target, index + 1);
+        foundTarget = true;
+        break;
+      }
+    }
+    if (!foundTarget) target = data.lines.length;
+  }
+
+  return Math.min(target, data.lines.length);
+}
+
+function DeferredDiscussion({ slug }) {
+  const containerRef = useRef(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const [comments, setComments] = useState([]);
+
+  useEffect(() => {
+    if (shouldLoad) return undefined;
+    const node = containerRef.current;
+    if (!node || typeof IntersectionObserver !== "function") {
+      setShouldLoad(true);
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      setShouldLoad(true);
+      observer.disconnect();
+    }, { rootMargin:"900px 0px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [shouldLoad]);
+
+  useEffect(() => {
+    if (!shouldLoad) return undefined;
+    let cancelled = false;
+    discApi.forWork(slug)
+      .then((items) => {
+        if (!cancelled) setComments(items);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldLoad, slug]);
+
+  const postComment = async (body, parentId) => {
+    const comment = await discApi.post(slug, body, parentId);
+    setComments((current) => [...current, comment]);
+  };
+  const editComment = async (id, body) => {
+    await discApi.edit(id, body);
+    setComments((current) => current.map((comment) => (
+      comment.id === id ? { ...comment, body, updatedAt:new Date().toISOString() } : comment
+    )));
+  };
+  const deleteComment = async (id) => {
+    await discApi.delete(id);
+    setComments((current) => current.filter((comment) => comment.id !== id));
+  };
+
+  return (
+    <div ref={containerRef} style={{ minHeight:shouldLoad ? 0 : 1 }}>
+      {shouldLoad && (
+        <Suspense fallback={null}>
+          <ThreadedComments
+            comments={comments}
+            onPost={postComment}
+            onEdit={editComment}
+            onDelete={deleteComment}
+            label="Discussion"
+            draftKey={`work:${slug}:discussion`}
+          />
+        </Suspense>
+      )}
+    </div>
+  );
 }
 
 function PoetryFrontMatter({ frontMatter }) {
@@ -1757,34 +1852,51 @@ function PlayView({
   illustrations = [],
   onEditIllustrationPlacement = null,
   onOpenIllustrationLightbox = null,
-  renderAllInitially = false,
+  initialVisibleItemCount = INITIAL_READER_ITEMS,
 }) {
   const [visibleItemCount, setVisibleItemCount] = useState(() => (
-    renderAllInitially ? data.lines.length : Math.min(INITIAL_READER_ITEMS, data.lines.length)
+    Math.min(Math.max(INITIAL_READER_ITEMS, initialVisibleItemCount), data.lines.length)
   ));
+  const visibleItemCountRef = useRef(visibleItemCount);
   const allItemsVisible = visibleItemCount >= data.lines.length;
 
   useEffect(() => {
-    if (renderAllInitially) {
-      setVisibleItemCount(data.lines.length);
-      return undefined;
-    }
-
-    let current = Math.min(INITIAL_READER_ITEMS, data.lines.length);
-    let timer = null;
+    let current = Math.min(
+      Math.max(visibleItemCountRef.current, INITIAL_READER_ITEMS, initialVisibleItemCount),
+      data.lines.length,
+    );
+    let scheduledId = null;
+    let scheduledWithIdleCallback = false;
+    visibleItemCountRef.current = current;
     setVisibleItemCount(current);
 
     const appendNextChunk = () => {
       current = Math.min(data.lines.length, current + READER_ITEM_CHUNK);
+      visibleItemCountRef.current = current;
       startTransition(() => setVisibleItemCount(current));
-      if (current < data.lines.length) timer = window.setTimeout(appendNextChunk, 40);
+      if (current < data.lines.length) scheduleNextChunk();
     };
 
-    if (current < data.lines.length) timer = window.setTimeout(appendNextChunk, 80);
-    return () => {
-      if (timer) window.clearTimeout(timer);
+    const scheduleNextChunk = () => {
+      if (typeof window.requestIdleCallback === "function") {
+        scheduledWithIdleCallback = true;
+        scheduledId = window.requestIdleCallback(appendNextChunk, { timeout: 1200 });
+      } else {
+        scheduledWithIdleCallback = false;
+        scheduledId = window.setTimeout(appendNextChunk, 180);
+      }
     };
-  }, [data.lines, renderAllInitially]);
+
+    if (current < data.lines.length) scheduleNextChunk();
+    return () => {
+      if (!scheduledId) return;
+      if (scheduledWithIdleCallback && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(scheduledId);
+      } else {
+        window.clearTimeout(scheduledId);
+      }
+    };
+  }, [data.lines, initialVisibleItemCount]);
 
   let lineNum = 0;
   let readingIndex = 0;
@@ -1976,7 +2088,6 @@ export default function ReaderPage() {
   const userId = user?.id;
   const [work, setWork] = useState(null);
   const [annots, setAnnots] = useState([]);
-  const [disc, setDisc] = useState([]);
   const [loading, setLoading] = useState(true);
   const [annotationPanel, setAnnotationPanel] = useState(null);
   const [fontSize, setFontSize] = useState(() => {
@@ -2009,35 +2120,56 @@ export default function ReaderPage() {
   const [illustrationLightbox, setIllustrationLightbox] = useState(null);
   const [readerInspectorPinned, setReaderInspectorPinned] = useState(false);
   const [semanticSearchEnabled, setSemanticSearchEnabled] = useState(false);
+  const [showBookshelfLink, setShowBookshelfLink] = useState(false);
+  const [readingWaypoints, setReadingWaypoints] = useState([]);
   const progressRef = useRef({ maxLine:0, total:0, slug:null });
   const trackedSlugRef = useRef("");
   const selectionLookupRef = useRef(0);
   const parsed = useMemo(() => (
     work?.content ? parsePlayShakespeareXML(work.content, work.title, work.category) : null
   ), [work?.category, work?.content, work?.title]);
-  const [peopleGraph, setPeopleGraph] = useState(null);
-  const [lineMetaIndex, setLineMetaIndex] = useState({});
+  const lineMetaIndexRef = useRef({});
+  const lineMetaByNumberRef = useRef(new Map());
+  const peopleTermIndexRef = useRef(new Map());
 
   // People relationships parse the full XML a second time, while the line
   // index walks every line. Neither is needed to paint the opening page, so
   // build both after the browser has had a chance to show the text.
   useEffect(() => {
-    setPeopleGraph(null);
-    setLineMetaIndex({});
+    lineMetaIndexRef.current = {};
+    lineMetaByNumberRef.current = new Map();
+    peopleTermIndexRef.current = new Map();
     if (!parsed) return undefined;
 
     let cancelled = false;
-    const buildReaderIndexes = () => {
+    const buildReaderIndexes = async () => {
       if (cancelled) return;
       const nextLineMetaIndex = buildLineMetaIndex(parsed);
-      const nextPeopleGraph = work?.content && parsed.type === "play"
-        ? buildPeopleGraphFromXML(work.content, work.title, work.category)
-        : null;
-      if (cancelled) return;
-      startTransition(() => {
-        setLineMetaIndex(nextLineMetaIndex);
-        setPeopleGraph(nextPeopleGraph);
+      const nextLineMetaByNumber = new Map();
+      Object.values(nextLineMetaIndex).forEach((meta) => {
+        if (meta?.lineNum && !nextLineMetaByNumber.has(meta.lineNum)) {
+          nextLineMetaByNumber.set(meta.lineNum, meta);
+        }
       });
+
+      const nextPeopleTermIndex = new Map();
+      if (work?.content && parsed.type === "play") {
+        const { buildPeopleGraphFromXML } = await import("../lib/peopleGraph");
+        if (cancelled) return;
+        const peopleGraph = buildPeopleGraphFromXML(work.content, work.title, work.category);
+        for (const person of peopleGraph?.people || []) {
+          const values = [person.name, person.short, ...(person.aliases || [])];
+          for (const value of values) {
+            const normalized = normalizeEntityTerm(value);
+            if (!normalized || nextPeopleTermIndex.has(normalized)) continue;
+            nextPeopleTermIndex.set(normalized, person);
+          }
+        }
+      }
+      if (cancelled) return;
+      lineMetaIndexRef.current = nextLineMetaIndex;
+      lineMetaByNumberRef.current = nextLineMetaByNumber;
+      peopleTermIndexRef.current = nextPeopleTermIndex;
     };
 
     const idleId = typeof window.requestIdleCallback === "function"
@@ -2051,26 +2183,62 @@ export default function ReaderPage() {
     };
   }, [parsed, work?.category, work?.content, work?.title]);
 
-  const lineMetaByNumber = useMemo(() => {
-    const map = new Map();
-    Object.values(lineMetaIndex).forEach((meta) => {
-      if (meta?.lineNum && !map.has(meta.lineNum)) map.set(meta.lineNum, meta);
-    });
-    return map;
-  }, [lineMetaIndex]);
-  const peopleTermIndex = useMemo(() => {
-    const index = new Map();
-    for (const person of peopleGraph?.people || []) {
-      const values = [person.name, person.short, ...(person.aliases || [])];
-      for (const value of values) {
-        const normalized = normalizeEntityTerm(value);
-        if (!normalized || index.has(normalized)) continue;
-        index.set(normalized, person);
-      }
-    }
-    return index;
-  }, [peopleGraph]);
+  useEffect(() => {
+    let cancelled = false;
+    setShowBookshelfLink(false);
+    if (!work) return undefined;
+
+    const loadBookshelfLink = async () => {
+      const { hasBookshelfForWork } = await import("../lib/shakespeareBookshelf");
+      if (!cancelled) setShowBookshelfLink(hasBookshelfForWork(work.familySlug || slug));
+    };
+    const idleId = typeof window.requestIdleCallback === "function"
+      ? window.requestIdleCallback(loadBookshelfLink, { timeout: 2500 })
+      : window.setTimeout(loadBookshelfLink, 1000);
+
+    return () => {
+      cancelled = true;
+      if (typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(idleId);
+      else window.clearTimeout(idleId);
+    };
+  }, [slug, work?.familySlug, work?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setReadingWaypoints([]);
+    if (!parsed || !work) return undefined;
+
+    const buildWaypoints = async () => {
+      const {
+        YEAR_OF_SHAKESPEARE_ROWS,
+        buildReadingWaypoints,
+        getCalendarRowsForWork,
+      } = await import("../lib/yearOfShakespeare");
+      if (cancelled) return;
+      const calendarRows = getCalendarRowsForWork(work, YEAR_OF_SHAKESPEARE_ROWS);
+      const nextWaypoints = buildReadingWaypoints(countRenderableLines(parsed), calendarRows);
+      if (!cancelled) startTransition(() => setReadingWaypoints(nextWaypoints));
+    };
+
+    const idleId = typeof window.requestIdleCallback === "function"
+      ? window.requestIdleCallback(buildWaypoints, { timeout: 3000 })
+      : window.setTimeout(buildWaypoints, 500);
+
+    return () => {
+      cancelled = true;
+      if (typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(idleId);
+      else window.clearTimeout(idleId);
+    };
+  }, [parsed, work]);
+  const waypointsByIndex = useMemo(
+    () => Object.fromEntries(readingWaypoints.map((waypoint) => [waypoint.lineIndex, waypoint])),
+    [readingWaypoints],
+  );
   const resumeLine = Math.max(0, parseInt(new URLSearchParams(location.search).get("line") || "0", 10) || 0);
+  const initialPlayItemCount = useMemo(
+    () => parsed?.type === "play" ? getInitialPlayItemCount(parsed, resumeLine, bookmark) : 0,
+    [bookmark, parsed, resumeLine],
+  );
   const hasActiveReaderInspector = !!(annotationPanel || wordLookup || placeAwareness || prosodyNote || prosodyEditor);
   const usePinnedReaderInspector = !isMobileViewport && readerInspectorPinned && hasActiveReaderInspector;
   const copyPageLink = async () => {
@@ -2221,11 +2389,11 @@ export default function ReaderPage() {
   const findCurrentWorkPersonMatch = useCallback((text) => {
     const candidates = entitySelectionCandidates(text);
     for (const candidate of candidates) {
-      const person = peopleTermIndex.get(candidate);
+      const person = peopleTermIndexRef.current.get(candidate);
       if (person) return person;
     }
     return null;
-  }, [peopleTermIndex]);
+  }, []);
 
   const getCurrentViewportLineNumber = useCallback(() => {
     const lines = document.querySelectorAll("[data-lineid]");
@@ -2258,8 +2426,8 @@ export default function ReaderPage() {
     });
     const lineId = closest?.dataset?.lineid || "";
     if (!lineId) return null;
-    return { lineId, ...(lineMetaIndex[lineId] || {}) };
-  }, [lineMetaIndex]);
+    return { lineId, ...(lineMetaIndexRef.current[lineId] || {}) };
+  }, []);
 
   useEffect(() => {
     if (!work?.id || trackedSlugRef.current === slug) return;
@@ -2359,18 +2527,18 @@ export default function ReaderPage() {
 
   // Public reader extras hydrate after the play is already visible.
   useEffect(() => {
+    if (!work?.id || work.slug !== slug) return undefined;
     let cancelled = false;
-    setDisc([]);
     setProsodyOverrides({});
     applyReaderIllustrationData({ placements: [], artists: [] });
 
     Promise.all([
-      discApi.forWork(slug).catch(()=>[]),
-      prosodyApi.forWork(slug).catch(()=>({ overrides: [] })),
+      parsed?.type === "poetry"
+        ? prosodyApi.forWork(slug).catch(()=>({ overrides: [] }))
+        : Promise.resolve({ overrides: [] }),
       readerIllustrationsApi.forWork(slug).catch(()=>({ placements: [], artists: [] })),
-    ]).then(([discussionData, prosodyData, illustrationData]) => {
+    ]).then(([prosodyData, illustrationData]) => {
       if (cancelled) return;
-      setDisc(discussionData);
       setProsodyOverrides(Object.fromEntries((prosodyData?.overrides || []).map((item) => [item.lineKey, item])));
       applyReaderIllustrationData(illustrationData);
     });
@@ -2378,12 +2546,12 @@ export default function ReaderPage() {
     return () => {
       cancelled = true;
     };
-  }, [applyReaderIllustrationData, slug]);
+  }, [applyReaderIllustrationData, parsed?.type, slug, work?.id, work?.slug]);
 
   // Wait for the session check before loading personalized annotations so the
   // reader does not request the work again when auth state settles.
   useEffect(() => {
-    if (!authReady) return undefined;
+    if (!authReady || !work?.id || work.slug !== slug) return undefined;
     let cancelled = false;
     setAnnots([]);
     setBookmark(null);
@@ -2405,26 +2573,42 @@ export default function ReaderPage() {
     return () => {
       cancelled = true;
     };
-  }, [authReady, slug, user?.id]);
+  }, [authReady, slug, user?.id, work?.id, work?.slug]);
 
   // Track reading progress on scroll
   useEffect(() => {
-    if (!user || !work) return;
-    progressRef.current.slug = slug;
+    if (!user || !work || !parsed) return undefined;
+    progressRef.current = {
+      maxLine: 0,
+      total: countRenderableLines(parsed),
+      slug,
+    };
+    let frameId = null;
 
-    const trackProgress = () => {
+    const measureProgress = () => {
+      frameId = null;
       const lines = document.querySelectorAll("[data-lineid]");
       if (!lines.length) return;
       const viewportBottom = window.innerHeight;
-      let maxVisible = 0;
-      lines.forEach((el, i) => {
-        if (el.getBoundingClientRect().top < viewportBottom) maxVisible = i + 1;
-      });
-      const total = lines.length;
+      let maxVisible = progressRef.current.maxLine;
+      const startIndex = Math.max(0, maxVisible - 1);
+
+      // Reading progress only moves forward, so resume near the furthest line
+      // already seen and stop at the first line below the viewport. This avoids
+      // measuring thousands of DOM nodes on every scroll event.
+      for (let index = startIndex; index < lines.length; index += 1) {
+        if (lines[index].getBoundingClientRect().top >= viewportBottom) break;
+        maxVisible = index + 1;
+      }
+
       if (maxVisible > progressRef.current.maxLine) {
         progressRef.current.maxLine = maxVisible;
-        progressRef.current.total = total;
       }
+    };
+
+    const trackProgress = () => {
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(measureProgress);
     };
 
     const saveProgress = () => {
@@ -2434,15 +2618,17 @@ export default function ReaderPage() {
       }
     };
 
+    trackProgress();
     window.addEventListener("scroll", trackProgress, { passive:true });
     // Save progress every 30s and on unmount
     const interval = setInterval(saveProgress, 30000);
     return () => {
       window.removeEventListener("scroll", trackProgress);
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
       clearInterval(interval);
       saveProgress();
     };
-  }, [user, work, slug]);
+  }, [parsed, slug, user, work]);
 
   // Scroll to bookmark on load
   useEffect(() => {
@@ -2663,7 +2849,7 @@ export default function ReaderPage() {
   const openQuoteCapture = useCallback((selection) => {
     const startLineId = selection?.lineId || "";
     const endLineId = selection?.endLineId || startLineId;
-    const citation = buildSelectionCitation(parsed, lineMetaIndex, startLineId, endLineId);
+    const citation = buildSelectionCitation(parsed, lineMetaIndexRef.current, startLineId, endLineId);
     setQuoteCapture({
       text: selection?.text || selection?.lineText || "",
       title: parsed.title || work.title,
@@ -2672,7 +2858,7 @@ export default function ReaderPage() {
     });
     setAnnotationPanel(null);
     window.getSelection()?.removeAllRanges();
-  }, [lineMetaIndex, parsed, work?.title]);
+  }, [parsed, work?.title]);
 
   const openSemanticPassageSearch = useCallback((text) => {
     const trimmed = String(text || "").trim();
@@ -2713,8 +2899,8 @@ export default function ReaderPage() {
       if (!panel) return;
       const startLineId = panel.lineId || "";
       const endLineId = panel.endLineId || startLineId;
-      const citation = buildSelectionCitation(parsed, lineMetaIndex, startLineId, endLineId);
-      const lineMeta = lineMetaIndex[startLineId] || {};
+      const citation = buildSelectionCitation(parsed, lineMetaIndexRef.current, startLineId, endLineId);
+      const lineMeta = lineMetaIndexRef.current[startLineId] || {};
       const text = String(panel.text || panel.lineText || "").trim();
       if (!text) return;
       addResearchItem({
@@ -2736,7 +2922,7 @@ export default function ReaderPage() {
     if (payload?.type === "annotation") {
       const annot = payload.annotation;
       if (!annot) return;
-      const lineMeta = lineMetaIndex[annot.line_id] || {};
+      const lineMeta = lineMetaIndexRef.current[annot.line_id] || {};
       const kind = getAnnotationKind(annot.kind, annot.color);
       addResearchItem({
         type: "annotation",
@@ -2755,7 +2941,7 @@ export default function ReaderPage() {
     }
 
     if (payload?.type === "word" && wordLookup) {
-      const lineMeta = lineMetaIndex[wordLookup.lineId || ""] || {};
+      const lineMeta = lineMetaIndexRef.current[wordLookup.lineId || ""] || {};
       const definition = String(payload.definition || "").trim();
       const label = payload.displayWord || wordLookup.selectedText || wordLookup.word;
       addResearchItem({
@@ -2786,12 +2972,12 @@ export default function ReaderPage() {
         workSlug: slug,
         workTitle,
         lineId: placeAwareness.lineId || "",
-        lineNumber: lineMetaIndex[placeAwareness.lineId || ""]?.lineNum || 0,
+        lineNumber: lineMetaIndexRef.current[placeAwareness.lineId || ""]?.lineNum || 0,
         copyText: `${place.name || placeAwareness.selectionText}${place.description ? `\n\n${place.description}` : ""}`,
         dedupeKey: `place:${placeAwareness.placeSlug}:${slug}`,
       });
     }
-  }, [addResearchItem, annotationPanel, lineMetaIndex, parsed, placeAwareness, slug, work?.title, wordLookup]);
+  }, [addResearchItem, annotationPanel, parsed, placeAwareness, slug, work?.title, wordLookup]);
 
   const openResearchTrayItem = useCallback((item) => {
     setShowResearchTray(false);
@@ -3023,10 +3209,6 @@ export default function ReaderPage() {
     }
   };
 
-  const postComment = async (body,parentId) => { const c=await discApi.post(slug,body,parentId); setDisc(prev=>[...prev,c]); };
-  const editComment = async (id,body) => { await discApi.edit(id,body); setDisc(prev=>prev.map(c=>c.id===id?{...c,body,updatedAt:new Date().toISOString()}:c)); };
-  const deleteComment = async (id) => { await discApi.delete(id); setDisc(prev=>prev.filter(c=>c.id!==id)); };
-
   if (loading) return <div style={{padding:60,textAlign:"center"}}><div className="spinner"/></div>;
   if (!work) return <div style={{padding:60,textAlign:"center",color:"var(--danger)"}}>Work not found.</div>;
   if (!work.content) return (
@@ -3046,7 +3228,6 @@ export default function ReaderPage() {
         ? "Apocrypha"
         : work.variant || "Edition");
   const bookshelfSlug = work.familySlug || slug;
-  const showBookshelfLink = hasBookshelfForWork(bookshelfSlug);
   const layerCatalogById = Object.fromEntries((layerCatalog || []).map((layer) => [String(layer.id), layer]));
   const typeCounts = {};
   const layerCounts = {};
@@ -3104,9 +3285,6 @@ export default function ReaderPage() {
   });
 
   const showAnnots = filteredAnnots.length > 0;
-  const readingCalendarRows = getCalendarRowsForWork(work, YEAR_OF_SHAKESPEARE_ROWS);
-  const readingWaypoints = buildReadingWaypoints(countRenderableLines(parsed), readingCalendarRows);
-  const waypointsByIndex = Object.fromEntries(readingWaypoints.map((waypoint) => [waypoint.lineIndex, waypoint]));
   const printDownloads = getWorkPrintDownloads(parsed.title || work.title, slug);
   const isLucrece = slug === "rape-of-lucrece";
   const availableIllustrationArtists = readerIllustrations.artists || [];
@@ -3123,7 +3301,7 @@ export default function ReaderPage() {
     : null;
   const placementEditorViewportMeta = placementEditor ? getCurrentViewportLineMeta() : null;
   const placementEditorLineMeta = placementEditor?.draft?.lineStart
-    ? lineMetaByNumber.get(Number(placementEditor.draft.lineStart) || 0)
+    ? lineMetaByNumberRef.current.get(Number(placementEditor.draft.lineStart) || 0)
     : null;
   const placementEditorLineContext = compactExcerpt(placementEditorLineMeta?.text || placementEditorViewportMeta?.text || "", 220);
   const dismissReaderHint = () => {
@@ -3261,17 +3439,21 @@ export default function ReaderPage() {
         </>
       )}
 
-      <ResearchTray
-        open={showResearchTray}
-        items={researchTrayItems}
-        mobileSheet={isMobileViewport}
-        fullPageHref={user ? "/my-research" : ""}
-        onClose={() => setShowResearchTray(false)}
-        onOpenItem={openResearchTrayItem}
-        onCopyItem={copyResearchTrayItem}
-        onRemoveItem={removeResearchTrayEntry}
-        onClear={clearResearchTrayItems}
-      />
+      {showResearchTray && (
+        <Suspense fallback={null}>
+          <ResearchTray
+            open
+            items={researchTrayItems}
+            mobileSheet={isMobileViewport}
+            fullPageHref={user ? "/my-research" : ""}
+            onClose={() => setShowResearchTray(false)}
+            onOpenItem={openResearchTrayItem}
+            onCopyItem={copyResearchTrayItem}
+            onRemoveItem={removeResearchTrayEntry}
+            onClear={clearResearchTrayItems}
+          />
+        </Suspense>
+      )}
 
       {/* Bookmark resume banner */}
       {bookmark && (
@@ -3395,7 +3577,7 @@ export default function ReaderPage() {
             waypointsByIndex={waypointsByIndex}
             onOpenAnnotationPanel={openAnnotationInspector}
           />
-        : <PlayView key={work.id} data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={openAnnotationInspector} illustrations={visibleIllustrations} onEditIllustrationPlacement={isAdmin ? openIllustrationPlacementEditor : null} onOpenIllustrationLightbox={openIllustrationLightbox} renderAllInitially={!!(resumeLine || bookmark)} />
+        : <PlayView key={work.id} data={parsed} showAnnots={showAnnots} annotsByLine={annotsByLine} userId={userId} isAdmin={isAdmin} canPublishGlobal={canPublishGlobal} editAnnot={editAnnot} deleteAnnot={deleteAnnot} bookmark={bookmark} showWaypoints={readerVisibility.showWaypoints !== false} waypointsByIndex={waypointsByIndex} onLookupTap={handleMobileLookupTap} onOpenAnnotationPanel={openAnnotationInspector} illustrations={visibleIllustrations} onEditIllustrationPlacement={isAdmin ? openIllustrationPlacementEditor : null} onOpenIllustrationLightbox={openIllustrationLightbox} initialVisibleItemCount={initialPlayItemCount} />
       }
 
       <IllustrationPlacementEditor
@@ -3455,65 +3637,71 @@ export default function ReaderPage() {
         />
       )}
       {wordLookup && (
-        <WordLookup
-          word={wordLookup.word}
-          label={wordLookup.selectedText || wordLookup.word}
-          workSlug={slug}
-          lineId={wordLookup.lineId || ""}
-          position={wordLookup.position}
-          mobileSheet={isMobileViewport}
-          pinned={usePinnedReaderInspector}
-          searchHref={`/search?${new URLSearchParams({ q: wordLookup.word, work: slug }).toString()}`}
-          onTogglePin={() => setReaderInspectorPinned((value) => !value)}
-          onClose={()=>{setWordLookup(null);window.getSelection()?.removeAllRanges();}}
-          onSaveToTray={(payload) => saveToResearchTray({ type: "word", ...payload })}
-          onAnnotate={user ? () => {
-            openAnnotationInspector({
-              mode: "compose",
-              x:wordLookup.position.x,
-              y:wordLookup.position.y,
-              text:wordLookup.selectedText || wordLookup.word,
-              lineId:wordLookup.lineId || "u",
-              endLineId: wordLookup.lineId || "u",
-              draftKey: `draft:annot:${slug}`,
-            });
-          } : undefined}
-        />
+        <Suspense fallback={null}>
+          <WordLookup
+            word={wordLookup.word}
+            label={wordLookup.selectedText || wordLookup.word}
+            workSlug={slug}
+            lineId={wordLookup.lineId || ""}
+            position={wordLookup.position}
+            mobileSheet={isMobileViewport}
+            pinned={usePinnedReaderInspector}
+            searchHref={`/search?${new URLSearchParams({ q: wordLookup.word, work: slug }).toString()}`}
+            onTogglePin={() => setReaderInspectorPinned((value) => !value)}
+            onClose={()=>{setWordLookup(null);window.getSelection()?.removeAllRanges();}}
+            onSaveToTray={(payload) => saveToResearchTray({ type: "word", ...payload })}
+            onAnnotate={user ? () => {
+              openAnnotationInspector({
+                mode: "compose",
+                x:wordLookup.position.x,
+                y:wordLookup.position.y,
+                text:wordLookup.selectedText || wordLookup.word,
+                lineId:wordLookup.lineId || "u",
+                endLineId: wordLookup.lineId || "u",
+                draftKey: `draft:annot:${slug}`,
+              });
+            } : undefined}
+          />
+        </Suspense>
       )}
       {placeAwareness && (
-        <PlaceAwareness
-          placeSlug={placeAwareness.placeSlug}
-          initialPlace={placeAwareness.initialPlace}
-          matchedTerm={placeAwareness.matchedTerm}
-          selectionText={placeAwareness.selectionText}
-          personMatch={placeAwareness.personMatch}
-          workSlug={slug}
-          workTitle={parsed?.title || work?.title || ""}
-          position={placeAwareness.position}
-          mobileSheet={isMobileViewport}
-          pinned={usePinnedReaderInspector}
-          onTogglePin={() => setReaderInspectorPinned((value) => !value)}
-          onClose={()=>{setPlaceAwareness(null);window.getSelection()?.removeAllRanges();}}
-          onSaveToTray={(payload) => saveToResearchTray({ type: "place", ...payload })}
-          onAnnotate={user ? () => {
-            openAnnotationInspector({
-              mode: "compose",
-              x:placeAwareness.position.x,
-              y:placeAwareness.position.y,
-              text:placeAwareness.selectionText,
-              lineId:placeAwareness.lineId || "u",
-              endLineId: placeAwareness.endLineId || placeAwareness.lineId || "u",
-              draftKey: `draft:annot:${slug}`,
-            });
-          } : undefined}
-        />
+        <Suspense fallback={null}>
+          <PlaceAwareness
+            placeSlug={placeAwareness.placeSlug}
+            initialPlace={placeAwareness.initialPlace}
+            matchedTerm={placeAwareness.matchedTerm}
+            selectionText={placeAwareness.selectionText}
+            personMatch={placeAwareness.personMatch}
+            workSlug={slug}
+            workTitle={parsed?.title || work?.title || ""}
+            position={placeAwareness.position}
+            mobileSheet={isMobileViewport}
+            pinned={usePinnedReaderInspector}
+            onTogglePin={() => setReaderInspectorPinned((value) => !value)}
+            onClose={()=>{setPlaceAwareness(null);window.getSelection()?.removeAllRanges();}}
+            onSaveToTray={(payload) => saveToResearchTray({ type: "place", ...payload })}
+            onAnnotate={user ? () => {
+              openAnnotationInspector({
+                mode: "compose",
+                x:placeAwareness.position.x,
+                y:placeAwareness.position.y,
+                text:placeAwareness.selectionText,
+                lineId:placeAwareness.lineId || "u",
+                endLineId: placeAwareness.endLineId || placeAwareness.lineId || "u",
+                draftKey: `draft:annot:${slug}`,
+              });
+            } : undefined}
+          />
+        </Suspense>
       )}
       {quoteCapture && (
-        <QuoteCaptureModal
-          quote={quoteCapture}
-          workSlug={slug}
-          onClose={() => setQuoteCapture(null)}
-        />
+        <Suspense fallback={null}>
+          <QuoteCaptureModal
+            quote={quoteCapture}
+            workSlug={slug}
+            onClose={() => setQuoteCapture(null)}
+          />
+        </Suspense>
       )}
       {prosodyNote && (
         <ProsodyNoteTooltip
@@ -3544,7 +3732,7 @@ export default function ReaderPage() {
           mobileSheet={isMobileViewport}
         />
       )}
-      <ThreadedComments comments={disc} onPost={postComment} onEdit={editComment} onDelete={deleteComment} label="Discussion" draftKey={`work:${slug}:discussion`} />
+      <DeferredDiscussion key={slug} slug={slug} />
     </div>
   );
 }

@@ -2,8 +2,8 @@ import { Suspense, lazy } from "react";
 import { Routes, Route } from "react-router-dom";
 import { useAuth } from "./lib/AuthContext";
 import Header from "./components/Header";
-import OnboardingModal from "./components/OnboardingModal";
 import HomePage from "./pages/HomePage";
+const OnboardingModal = lazy(() => import("./components/OnboardingModal"));
 const ReaderPage = lazy(() => import("./pages/ReaderPage"));
 const ForumPage = lazy(() => import("./pages/ForumPage"));
 const ForumThreadPage = lazy(() => import("./pages/ForumThreadPage"));
@@ -44,7 +44,9 @@ export default function App() {
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column" }}>
       <Header />
       {authReady && user?.needsOnboarding && (
-        <OnboardingModal user={user} onComplete={()=>refreshUser()} />
+        <Suspense fallback={null}>
+          <OnboardingModal user={user} onComplete={()=>refreshUser()} />
+        </Suspense>
       )}
       <main style={{ flex:1 }}>
         <Suspense fallback={<RouteFallback />}>

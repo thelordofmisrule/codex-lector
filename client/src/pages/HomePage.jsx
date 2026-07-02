@@ -22,6 +22,18 @@ export default function HomePage() {
 
   useEffect(() => { api.list().then(setWorks).finally(()=>setLoading(false)); }, []);
   useEffect(() => () => clearTimeout(prefetchTimer.current), []);
+  useEffect(() => {
+    const connection = navigator.connection;
+    if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || "")) return undefined;
+    const preload = () => preloadReaderPage();
+    const idleId = typeof window.requestIdleCallback === "function"
+      ? window.requestIdleCallback(preload, { timeout:2500 })
+      : window.setTimeout(preload, 1200);
+    return () => {
+      if (typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(idleId);
+      else window.clearTimeout(idleId);
+    };
+  }, []);
 
   const scheduleReaderPrefetch = (slug) => {
     clearTimeout(prefetchTimer.current);
