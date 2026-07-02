@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { works as worksApi } from "../lib/api";
 import { useToast } from "../lib/ToastContext";
 import { buildPeopleGraphFromXML, buildPeopleNetwork } from "../lib/peopleGraph";
 import { buildPrimaryWorkOptions, getWorkFamilyTitle } from "../lib/workPresentation";
+
+// The graph pulls in three.js, so keep it out of the main bundle.
+const CharacterNetworkGraph = lazy(() => import("../components/CharacterNetworkGraph"));
 
 function statCard(label, value, note = "") {
   return (
@@ -50,114 +53,73 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-const GRAPH_WIDTH = 860;
-const GRAPH_HEIGHT = 620;
-const GRAPH_PADDING = 72;
-const GRAPH_CENTER = { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 };
-
-function buildGraphLayout(nodes, edges, selectedNodeId) {
-  const positions = {};
-  if (!nodes.length) return positions;
-
-  const orderedNodes = [...nodes].sort((a, b) => {
-    if (b.connectionWeight !== a.connectionWeight) return b.connectionWeight - a.connectionWeight;
-    if (b.lineCount !== a.lineCount) return b.lineCount - a.lineCount;
-    return a.name.localeCompare(b.name);
-  });
-
-  function placeRing(ringNodes, radius, angleOffset = 0) {
-    if (!ringNodes.length) return;
-    ringNodes.forEach((node, index) => {
-      const angle = angleOffset - Math.PI / 2 + (index / ringNodes.length) * Math.PI * 2;
-      positions[node.id] = {
-        x: GRAPH_CENTER.x + Math.cos(angle) * radius,
-        y: GRAPH_CENTER.y + Math.sin(angle) * radius,
-        angle,
-      };
-    });
-  }
-
-  if (selectedNodeId && orderedNodes.some((node) => node.id === selectedNodeId)) {
-    positions[selectedNodeId] = { ...GRAPH_CENTER, angle: -Math.PI / 2 };
-    const neighborIds = new Set();
-    edges.forEach((edge) => {
-      if (edge.sourceId === selectedNodeId) neighborIds.add(edge.targetId);
-      if (edge.targetId === selectedNodeId) neighborIds.add(edge.sourceId);
-    });
-    const innerRing = orderedNodes.filter((node) => node.id !== selectedNodeId && neighborIds.has(node.id));
-    const outerRing = orderedNodes.filter((node) => node.id !== selectedNodeId && !neighborIds.has(node.id));
-    placeRing(innerRing, clamp(125 + innerRing.length * 3, 145, 185));
-    placeRing(outerRing, clamp(200 + outerRing.length * 2, 220, 245), innerRing.length ? Math.PI / innerRing.length : 0);
-    return positions;
-  }
-
-  if (orderedNodes.length === 1) {
-    positions[orderedNodes[0].id] = { ...GRAPH_CENTER, angle: -Math.PI / 2 };
-    return positions;
-  }
-
-  placeRing(orderedNodes, clamp(150 + orderedNodes.length * 3, 170, 225));
-  return positions;
-}
-
 function GraphPanel({
   nodes,
   edges,
   edgeMode,
+  viewMode,
+  onSetViewMode,
   selectedNodeId,
   selectedEdgeId,
   onSelectNode,
   onSelectEdge,
 }) {
-  const positions = useMemo(
-    () => buildGraphLayout(nodes, edges, selectedNodeId),
-    [nodes, edges, selectedNodeId],
-  );
-
-  const maxWeight = Math.max(1, ...edges.map((edge) => edge.weight || 0));
-  const selectedEdge = selectedEdgeId ? edges.find((edge) => edge.id === selectedEdgeId) : null;
-  const neighborIds = new Set();
-  if (selectedNodeId) {
-    edges.forEach((edge) => {
-      if (edge.sourceId === selectedNodeId) neighborIds.add(edge.targetId);
-      if (edge.targetId === selectedNodeId) neighborIds.add(edge.sourceId);
-    });
-  }
-
   return (
     <div style={{
       background: "radial-gradient(circle at top, var(--surface) 0%, var(--bg) 72%)",
       border: "1px solid var(--border-light)",
       borderRadius: 16,
       padding: 18,
-      minHeight: 560,
+      minHeight: 600,
       display: "flex",
       flexDirection: "column",
       gap: 12,
     }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         <div>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 18, color: "var(--accent)", letterSpacing: 1 }}>
             Character Network
           </div>
           <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
             {edgeMode === "turn_exchange"
-              ? "Edges count consecutive speech exchanges inside the current scope."
-              : "Edges count shared scene presence inside the current scope."}
+              ? "Lines connect characters who exchange speeches; thicker means more exchanges."
+              : "Lines connect characters who share scenes; thicker means more scenes together."}
           </div>
         </div>
-        {(selectedNodeId || selectedEdgeId) && (
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => {
-              onSelectNode("");
-              onSelectEdge("");
-            }}
-            style={{ color: "var(--text-light)" }}
-          >
-            Clear Focus
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden" }}>
+            {[["3d", "3D"], ["2d", "2D"]].map(([mode, label]) => (
+              <button
+                key={mode}
+                className="btn btn-sm"
+                onClick={() => onSetViewMode(mode)}
+                style={{
+                  borderRadius: 0,
+                  minWidth: 44,
+                  background: viewMode === mode ? "var(--accent)" : "var(--surface)",
+                  color: viewMode === mode ? "var(--accent-contrast)" : "var(--text-muted)",
+                  fontFamily: "var(--font-display)",
+                  fontSize: 12,
+                  letterSpacing: 1,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {(selectedNodeId || selectedEdgeId) && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                onSelectNode("");
+                onSelectEdge("");
+              }}
+              style={{ color: "var(--text-light)" }}
+            >
+              Clear Focus
+            </button>
+          )}
+        </div>
       </div>
 
       {!nodes.length ? (
@@ -174,206 +136,45 @@ function GraphPanel({
           No people appear in this scope.
         </div>
       ) : (
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <svg
-            viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
-            style={{ width: "100%", height: "100%", minHeight: 480, display: "block", overflow: "visible" }}
-            onClick={(event) => {
-              if (event.target === event.currentTarget) {
-                onSelectNode("");
-                onSelectEdge("");
-              }
-            }}
-          >
-            <circle cx={GRAPH_CENTER.x} cy={GRAPH_CENTER.y} r="126" fill="var(--gold-faint)" />
-            <circle cx={GRAPH_CENTER.x} cy={GRAPH_CENTER.y} r="88" fill="var(--accent-faint)" />
-            <text
-              x={GRAPH_CENTER.x}
-              y={GRAPH_CENTER.y - 12}
-              textAnchor="middle"
-              style={{ fontFamily: "var(--font-display)", fontSize: 16, letterSpacing: 1.2, fill: "var(--accent)" }}
-            >
-              {edgeMode === "turn_exchange" ? "Turn Exchanges" : "Shared Scenes"}
-            </text>
-            <text
-              x={GRAPH_CENTER.x}
-              y={GRAPH_CENTER.y + 12}
-              textAnchor="middle"
-              style={{ fontFamily: "var(--font-body)", fontSize: 13, fill: "var(--text-light)" }}
-            >
-              {nodes.length} characters • {edges.length} connections
-            </text>
-
-            {edges.map((edge) => {
-              const source = positions[edge.sourceId];
-              const target = positions[edge.targetId];
-              if (!source || !target) return null;
-              const isSelected = selectedEdgeId === edge.id;
-              const touchesSelectedNode = selectedNodeId && (edge.sourceId === selectedNodeId || edge.targetId === selectedNodeId);
-              const touchesSelectedEdge = selectedEdge && (edge.id === selectedEdge.id);
-              const muted = (selectedNodeId && !touchesSelectedNode) || (selectedEdge && !touchesSelectedEdge);
-              const opacity = isSelected ? 0.95 : muted ? 0.035 : 0.22 + (edge.weight / maxWeight) * 0.5;
-              const stroke = isSelected
-                ? "var(--accent)"
-                : edgeMode === "turn_exchange"
-                  ? "var(--gold)"
-                  : "var(--border)";
-              const strokeWidth = isSelected ? 5 : 1.5 + (edge.weight / maxWeight) * 4;
-              const midX = (source.x + target.x) / 2;
-              const midY = (source.y + target.y) / 2;
-              return (
-                <g key={edge.id}>
-                  <line
-                    x1={source.x}
-                    y1={source.y}
-                    x2={target.x}
-                    y2={target.y}
-                    stroke={stroke}
-                    strokeWidth={strokeWidth}
-                    strokeLinecap="round"
-                    opacity={opacity}
-                  />
-                  <line
-                    x1={source.x}
-                    y1={source.y}
-                    x2={target.x}
-                    y2={target.y}
-                    stroke="transparent"
-                    strokeWidth={16}
-                    strokeLinecap="round"
-                    style={{ cursor: "pointer" }}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onSelectNode("");
-                      onSelectEdge(edge.id);
-                    }}
-                  />
-                  {edge.weight > 1 && !muted && (
-                    <>
-                      <circle cx={midX} cy={midY} r="11" fill="var(--surface)" opacity={muted ? 0.28 : 0.92} />
-                      <text
-                        x={midX}
-                        y={midY + 4}
-                        textAnchor="middle"
-                        style={{
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 10,
-                          fill: isSelected ? "var(--accent)" : "var(--text-muted)",
-                          pointerEvents: "none",
-                        }}
-                      >
-                        {edge.weight}
-                      </text>
-                    </>
-                  )}
-                </g>
-              );
-            })}
-
-            {nodes.map((node) => {
-              const pos = positions[node.id];
-              if (!pos) return null;
-              const isSelected = selectedNodeId === node.id;
-              const inSelectedEdge = selectedEdge && (selectedEdge.sourceId === node.id || selectedEdge.targetId === node.id);
-              const isNeighbor = selectedNodeId ? neighborIds.has(node.id) : false;
-              const muted = (selectedNodeId && !isSelected && !isNeighbor) || (selectedEdge && !inSelectedEdge);
-              const focusVisible = isSelected || inSelectedEdge || isNeighbor;
-              const radius = clamp(12 + Math.sqrt(Math.max(1, node.lineCount || 1)) * 0.85 + node.connectionWeight * 0.18, 12, 32);
-              const labelFontSize = isSelected ? 14 : 12;
-              const approxLabelWidth = clamp(node.name.length * labelFontSize * 0.58, 44, 190);
-              let labelX = pos.x + Math.cos(pos.angle || 0) * (radius + 16);
-              let labelY = pos.y + Math.sin(pos.angle || 0) * (radius + 16);
-              const textAnchor = Math.cos(pos.angle || 0) > 0.35
-                ? "start"
-                : Math.cos(pos.angle || 0) < -0.35
-                  ? "end"
-                  : "middle";
-              const leftBound = GRAPH_PADDING;
-              const rightBound = GRAPH_WIDTH - GRAPH_PADDING;
-              const topBound = GRAPH_PADDING;
-              const bottomBound = GRAPH_HEIGHT - GRAPH_PADDING;
-              if (textAnchor === "start") {
-                labelX = Math.min(labelX, rightBound - approxLabelWidth);
-              } else if (textAnchor === "end") {
-                labelX = Math.max(labelX, leftBound + approxLabelWidth);
-              } else {
-                labelX = clamp(labelX, leftBound + approxLabelWidth / 2, rightBound - approxLabelWidth / 2);
-              }
-              labelY = clamp(labelY, topBound + labelFontSize, bottomBound - 4);
-              const fill = isSelected ? "var(--accent)" : node.connectionWeight > 0 ? "var(--gold)" : "var(--surface)";
-              const stroke = isSelected ? "var(--gold-light)" : "var(--accent)";
-              const labelPaddingX = 9;
-              const labelRectX = textAnchor === "start"
-                ? labelX - labelPaddingX
-                : textAnchor === "end"
-                  ? labelX - approxLabelWidth - labelPaddingX
-                  : labelX - (approxLabelWidth / 2) - labelPaddingX;
-              const labelRectWidth = approxLabelWidth + labelPaddingX * 2;
-              const showLabelBackdrop = focusVisible && !muted;
-              const labelFill = isSelected
-                ? "var(--accent)"
-                : inSelectedEdge
-                  ? "var(--text)"
-                  : "var(--text-muted)";
-              return (
-                <g key={node.id}>
-                  <circle
-                    cx={pos.x}
-                    cy={pos.y}
-                    r={radius + (isSelected ? 4 : 0)}
-                    fill={isSelected ? "var(--gold-faint)" : "transparent"}
-                    opacity={muted ? 0.03 : 0.9}
-                  />
-                  <circle
-                    cx={pos.x}
-                    cy={pos.y}
-                    r={radius}
-                    fill={fill}
-                    stroke={stroke}
-                    strokeWidth={isSelected ? 3 : 1.5}
-                    opacity={muted ? 0.08 : 0.95}
-                    style={{ cursor: "pointer" }}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onSelectEdge("");
-                      onSelectNode(node.id);
-                    }}
-                  />
-                  {!muted && showLabelBackdrop && (
-                    <rect
-                      x={labelRectX}
-                      y={labelY - labelFontSize - 4}
-                      width={labelRectWidth}
-                      height={labelFontSize + 12}
-                      rx={10}
-                      fill="var(--surface)"
-                      stroke={isSelected ? "var(--gold-light)" : "var(--border-light)"}
-                      strokeWidth={isSelected ? 1.5 : 1}
-                      opacity={isSelected ? 0.96 : 0.9}
-                    />
-                  )}
-                  {!muted && (
-                    <text
-                      x={labelX}
-                      y={labelY}
-                      textAnchor={textAnchor}
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        fontSize: labelFontSize,
-                        fontWeight: isSelected ? 600 : 400,
-                        fill: labelFill,
-                        opacity: 1,
-                        pointerEvents: "none",
-                      }}
-                    >
-                      {node.name}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-          </svg>
-        </div>
+        <>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <Suspense fallback={(
+              <div style={{ minHeight: 480, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div className="spinner" />
+              </div>
+            )}>
+              <CharacterNetworkGraph
+                nodes={nodes}
+                edges={edges}
+                viewMode={viewMode}
+                selectedNodeId={selectedNodeId}
+                selectedEdgeId={selectedEdgeId}
+                onSelectNode={onSelectNode}
+                onSelectEdge={onSelectEdge}
+              />
+            </Suspense>
+          </div>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+            fontSize: 12,
+            color: "var(--text-light)",
+            borderTop: "1px solid var(--border-light)",
+            paddingTop: 10,
+          }}>
+            <span>
+              {viewMode === "3d"
+                ? "Drag to rotate • Scroll to zoom • Right-drag to pan • Drag a character to move it"
+                : "Drag to pan • Scroll to zoom • Drag a character to move it"}
+            </span>
+            <span>
+              Sphere size = lines spoken • Hover for details • Click a character or a line to inspect
+            </span>
+          </div>
+        </>
       )}
     </div>
   );
@@ -651,6 +452,7 @@ export default function PeoplePage() {
   const [selectedActId, setSelectedActId] = useState(() => searchParams.get("act") || "all");
   const [selectedSceneId, setSelectedSceneId] = useState(() => searchParams.get("scene") || "all");
   const [edgeMode, setEdgeMode] = useState(() => searchParams.get("mode") === "turns" ? "turn_exchange" : "co_present");
+  const [viewMode, setViewMode] = useState(() => (searchParams.get("view") === "2d" ? "2d" : "3d"));
   const [minWeight, setMinWeight] = useState(() => {
     const raw = parseInt(searchParams.get("min") || "1", 10);
     return Number.isFinite(raw) ? clamp(raw, 1, 12) : 1;
@@ -762,8 +564,9 @@ export default function PeoplePage() {
     if (selectedSceneId !== "all") next.set("scene", selectedSceneId);
     if (edgeMode === "turn_exchange") next.set("mode", "turns");
     if (minWeight > 1) next.set("min", String(minWeight));
+    if (viewMode === "2d") next.set("view", "2d");
     setSearchParams(next, { replace: true });
-  }, [selectedWorkSlug, selectedActId, selectedSceneId, edgeMode, minWeight, setSearchParams]);
+  }, [selectedWorkSlug, selectedActId, selectedSceneId, edgeMode, minWeight, viewMode, setSearchParams]);
 
   const network = useMemo(
     () => buildPeopleNetwork(graph, { actId: selectedActId, sceneId: selectedSceneId, edgeMode }),
@@ -892,7 +695,7 @@ export default function PeoplePage() {
 
         <div>
           <div style={{ fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 6 }}>
-            Edge Mode
+            Connection Type
           </div>
           <div style={{ display: "flex", border: "1px solid var(--border-light)", borderRadius: 8, overflow: "hidden", height: 44 }}>
             <button
@@ -930,7 +733,7 @@ export default function PeoplePage() {
 
         <div>
           <div style={{ fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--text-light)", fontFamily: "var(--font-display)", marginBottom: 6 }}>
-            Minimum Edge Weight
+            Minimum Connection Strength
           </div>
           <div style={{
             height: 44,
@@ -1002,6 +805,8 @@ export default function PeoplePage() {
               nodes={visibleNodes}
               edges={visibleEdges}
               edgeMode={edgeMode}
+              viewMode={viewMode}
+              onSetViewMode={setViewMode}
               selectedNodeId={selectedNodeId}
               selectedEdgeId={selectedEdgeId}
               onSelectNode={setSelectedNodeId}
