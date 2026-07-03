@@ -1369,6 +1369,7 @@ a:hover { text-decoration:underline; }
   .margin-annot-col { display:none !important; }
   .people-main-grid { grid-template-columns: minmax(0, 1fr) !important; }
   .people-scene-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .words-facets-grid { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
 @media (max-width: 640px) {

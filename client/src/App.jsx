@@ -24,6 +24,7 @@ const AdminAnalyticsPage = lazy(() => import("./pages/AdminAnalyticsPage"));
 const HowToPage = lazy(() => import("./pages/HowToPage"));
 const PlacesPage = lazy(() => import("./pages/PlacesPage"));
 const PeoplePage = lazy(() => import("./pages/PeoplePage"));
+const WordExplorerPage = lazy(() => import("./pages/WordExplorerPage"));
 const GenealogyPage = lazy(() => import("./pages/GenealogyPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const GalleryPage = lazy(() => import("./pages/GalleryPage"));
@@ -66,6 +67,8 @@ export default function App() {
             <Route path="/layers" element={<LayersPage />} />
             <Route path="/places" element={<PlacesPage />} />
             <Route path="/people" element={<PeoplePage />} />
+            <Route path="/words" element={<WordExplorerPage />} />
+            <Route path="/words/:word" element={<WordExplorerPage />} />
             <Route path="/genealogy" element={<GenealogyPage />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/gallery" element={<GalleryPage />} />

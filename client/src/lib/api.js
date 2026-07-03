@@ -201,6 +201,23 @@ export const words = {
   },
   autocomplete:prefix=>req(`/words?prefix=${encodeURIComponent(prefix)}`),
 };
+export const concordance = {
+  summary:(word, opts={})=>{
+    const params = new URLSearchParams();
+    if (opts.forms?.length) params.set("forms", opts.forms.join(","));
+    if (opts.scope) params.set("scope", opts.scope);
+    return req(`/concordance/${encodeURIComponent(word)}${params.toString() ? `?${params.toString()}` : ""}`);
+  },
+  lines:(word, opts={})=>{
+    const params = new URLSearchParams();
+    if (opts.forms?.length) params.set("forms", opts.forms.join(","));
+    if (opts.scope) params.set("scope", opts.scope);
+    if (opts.work) params.set("work", opts.work);
+    if (opts.speaker) params.set("speaker", opts.speaker);
+    if (opts.page) params.set("page", String(opts.page));
+    return req(`/concordance/${encodeURIComponent(word)}/lines?${params.toString()}`);
+  },
+};
 export const glossary = {
   save:data=>req("/glossary",{method:"PUT",body:JSON.stringify(data)}),
   remove:data=>req("/glossary",{method:"DELETE",body:JSON.stringify(data)}),

@@ -438,8 +438,15 @@ export default function WordLookup({
           </>
         )}
 
-        {(onAnnotate || mobileSheet || onSaveToTray) && (
-          <div style={{ marginTop:12, paddingTop:10, borderTop:"1px solid var(--border-light)", display:"grid", gap:8 }}>
+        <div style={{ marginTop:12, paddingTop:10, borderTop:"1px solid var(--border-light)", display:"grid", gap:8 }}>
+            <Link
+              to={`/words/${encodeURIComponent(sanitizeTerm(word))}`}
+              onClick={onClose}
+              className="btn btn-secondary btn-sm"
+              style={{ width:"100%", textAlign:"center", color:"var(--text)", textDecoration:"none" }}
+            >
+              Full concordance →
+            </Link>
             {onAnnotate && (
               <button
                 className="btn btn-secondary btn-sm"
@@ -485,7 +492,6 @@ export default function WordLookup({
               </>
             )}
           </div>
-        )}
     </ReaderOverlayShell>
   );
 }

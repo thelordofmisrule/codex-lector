@@ -63,6 +63,7 @@ export default function Header() {
         { to:"/genealogy", label:"Genealogy" },
         { to:"/people", label:"People" },
         { to:"/places", label:"Places" },
+        { to:"/words", label:"Words" },
         { to:"/gallery", label:"Gallery" },
         ...(showChineseMode ? [{ to:"/chinese", label:"Chinese" }] : []),
         ...(user ? [{ to:"/my-research", label:"My Research" }] : []),

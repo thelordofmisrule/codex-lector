@@ -92,6 +92,7 @@ app.use("/api/gallery", require("./routes/gallery"));
 app.use("/api/quote-images", require("./routes/quoteImages"));
 app.use("/api/source-texts", require("./routes/sourceTexts"));
 app.use("/api/reader-illustrations", require("./routes/readerIllustrations"));
+app.use("/api/concordance", require("./routes/concordance"));
 app.get("/api/health", (req,res) => res.json({ status:"ok" }));
 app.use("/media", express.static(path.join(__dirname, "..", "data", "media"), {
   etag: true,
