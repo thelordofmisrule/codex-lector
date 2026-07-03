@@ -1,86 +1,115 @@
 const express = require("express");
 const db = require("../db");
 const { resolveGlossary } = require("../lib/glossary");
+const {
+  normalizeWord,
+  scopeVariants,
+  countLinesPerWork,
+  fetchLines,
+  getWorkTokenTotals,
+} = require("../lib/corpus");
 
 const r = express.Router();
 
-function sanitizeWord(value) {
-  return String(value || "").toLowerCase().replace(/[^a-z']/g, "");
+/* Glossary lookups keep interior apostrophes ("lov'd"); corpus queries strip them. */
+function sanitizeGlossaryWord(value) {
+  return String(value || "").toLowerCase().replace(/[’]/g, "'").replace(/[^a-z']/g, "");
 }
 
-function orderWorksForExamples(freq, preferredSlug = "") {
-  if (!preferredSlug) return freq.slice(0, 3);
-  const preferred = freq.find((item) => item.slug === preferredSlug);
-  const rest = freq.filter((item) => item.slug !== preferredSlug);
-  return [preferred, ...rest].filter(Boolean).slice(0, 3);
+function buildSnippet(lineText, word) {
+  const text = String(lineText || "").replace(/\s+/g, " ").trim();
+  if (text.length <= 120) return text;
+
+  // Trim long prose lines to a window around the first match.
+  const pattern = new RegExp(`\\b${word.split("").join("[’']?")}\\b`, "i");
+  const match = pattern.exec(text);
+  const at = match ? match.index : 0;
+  const start = Math.max(0, at - 46);
+  const end = Math.min(text.length, at + word.length + 60);
+  let snippet = text.slice(start, end).trim();
+  if (start > 0) snippet = "…" + snippet;
+  if (end < text.length) snippet += "…";
+  return snippet;
 }
 
-/* Look up a word: editorial glossary first, then corpus frequency and examples. */
+/*
+ * Word lookup for the reader popover: editorial glossary first, then corpus
+ * frequency and examples from the line search index (all editions, so counts
+ * match whichever text the reader has open).
+ */
 r.get("/:word", (req, res) => {
-  const word = sanitizeWord(req.params.word);
-  if (!word || word.length < 2) return res.status(400).json({ error:"Word too short." });
+  const word = normalizeWord(req.params.word);
+  const glossaryWord = sanitizeGlossaryWord(req.params.word);
+  if (!word || word.length < 2) return res.status(400).json({ error: "Word too short." });
+
+  res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=3600");
 
   const workSlug = String(req.query.work || "").trim();
   const lineId = String(req.query.lineId || "").trim();
 
-  const freq = db.prepare(`
-    SELECT wi.count, w.title, w.slug
-    FROM word_index wi
-    JOIN works w ON wi.work_id=w.id
-    WHERE wi.word=?
-    ORDER BY wi.count DESC
-  `).all(word);
-
-  const totalCount = freq.reduce((sum, item) => sum + item.count, 0);
-  const worksAppearingIn = freq.length;
-  const totalWords = db.prepare("SELECT SUM(count) as n FROM word_index").get()?.n || 1;
+  // Counts cover the canonical texts plus apocrypha; First Folio reprints are
+  // excluded so the same play is not double-counted.
+  const variants = scopeVariants("all");
+  const perWork = countLinesPerWork(db, [word], variants);
+  const totalCount = perWork.reduce((sum, row) => sum + row.lines, 0);
+  const scopeSlugs = db.prepare(`
+    SELECT DISTINCT work_slug AS slug FROM work_search_lines
+    WHERE variant IN (${variants.map(() => "?").join(",")})
+  `).all(...variants);
+  const tokenTotals = getWorkTokenTotals(db);
+  const totalTokens = scopeSlugs.reduce((sum, row) => sum + (tokenTotals.get(row.slug) || 0), 0);
 
   const examples = [];
-  if (freq.length > 0) {
-    const worksToSearch = orderWorksForExamples(freq, workSlug);
-    for (const item of worksToSearch) {
-      const work = db.prepare("SELECT content FROM works WHERE slug=?").get(item.slug);
-      if (!work?.content) continue;
-      const text = work.content.replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/g, " ");
-      const regex = new RegExp(`\\b${word}\\b`, "gi");
-      let match;
-      let found = 0;
-      while ((match = regex.exec(text)) !== null && found < 2) {
-        const start = Math.max(0, match.index - 40);
-        const end = Math.min(text.length, match.index + word.length + 40);
-        let snippet = text.slice(start, end).replace(/\s+/g, " ").trim();
-        if (start > 0) snippet = "…" + snippet;
-        if (end < text.length) snippet += "…";
-        examples.push({ work:item.title, slug:item.slug, snippet });
-        found += 1;
-      }
-    }
+  // The reader may have any edition open (including First Folio); its own
+  // examples come first, then canonical works by frequency.
+  const preferredRows = workSlug ? fetchLines(db, [word], null, { workSlug, limit: 2 }) : [];
+  preferredRows.forEach((row) => {
+    examples.push({
+      work: row.title,
+      slug: row.slug,
+      lineNumber: row.lineNumber,
+      snippet: buildSnippet(row.lineText, word),
+    });
+  });
+  for (const row of perWork) {
+    if (examples.length >= 5) break;
+    if (row.slug === workSlug) continue;
+    fetchLines(db, [word], variants, { workSlug: row.slug, limit: 2 }).forEach((line) => {
+      if (examples.length >= 5) return;
+      examples.push({
+        work: line.title,
+        slug: line.slug,
+        lineNumber: line.lineNumber,
+        snippet: buildSnippet(line.lineText, word),
+      });
+    });
   }
 
   const glossary = resolveGlossary(db, {
-    word,
+    word: glossaryWord,
     workSlug,
     lineId,
     includeEditorial: !!req.user?.canPublishGlobal,
   });
 
   res.json({
-    word,
+    word: glossaryWord || word,
     totalCount,
-    worksAppearingIn,
-    relativeFrequency: totalCount / totalWords,
-    frequency: freq.map((item) => ({ title:item.title, slug:item.slug, count:item.count })),
-    examples: examples.slice(0, 5),
+    worksAppearingIn: perWork.length,
+    relativeFrequency: totalTokens > 0 ? totalCount / totalTokens : 0,
+    frequency: perWork.map((row) => ({ title: row.title, slug: row.slug, count: row.lines })),
+    examples,
     gloss: glossary.gloss,
     editorial: glossary.editorial,
     normalizedWord: glossary.normalizedWord,
   });
 });
 
-/* Bulk lookup — for autocomplete or batch */
+/* Autocomplete over the vocabulary table (derived from the line search index). */
 r.get("/", (req, res) => {
-  const prefix = sanitizeWord(req.query.prefix || "");
+  const prefix = normalizeWord(req.query.prefix || "");
   if (!prefix || prefix.length < 2) return res.json([]);
+  res.set("Cache-Control", "public, max-age=3600");
   const words = db.prepare(`
     SELECT word, SUM(count) as total FROM word_index
     WHERE word LIKE ? GROUP BY word ORDER BY total DESC LIMIT 20

@@ -1,56 +1,56 @@
 /**
  * scripts/build-word-index.js
- * Extracts all words from work content and builds a frequency index.
- * Run: node scripts/build-word-index.js
+ * Rebuilds the word_index vocabulary table (used for autocomplete) from
+ * work_search_lines.normalized_text, so its tokenization matches the search
+ * index and the concordance exactly ("lov'd" -> "lovd").
+ *
+ * Run after rebuild-search-index: node scripts/build-word-index.js
  */
 const Database = require("better-sqlite3");
 const path = require("path");
 const db = new Database(path.join(__dirname, "..", "data", "codex.db"));
+db.pragma("journal_mode = WAL");
 
-// Strip XML/HTML tags and extract plain text
-function stripTags(html) {
-  return (html || "").replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/g, " ");
+console.log("Building word index from work_search_lines...");
+
+const lineCount = db.prepare("SELECT count(*) AS n FROM work_search_lines").get().n;
+if (!lineCount) {
+  console.error("work_search_lines is empty — run `npm run build-search` first.");
+  process.exit(1);
 }
 
-// Tokenize into words (lowercase, letters only, 2+ chars)
-function tokenize(text) {
-  return text.toLowerCase().match(/[a-z']{2,}/g) || [];
-}
+const works = db.prepare(`
+  SELECT DISTINCT work_id AS workId, work_title AS title FROM work_search_lines
+`).all();
 
-console.log("Building word index...");
+const readLines = db.prepare(`
+  SELECT normalized_text AS text FROM work_search_lines
+  WHERE work_id = ? AND normalized_text != ''
+`);
+const insert = db.prepare("INSERT INTO word_index (word, work_id, count) VALUES (?,?,?)");
 
-// Clear existing index
-db.exec("DELETE FROM word_index");
+const globalFreq = new Map();
 
-const works = db.prepare("SELECT id, title, content FROM works WHERE content IS NOT NULL").all();
-const insert = db.prepare("INSERT OR REPLACE INTO word_index (word, work_id, count) VALUES (?,?,?)");
-
-const globalFreq = {};
-let totalWorks = 0;
-
-const insertMany = db.transaction((rows) => {
-  for (const r of rows) insert.run(r.word, r.workId, r.count);
-});
-
-for (const work of works) {
-  const text = stripTags(work.content);
-  const words = tokenize(text);
-  const freq = {};
-  for (const w of words) {
-    freq[w] = (freq[w] || 0) + 1;
-    globalFreq[w] = (globalFreq[w] || 0) + 1;
+const rebuild = db.transaction(() => {
+  db.exec("DELETE FROM word_index");
+  for (const work of works) {
+    const freq = new Map();
+    for (const { text } of readLines.iterate(work.workId)) {
+      for (const token of text.split(" ")) {
+        if (token.length < 2) continue;
+        freq.set(token, (freq.get(token) || 0) + 1);
+        globalFreq.set(token, (globalFreq.get(token) || 0) + 1);
+      }
+    }
+    for (const [word, count] of freq) insert.run(word, work.workId, count);
+    console.log(`  ${work.title}: ${freq.size} unique words`);
   }
+});
+rebuild();
 
-  const rows = Object.entries(freq).map(([word, count]) => ({ word, workId: work.id, count }));
-  insertMany(rows);
-  totalWorks++;
-  console.log(`  ${work.title}: ${words.length} words, ${Object.keys(freq).length} unique`);
-}
-
-console.log(`\nIndexed ${totalWorks} works, ${Object.keys(globalFreq).length} unique words.`);
-console.log(`Top 20 words across all works:`);
-const top = Object.entries(globalFreq).sort((a,b) => b[1]-a[1]).slice(0, 20);
-for (const [word, count] of top) console.log(`  ${word}: ${count}`);
+console.log(`\nIndexed ${works.length} works, ${globalFreq.size} unique words.`);
+const top = [...globalFreq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+console.log("Top 10:", top.map(([word, count]) => `${word}:${count}`).join(" "));
 
 db.close();
-console.log("\nWord index complete.");
+console.log("Word index complete.");

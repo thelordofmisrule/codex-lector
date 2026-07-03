@@ -39,6 +39,8 @@ export function AuthProvider({ children }) {
     document.documentElement.setAttribute("data-theme", themeMode);
     localStorage.setItem("codex-theme", themeMode);
     localStorage.setItem("codex-dark", String(themeMode === "dark"));
+    // Eva display fonts load on demand (see index.html bootstrap).
+    if (themeMode === "eva") window.__ensureEvaFonts?.();
   }, [themeMode]);
 
   const login = useCallback(async (u,p) => { const d=await api.login(u,p); setUser(d); return d; }, []);

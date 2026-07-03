@@ -36,7 +36,9 @@ if (process.env.NODE_ENV === "production") {
 
 /* ── Middleware ── */
 app.use(compression());
-app.use(express.json({ limit:"50mb" }));
+// Only the image-upload routes accept base64 payloads; everything else is small JSON.
+app.use(["/api/gallery", "/api/blog", "/api/places"], express.json({ limit: "50mb" }));
+app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
 // Security headers
@@ -289,340 +291,173 @@ if (process.env.NODE_ENV === "production") {
     });
   }
 
-  // Inject OG meta tags for blog posts (for Twitter/social embeds)
-  app.get("/blog/:id", (req, res) => {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) return res.send(renderHtml(defaultMeta(`${SITE_URL}/blog/${req.params.id}`)));
-    const post = db.prepare("SELECT p.title,p.body,p.header_image,u.display_name FROM blog_posts p JOIN users u ON p.user_id=u.id WHERE p.id=?").get(id);
-    if (!post) return res.send(renderHtml(defaultMeta(`${SITE_URL}/blog/${id}`)));
-
-    const title = esc(post.title);
-    const desc = esc(post.body.replace(/[#*_`\[\]]/g,"").slice(0,200));
-    const author = esc(post.display_name);
-    const url = `${SITE_URL}/blog/${id}`;
-    const imageUrl = socialImageUrl(post.header_image || "", post.title, post.body.replace(/[#*_`\[\]]/g,"").slice(0,160));
-
-    const meta = `
-    <meta name="description" content="${desc}" />
-    <link rel="canonical" href="${url}" />
-    ${verificationMeta()}
-    <meta property="og:type" content="article" />
-    <meta property="og:title" content="${title}" />
-    <meta property="og:description" content="${desc}" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:site_name" content="${SITE_NAME}" />
-    ${socialImageMeta(imageUrl, `${post.title} on ${SITE_NAME}`)}
-    <meta name="twitter:title" content="${title}" />
-    <meta name="twitter:description" content="${desc}" />
-    <meta name="author" content="${author}" />
-    <title>${title} — ${SITE_NAME}</title>`;
-
-    res.send(renderHtml(meta));
-  });
-
-  // OG meta for works
-  app.get("/read/:slug", (req, res) => {
-    const work = db.prepare("SELECT title,authors FROM works WHERE slug=?").get(req.params.slug);
-    if (!work) return res.send(renderHtml(defaultMeta(`${SITE_URL}/read/${req.params.slug}`)));
-    const title = esc(work.title);
-    const author = esc(work.authors || "William Shakespeare");
-    const url = `${SITE_URL}/read/${req.params.slug}`;
-    const imageUrl = socialImageUrl("", `${work.title} — ${SITE_NAME}`, `Read ${work.title} by ${work.authors || "William Shakespeare"} with scholarly annotations.`);
-
-    const meta = `
-    <meta name="description" content="Read ${title} by ${author} with scholarly annotations." />
-    <link rel="canonical" href="${url}" />
-    ${verificationMeta()}
-    <meta property="og:type" content="book" />
-    <meta property="og:title" content="${title} — ${SITE_NAME}" />
-    <meta property="og:description" content="Read ${title} by ${author} with scholarly annotations." />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:site_name" content="${SITE_NAME}" />
-    ${socialImageMeta(imageUrl, `${work.title} on ${SITE_NAME}`)}
-    <meta name="twitter:title" content="${title}" />
-    <meta name="twitter:description" content="Read ${title} with annotations on ${SITE_NAME}" />
-    <title>${title} — ${SITE_NAME}</title>`;
-
-    res.send(renderHtml(meta));
-  });
-
-  app.get("/forum/:id", (req, res) => {
-    const thread = db.prepare("SELECT t.title,t.body,u.display_name FROM forum_threads t JOIN users u ON u.id=t.user_id WHERE t.id=?").get(req.params.id);
-    if (!thread) return res.send(renderHtml(defaultMeta(`${SITE_URL}/forum/${req.params.id}`)));
-    const title = esc(thread.title);
-    const desc = esc((thread.body || "").replace(/[#*_`\[\]]/g, "").slice(0, 200));
-    const url = `${SITE_URL}/forum/${req.params.id}`;
-    const imageUrl = socialImageUrl("", thread.title, (thread.body || "").replace(/[#*_`\[\]]/g, "").slice(0, 160));
-    const meta = `
-    <meta name="description" content="${desc}" />
-    <link rel="canonical" href="${url}" />
-    ${verificationMeta()}
-    <meta property="og:type" content="article" />
-    <meta property="og:title" content="${title} — ${SITE_NAME}" />
-    <meta property="og:description" content="${desc}" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:site_name" content="${SITE_NAME}" />
-    ${socialImageMeta(imageUrl, `${thread.title} on ${SITE_NAME}`)}
-    <meta name="twitter:title" content="${title}" />
-    <meta name="twitter:description" content="${desc}" />
-    <meta name="author" content="${esc(thread.display_name)}" />
-    <title>${title} — ${SITE_NAME}</title>`;
-    res.send(renderHtml(meta));
-  });
-
-  app.get("/annotation/:id", (req, res) => {
-    const ann = db.prepare(`
-      SELECT a.note,a.selected_text,w.title AS work_title,u.display_name
-      FROM annotations a
-      JOIN works w ON w.id=a.work_id
-      JOIN users u ON u.id=a.user_id
-      WHERE a.id=?
-    `).get(req.params.id);
-    if (!ann) return res.send(renderHtml(defaultMeta(`${SITE_URL}/annotation/${req.params.id}`)));
-    const head = ann.selected_text ? `${ann.selected_text} — ${ann.work_title}` : `Annotation on ${ann.work_title}`;
-    const title = esc(head.slice(0, 120));
-    const desc = esc((ann.note || "").replace(/[#*_`\[\]]/g, "").slice(0, 200));
-    const url = `${SITE_URL}/annotation/${req.params.id}`;
-    const imageUrl = socialImageUrl("", head, (ann.note || "").replace(/[#*_`\[\]]/g, "").slice(0, 160));
-    const meta = `
-    <meta name="description" content="${desc}" />
-    <link rel="canonical" href="${url}" />
-    ${verificationMeta()}
-    <meta property="og:type" content="article" />
-    <meta property="og:title" content="${title} — ${SITE_NAME}" />
-    <meta property="og:description" content="${desc}" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:site_name" content="${SITE_NAME}" />
-    ${socialImageMeta(imageUrl, `${head} on ${SITE_NAME}`)}
-    <meta name="twitter:title" content="${title}" />
-    <meta name="twitter:description" content="${desc}" />
-    <meta name="author" content="${esc(ann.display_name)}" />
-    <title>${title} — ${SITE_NAME}</title>`;
-    res.send(renderHtml(meta));
-  });
-
-  app.get("/layers/:id", (req, res) => {
-    const layer = db.prepare(`
-      SELECT l.name,l.description,l.is_public,u.display_name
-      FROM annotation_layers l
-      JOIN users u ON u.id=l.user_id
-      WHERE l.id=?
-    `).get(req.params.id);
-    if (!layer || !layer.is_public) return res.send(renderHtml(defaultMeta(`${SITE_URL}/layers/${req.params.id}`)));
-    const title = esc(layer.name);
-    const desc = esc((layer.description || `Annotation layer by ${layer.display_name}`).slice(0, 200));
-    const url = `${SITE_URL}/layers/${req.params.id}`;
-    const imageUrl = socialImageUrl("", layer.name, layer.description || `Annotation layer by ${layer.display_name}`);
-    const meta = `
-    <meta name="description" content="${desc}" />
-    <link rel="canonical" href="${url}" />
-    ${verificationMeta()}
-    <meta property="og:type" content="article" />
-    <meta property="og:title" content="${title} — ${SITE_NAME}" />
-    <meta property="og:description" content="${desc}" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:site_name" content="${SITE_NAME}" />
-    ${socialImageMeta(imageUrl, `${layer.name} on ${SITE_NAME}`)}
-    <meta name="twitter:title" content="${title}" />
-    <meta name="twitter:description" content="${desc}" />
-    <meta name="author" content="${esc(layer.display_name)}" />
-    <title>${title} — ${SITE_NAME}</title>`;
-    res.send(renderHtml(meta));
-  });
-
-  app.get("/profile/:username", (req, res) => {
-    const profile = db.prepare("SELECT display_name,bio FROM users WHERE username=?").get(String(req.params.username || "").toLowerCase());
-    if (!profile) return res.send(renderHtml(defaultMeta(`${SITE_URL}/profile/${req.params.username}`)));
-    const title = esc(`${profile.display_name} Profile`);
-    const desc = esc((profile.bio || `${profile.display_name} on ${SITE_NAME}`).slice(0, 200));
-    const url = `${SITE_URL}/profile/${req.params.username}`;
-    const imageUrl = socialImageUrl("", `${profile.display_name} on ${SITE_NAME}`, profile.bio || `${profile.display_name} profile`);
-    const meta = `
-    <meta name="description" content="${desc}" />
-    <link rel="canonical" href="${url}" />
-    ${verificationMeta()}
-    <meta property="og:type" content="profile" />
-    <meta property="og:title" content="${title} — ${SITE_NAME}" />
-    <meta property="og:description" content="${desc}" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:site_name" content="${SITE_NAME}" />
-    ${socialImageMeta(imageUrl, `${profile.display_name} profile on ${SITE_NAME}`)}
-    <meta name="twitter:title" content="${title}" />
-    <meta name="twitter:description" content="${desc}" />
-    <title>${title} — ${SITE_NAME}</title>`;
-    res.send(renderHtml(meta));
-  });
-
-  app.get("/places", (req, res) => {
-    const url = `${SITE_URL}/places`;
-    const desc = "Explore a curated geography of real places mentioned across Shakespeare's works, with line-level citations.";
-    const imageUrl = socialImageUrl("", "Places in the Works", desc);
+  /* One renderer for every social/OG meta page; pages are declared as data.
+     Dynamic resolvers return { title, desc, ... } or null for the default meta. */
+  function sendMetaPage(res, url, page) {
+    const { title, desc, ogType = "website", author = "", image = "" } = page;
+    const fullTitle = `${title} — ${SITE_NAME}`;
+    const imageUrl = socialImageUrl(image, title, desc);
     const meta = `
     <meta name="description" content="${esc(desc)}" />
-    <link rel="canonical" href="${url}" />
+    <link rel="canonical" href="${esc(url)}" />
     ${verificationMeta()}
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="Places in the Works — ${SITE_NAME}" />
+    <meta property="og:type" content="${esc(ogType)}" />
+    <meta property="og:title" content="${esc(fullTitle)}" />
     <meta property="og:description" content="${esc(desc)}" />
-    <meta property="og:url" content="${url}" />
+    <meta property="og:url" content="${esc(url)}" />
     <meta property="og:site_name" content="${SITE_NAME}" />
-    ${socialImageMeta(imageUrl, `Places in the Works on ${SITE_NAME}`)}
-    <meta name="twitter:title" content="Places in the Works" />
+    ${socialImageMeta(imageUrl, `${title} on ${SITE_NAME}`)}
+    <meta name="twitter:title" content="${esc(title)}" />
     <meta name="twitter:description" content="${esc(desc)}" />
-    <title>Places in the Works — ${SITE_NAME}</title>`;
+    ${author ? `<meta name="author" content="${esc(author)}" />` : ""}
+    <title>${esc(fullTitle)}</title>`;
     res.send(renderHtml(meta));
+  }
+
+  function stripMarkdown(text, length) {
+    return String(text || "").replace(/[#*_`\[\]]/g, "").slice(0, length);
+  }
+
+  const STATIC_META_PAGES = {
+    "/places": { title: "Places in the Works", desc: "Explore a curated geography of real places mentioned across Shakespeare's works, with line-level citations." },
+    "/people": { title: "People in the Plays", desc: "Trace characters, scene-by-scene presence, and dialogue exchanges across Shakespeare's plays." },
+    "/words": { title: "Word Explorer", desc: "A full concordance of Shakespeare's works: trace any word by play, speaker, and line, with collocates and word forms." },
+    "/genealogy": { title: "Genealogy of the English Kings", desc: "Follow the dynastic relationships behind Shakespeare's English histories, from King John to Henry VIII." },
+    "/chat": { title: "Live Chat", desc: "Join live conversation in the lobby, the Year of Shakespeare room, or work-specific reading rooms." },
+    "/gallery": { title: "Shakespeare Art Gallery", desc: "Browse open-source Shakespeare artwork organized by work, with reusable tags for gallery, quote cards, and future sitewide image features." },
+    "/bookshelf": { title: "Shakespeare's Bookshelf", desc: "Browse the books, chronicles, poems, and source texts Shakespeare likely read or adapted, organized by the work they influenced." },
+    "/sources/lucrece": { title: "Sources of Lucrece", desc: "Primary and later source texts for Shakespeare's The Rape of Lucrece, including Ovid, Livy, Chaucer, and Painter.", ogType: "article" },
+  };
+
+  const DYNAMIC_META_PAGES = [
+    {
+      path: "/blog/:id",
+      resolve(req) {
+        const id = parseInt(req.params.id, 10);
+        if (Number.isNaN(id)) return null;
+        const post = db.prepare("SELECT p.title,p.body,p.header_image,u.display_name FROM blog_posts p JOIN users u ON p.user_id=u.id WHERE p.id=?").get(id);
+        if (!post) return null;
+        return {
+          title: post.title,
+          desc: stripMarkdown(post.body, 200),
+          author: post.display_name,
+          image: post.header_image || "",
+          ogType: "article",
+        };
+      },
+    },
+    {
+      path: "/read/:slug",
+      resolve(req) {
+        const work = db.prepare("SELECT title,authors FROM works WHERE slug=?").get(req.params.slug);
+        if (!work) return null;
+        return {
+          title: work.title,
+          desc: `Read ${work.title} by ${work.authors || "William Shakespeare"} with scholarly annotations.`,
+          ogType: "book",
+        };
+      },
+    },
+    {
+      path: "/forum/:id",
+      resolve(req) {
+        const thread = db.prepare("SELECT t.title,t.body,u.display_name FROM forum_threads t JOIN users u ON u.id=t.user_id WHERE t.id=?").get(req.params.id);
+        if (!thread) return null;
+        return {
+          title: thread.title,
+          desc: stripMarkdown(thread.body, 200),
+          author: thread.display_name,
+          ogType: "article",
+        };
+      },
+    },
+    {
+      path: "/annotation/:id",
+      resolve(req) {
+        const ann = db.prepare(`
+          SELECT a.note,a.selected_text,w.title AS work_title,u.display_name
+          FROM annotations a
+          JOIN works w ON w.id=a.work_id
+          JOIN users u ON u.id=a.user_id
+          WHERE a.id=?
+        `).get(req.params.id);
+        if (!ann) return null;
+        const head = ann.selected_text ? `${ann.selected_text} — ${ann.work_title}` : `Annotation on ${ann.work_title}`;
+        return {
+          title: head.slice(0, 120),
+          desc: stripMarkdown(ann.note, 200),
+          author: ann.display_name,
+          ogType: "article",
+        };
+      },
+    },
+    {
+      path: "/layers/:id",
+      resolve(req) {
+        const layer = db.prepare(`
+          SELECT l.name,l.description,l.is_public,u.display_name
+          FROM annotation_layers l
+          JOIN users u ON u.id=l.user_id
+          WHERE l.id=?
+        `).get(req.params.id);
+        if (!layer || !layer.is_public) return null;
+        return {
+          title: layer.name,
+          desc: (layer.description || `Annotation layer by ${layer.display_name}`).slice(0, 200),
+          author: layer.display_name,
+          ogType: "article",
+        };
+      },
+    },
+    {
+      path: "/profile/:username",
+      resolve(req) {
+        const profile = db.prepare("SELECT display_name,bio FROM users WHERE username=?").get(String(req.params.username || "").toLowerCase());
+        if (!profile) return null;
+        return {
+          title: `${profile.display_name} Profile`,
+          desc: (profile.bio || `${profile.display_name} on ${SITE_NAME}`).slice(0, 200),
+          ogType: "profile",
+        };
+      },
+    },
+    {
+      path: "/source-texts/:identifier",
+      resolve(req) {
+        const raw = String(req.params.identifier || "").trim();
+        const entry = db.prepare(`
+          SELECT title, author, slug
+          FROM source_texts
+          WHERE slug=? COLLATE NOCASE OR tcp_id=? COLLATE NOCASE
+          LIMIT 1
+        `).get(raw.toLowerCase(), raw.toUpperCase());
+        if (!entry) return null;
+        return {
+          title: entry.title,
+          desc: `${entry.title} on Codex Lector's Bookshelf, available as an EEBO-TCP source text.${entry.author ? ` ${entry.author}.` : ""}`,
+          author: entry.author || "EEBO-TCP source text",
+          ogType: "article",
+        };
+      },
+    },
+  ];
+
+  Object.entries(STATIC_META_PAGES).forEach(([routePath, page]) => {
+    app.get(routePath, (req, res) => sendMetaPage(res, `${SITE_URL}${routePath}`, page));
   });
 
-  app.get("/people", (req, res) => {
-    const url = `${SITE_URL}/people`;
-    const desc = "Trace characters, scene-by-scene presence, and dialogue exchanges across Shakespeare's plays.";
-    const imageUrl = socialImageUrl("", "People in the Plays", desc);
-    const meta = `
-    <meta name="description" content="${esc(desc)}" />
-    <link rel="canonical" href="${url}" />
-    ${verificationMeta()}
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="People in the Plays — ${SITE_NAME}" />
-    <meta property="og:description" content="${esc(desc)}" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:site_name" content="${SITE_NAME}" />
-    ${socialImageMeta(imageUrl, `People in the Plays on ${SITE_NAME}`)}
-    <meta name="twitter:title" content="People in the Plays" />
-    <meta name="twitter:description" content="${esc(desc)}" />
-    <title>People in the Plays — ${SITE_NAME}</title>`;
-    res.send(renderHtml(meta));
-  });
-
-  app.get("/genealogy", (req, res) => {
-    const url = `${SITE_URL}/genealogy`;
-    const desc = "Follow the dynastic relationships behind Shakespeare's English histories, from King John to Henry VIII.";
-    const imageUrl = socialImageUrl("", "Genealogy of the English Kings", desc);
-    const meta = `
-    <meta name="description" content="${esc(desc)}" />
-    <link rel="canonical" href="${url}" />
-    ${verificationMeta()}
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="Genealogy of the English Kings — ${SITE_NAME}" />
-    <meta property="og:description" content="${esc(desc)}" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:site_name" content="${SITE_NAME}" />
-    ${socialImageMeta(imageUrl, `Genealogy of the English Kings on ${SITE_NAME}`)}
-    <meta name="twitter:title" content="Genealogy of the English Kings" />
-    <meta name="twitter:description" content="${esc(desc)}" />
-    <title>Genealogy of the English Kings — ${SITE_NAME}</title>`;
-    res.send(renderHtml(meta));
-  });
-
-  app.get("/chat", (req, res) => {
-    const url = `${SITE_URL}/chat`;
-    const desc = "Join live conversation in the lobby, the Year of Shakespeare room, or work-specific reading rooms.";
-    const imageUrl = socialImageUrl("", "Live Chat", desc);
-    const meta = `
-    <meta name="description" content="${esc(desc)}" />
-    <link rel="canonical" href="${url}" />
-    ${verificationMeta()}
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="Live Chat — ${SITE_NAME}" />
-    <meta property="og:description" content="${esc(desc)}" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:site_name" content="${SITE_NAME}" />
-    ${socialImageMeta(imageUrl, `Live Chat on ${SITE_NAME}`)}
-    <meta name="twitter:title" content="Live Chat" />
-    <meta name="twitter:description" content="${esc(desc)}" />
-    <title>Live Chat — ${SITE_NAME}</title>`;
-    res.send(renderHtml(meta));
-  });
-
-  app.get("/gallery", (req, res) => {
-    const url = `${SITE_URL}/gallery`;
-    const desc = "Browse open-source Shakespeare artwork organized by work, with reusable tags for gallery, quote cards, and future sitewide image features.";
-    const imageUrl = socialImageUrl("", "Shakespeare Art Gallery", desc);
-    const meta = `
-    <meta name="description" content="${esc(desc)}" />
-    <link rel="canonical" href="${url}" />
-    ${verificationMeta()}
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="Shakespeare Art Gallery — ${SITE_NAME}" />
-    <meta property="og:description" content="${esc(desc)}" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:site_name" content="${SITE_NAME}" />
-    ${socialImageMeta(imageUrl, `Shakespeare Art Gallery on ${SITE_NAME}`)}
-    <meta name="twitter:title" content="Shakespeare Art Gallery" />
-    <meta name="twitter:description" content="${esc(desc)}" />
-    <title>Shakespeare Art Gallery — ${SITE_NAME}</title>`;
-    res.send(renderHtml(meta));
-  });
-
-  app.get("/bookshelf", (req, res) => {
-    const url = `${SITE_URL}/bookshelf`;
-    const desc = "Browse the books, chronicles, poems, and source texts Shakespeare likely read or adapted, organized by the work they influenced.";
-    const imageUrl = socialImageUrl("", "Shakespeare's Bookshelf", desc);
-    const meta = `
-    <meta name="description" content="${esc(desc)}" />
-    <link rel="canonical" href="${url}" />
-    ${verificationMeta()}
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="Shakespeare's Bookshelf — ${SITE_NAME}" />
-    <meta property="og:description" content="${esc(desc)}" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:site_name" content="${SITE_NAME}" />
-    ${socialImageMeta(imageUrl, `Shakespeare's Bookshelf on ${SITE_NAME}`)}
-    <meta name="twitter:title" content="Shakespeare's Bookshelf" />
-    <meta name="twitter:description" content="${esc(desc)}" />
-    <title>Shakespeare's Bookshelf — ${SITE_NAME}</title>`;
-    res.send(renderHtml(meta));
-  });
-
-  app.get("/sources/lucrece", (req, res) => {
-    const url = `${SITE_URL}/sources/lucrece`;
-    const desc = "Primary and later source texts for Shakespeare's The Rape of Lucrece, including Ovid, Livy, Chaucer, and Painter.";
-    const imageUrl = socialImageUrl("", "Sources of Lucrece", desc);
-    const meta = `
-    <meta name="description" content="${esc(desc)}" />
-    <link rel="canonical" href="${url}" />
-    ${verificationMeta()}
-    <meta property="og:type" content="article" />
-    <meta property="og:title" content="Sources of Lucrece — ${SITE_NAME}" />
-    <meta property="og:description" content="${esc(desc)}" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:site_name" content="${SITE_NAME}" />
-    ${socialImageMeta(imageUrl, `Sources of Lucrece on ${SITE_NAME}`)}
-    <meta name="twitter:title" content="Sources of Lucrece" />
-    <meta name="twitter:description" content="${esc(desc)}" />
-    <title>Sources of Lucrece — ${SITE_NAME}</title>`;
-    res.send(renderHtml(meta));
-  });
-
-  app.get("/source-texts/:identifier", (req, res) => {
-    const raw = String(req.params.identifier || "").trim();
-    const entry = db.prepare(`
-      SELECT title, author, tcp_id, slug
-      FROM source_texts
-      WHERE slug=? COLLATE NOCASE OR tcp_id=? COLLATE NOCASE
-      LIMIT 1
-    `).get(raw.toLowerCase(), raw.toUpperCase());
-    if (!entry) return res.send(renderHtml(defaultMeta(`${SITE_URL}/source-texts/${raw}`)));
-
-    const title = esc(entry.title);
-    const author = esc(entry.author || "EEBO-TCP source text");
-    const url = `${SITE_URL}/source-texts/${entry.slug}`;
-    const desc = `${entry.title} on Codex Lector's Bookshelf, available as an EEBO-TCP source text.${entry.author ? ` ${entry.author}.` : ""}`;
-    const imageUrl = socialImageUrl("", `${entry.title} — ${SITE_NAME}`, desc);
-    const meta = `
-    <meta name="description" content="${esc(desc)}" />
-    <link rel="canonical" href="${url}" />
-    ${verificationMeta()}
-    <meta property="og:type" content="article" />
-    <meta property="og:title" content="${title} — ${SITE_NAME}" />
-    <meta property="og:description" content="${esc(desc)}" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:site_name" content="${SITE_NAME}" />
-    ${socialImageMeta(imageUrl, `${entry.title} on ${SITE_NAME}`)}
-    <meta name="twitter:title" content="${title}" />
-    <meta name="twitter:description" content="${esc(desc)}" />
-    <meta name="author" content="${author}" />
-    <title>${title} — ${SITE_NAME}</title>`;
-    res.send(renderHtml(meta));
+  DYNAMIC_META_PAGES.forEach(({ path: routePath, resolve }) => {
+    app.get(routePath, (req, res) => {
+      const url = `${SITE_URL}${req.path}`;
+      let page = null;
+      try {
+        page = resolve(req);
+      } catch (err) {
+        console.error(`Meta resolve failed for ${routePath}:`, err);
+      }
+      if (!page) return res.send(renderHtml(defaultMeta(url)));
+      sendMetaPage(res, url, page);
+    });
   });
 
   // All other routes — serve SPA

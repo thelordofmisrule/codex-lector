@@ -499,21 +499,32 @@ function semanticHeuristicAdjustments(row, profile, workBoost = 0) {
   return adjustment;
 }
 
-function selectWorkTextRows(workSlugs) {
-  if (!Array.isArray(workSlugs) || !workSlugs.length) return [];
-  const placeholders = workSlugs.map(() => "?").join(",");
-  return db.prepare(`
-    SELECT slug, title, content
-    FROM works
-    WHERE slug IN (${placeholders})
-  `).all(...workSlugs);
+/* Normalizing a full work text costs megabytes of regex; the corpus only
+   changes on re-import (which restarts the server), so cache per slug. */
+const normalizedWorkTextCache = new Map();
+
+function getNormalizedWorkTexts(workSlugs) {
+  const missing = workSlugs.filter((slug) => !normalizedWorkTextCache.has(slug));
+  if (missing.length) {
+    const placeholders = missing.map(() => "?").join(",");
+    db.prepare(`
+      SELECT slug, title, content
+      FROM works
+      WHERE slug IN (${placeholders})
+    `).all(...missing).forEach((row) => {
+      normalizedWorkTextCache.set(row.slug, normalizeSemanticText(`${row.title || ""} ${row.content || ""}`));
+    });
+  }
+  return workSlugs
+    .filter((slug) => normalizedWorkTextCache.has(slug))
+    .map((slug) => ({ slug, combined: normalizedWorkTextCache.get(slug) }));
 }
 
 function buildSemanticWorkBoosts(workSlugs, profile) {
-  const rows = selectWorkTextRows(workSlugs);
+  const rows = getNormalizedWorkTexts(Array.isArray(workSlugs) ? workSlugs : []);
   const boosts = new Map();
   rows.forEach((row) => {
-    const combined = normalizeSemanticText(`${row.title || ""} ${row.content || ""}`);
+    const combined = row.combined;
     let boost = 0;
     let nameMatches = 0;
     profile.namedTerms.forEach((term) => {

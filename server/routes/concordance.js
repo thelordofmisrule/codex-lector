@@ -2,19 +2,19 @@ const express = require("express");
 const db = require("../db");
 const { resolveGlossary } = require("../lib/glossary");
 const { compositionYear } = require("../lib/workChronology");
+const {
+  normalizeWord,
+  scopeVariants,
+  variantFilter,
+  ftsMatchExpression,
+  countLines,
+  fetchLines,
+  countLinesPerWork,
+  getWorkTokenTotals,
+  getGlobalTokenFreq,
+} = require("../lib/corpus");
 
 const r = express.Router();
-
-/*
- * Concordance queries run against work_search_lines / work_search_fts, whose
- * normalized_text strips punctuation and apostrophes ("lov'd" -> "lovd").
- * Words handled here are normalized the same way.
- */
-
-const SCOPES = {
-  canon: ["ps", "ps-poems"],
-  all: ["ps", "ps-poems", "ps-apocrypha"],
-};
 
 // Above this many matching lines we fall back to SQL aggregates only
 // (per-work and per-speaker counts) and skip occurrence counts and collocates.
@@ -37,25 +37,6 @@ const STOPWORDS = new Set([
   "himself", "herself", "myself", "thyself", "itself", "yourself",
 ]);
 
-function normalizeWord(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[’']/g, "")
-    .replace(/[^a-z]/g, "");
-}
-
-function scopeVariants(scope) {
-  return SCOPES[scope === "all" ? "all" : "canon"];
-}
-
-function variantPlaceholders(variants) {
-  return variants.map(() => "?").join(",");
-}
-
-function ftsMatchExpression(forms) {
-  return `normalized_text : (${forms.map((form) => `"${form}"`).join(" OR ")})`;
-}
-
 function parseForms(rawForms, word) {
   const forms = new Set([word]);
   String(rawForms || "")
@@ -64,44 +45,6 @@ function parseForms(rawForms, word) {
     .filter((form) => form.length >= 2 && form.length <= 30)
     .forEach((form) => forms.add(form));
   return [...forms].filter((form) => form.length >= 2);
-}
-
-/* --- corpus token totals per work (for per-10k rates), computed once --- */
-let workTokenTotals = null;
-function getWorkTokenTotals() {
-  if (!workTokenTotals) {
-    workTokenTotals = new Map();
-    db.prepare(`
-      SELECT work_slug AS slug,
-             SUM(length(normalized_text) - length(replace(normalized_text, ' ', '')) + 1) AS tokens
-      FROM work_search_lines
-      WHERE normalized_text != ''
-      GROUP BY work_slug
-    `).all().forEach((row) => workTokenTotals.set(row.slug, row.tokens || 0));
-  }
-  return workTokenTotals;
-}
-
-/* --- global token frequencies (collocate background), computed once --- */
-let globalTokenFreq = null;
-function getGlobalTokenFreq() {
-  if (!globalTokenFreq) {
-    const freq = new Map();
-    let total = 0;
-    const rows = db.prepare(`
-      SELECT normalized_text AS text FROM work_search_lines
-      WHERE variant IN ('ps','ps-poems') AND normalized_text != ''
-    `).all();
-    rows.forEach(({ text }) => {
-      text.split(" ").forEach((token) => {
-        if (token.length < 2) return;
-        freq.set(token, (freq.get(token) || 0) + 1);
-        total += 1;
-      });
-    });
-    globalTokenFreq = { freq, total: Math.max(1, total) };
-  }
-  return globalTokenFreq;
 }
 
 /* --- word form suggestions, verified against the corpus --- */
@@ -137,71 +80,13 @@ function candidateForms(word) {
 }
 
 function suggestForms(word, variants) {
-  const stmt = db.prepare(`
-    SELECT count(*) AS n
-    FROM work_search_fts f
-    JOIN work_search_lines l ON l.id = f.rowid
-    WHERE work_search_fts MATCH ? AND l.variant IN (${variantPlaceholders(variants)})
-  `);
   const found = [];
   candidateForms(word).forEach((form) => {
-    const n = stmt.get(ftsMatchExpression([form]), ...variants)?.n || 0;
+    const n = countLines(db, [form], variants);
     if (n > 0) found.push({ form, lines: n });
   });
   found.sort((a, b) => b.lines - a.lines);
   return found;
-}
-
-/* --- matched line retrieval --- */
-function countMatchingLines(forms, variants, { workSlug = "", speaker = "" } = {}) {
-  const params = [ftsMatchExpression(forms), ...variants];
-  let where = `work_search_fts MATCH ? AND l.variant IN (${variantPlaceholders(variants)})`;
-  if (workSlug) {
-    where += " AND l.work_slug = ?";
-    params.push(workSlug);
-  }
-  if (speaker) {
-    where += " AND l.speaker = ?";
-    params.push(speaker);
-  }
-  return db.prepare(`
-    SELECT count(*) AS n
-    FROM work_search_fts f
-    JOIN work_search_lines l ON l.id = f.rowid
-    WHERE ${where}
-  `).get(...params)?.n || 0;
-}
-
-const LINE_COLUMNS = `
-  l.work_slug AS slug, l.work_title AS title, l.category, l.variant,
-  l.line_number AS lineNumber, l.display_line_number AS displayLineNumber,
-  l.line_text AS lineText, l.normalized_text AS normalizedText,
-  l.speaker, l.act_label AS actLabel, l.scene_label AS sceneLabel
-`;
-
-function fetchMatchingLines(forms, variants, { workSlug = "", speaker = "", limit = 0, offset = 0 } = {}) {
-  const params = [ftsMatchExpression(forms), ...variants];
-  let where = `work_search_fts MATCH ? AND l.variant IN (${variantPlaceholders(variants)})`;
-  if (workSlug) {
-    where += " AND l.work_slug = ?";
-    params.push(workSlug);
-  }
-  if (speaker) {
-    where += " AND l.speaker = ?";
-    params.push(speaker);
-  }
-  let sql = `
-    SELECT ${LINE_COLUMNS}
-    FROM work_search_fts f
-    JOIN work_search_lines l ON l.id = f.rowid
-    WHERE ${where}
-    ORDER BY l.work_id, l.line_number
-  `;
-  if (limit > 0) {
-    sql += " LIMIT ? OFFSET ?";
-    params.push(limit, offset);
-  }
-  return db.prepare(sql).all(...params);
 }
 
 /* --- summary aggregation --- */
@@ -221,7 +106,7 @@ function rememberSummary(key, value) {
 }
 
 function buildWorkRow(slug, title, category, occurrences, lines) {
-  const tokens = getWorkTokenTotals().get(slug) || 0;
+  const tokens = getWorkTokenTotals(db).get(slug) || 0;
   return {
     slug,
     title,
@@ -269,7 +154,7 @@ function summarizeFromRows(rows, forms) {
     });
   });
 
-  const { freq: bgFreq, total: bgTotal } = getGlobalTokenFreq();
+  const { freq: bgFreq, total: bgTotal } = getGlobalTokenFreq(db);
   const windowTokens = rows.reduce((sum, row) => sum + row.normalizedText.split(" ").length, 0) || 1;
   const collocates = [...collocateCounts.entries()]
     .filter(([, count]) => count >= 3)
@@ -302,25 +187,18 @@ function summarizeFromRows(rows, forms) {
 }
 
 function summarizeAggregateOnly(forms, variants) {
-  const match = ftsMatchExpression(forms);
-  const perWork = db.prepare(`
-    SELECT l.work_slug AS slug, l.work_title AS title, l.category, count(*) AS lines
-    FROM work_search_fts f
-    JOIN work_search_lines l ON l.id = f.rowid
-    WHERE work_search_fts MATCH ? AND l.variant IN (${variantPlaceholders(variants)})
-    GROUP BY l.work_slug
-    ORDER BY lines DESC
-  `).all(match, ...variants);
+  const perWork = countLinesPerWork(db, forms, variants);
 
+  const variant = variantFilter(variants);
   const perSpeaker = db.prepare(`
     SELECT l.speaker, count(*) AS lines, count(DISTINCT l.work_slug) AS workCount
     FROM work_search_fts f
     JOIN work_search_lines l ON l.id = f.rowid
-    WHERE work_search_fts MATCH ? AND l.variant IN (${variantPlaceholders(variants)})
+    WHERE work_search_fts MATCH ?${variant.sql}
     GROUP BY l.speaker
     ORDER BY lines DESC
     LIMIT 20
-  `).all(match, ...variants);
+  `).all(ftsMatchExpression(forms), ...variant.params);
 
   const lines = perWork.reduce((sum, row) => sum + row.lines, 0);
   return {
@@ -343,10 +221,10 @@ function getSummary(forms, scope) {
   if (summaryCache.has(key)) return summaryCache.get(key);
 
   const variants = scopeVariants(scope);
-  const totalLines = countMatchingLines(forms, variants);
+  const totalLines = countLines(db, forms, variants);
   const summary = totalLines > FULL_SCAN_LINE_LIMIT
     ? summarizeAggregateOnly(forms, variants)
-    : summarizeFromRows(fetchMatchingLines(forms, variants), forms);
+    : summarizeFromRows(fetchLines(db, forms, variants), forms);
 
   rememberSummary(key, summary);
   return summary;
@@ -357,6 +235,7 @@ r.get("/:word", (req, res) => {
   const word = normalizeWord(req.params.word);
   if (!word || word.length < 2) return res.status(400).json({ error: "Word too short." });
 
+  res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=3600");
   const scope = req.query.scope === "all" ? "all" : "canon";
   const variants = scopeVariants(scope);
   const forms = parseForms(req.query.forms, word);
@@ -364,9 +243,9 @@ r.get("/:word", (req, res) => {
   try {
     const suggestedForms = suggestForms(word, variants);
     const summary = getSummary(forms, scope);
-    const totals = getWorkTokenTotals();
+    const totals = getWorkTokenTotals(db);
     const scopeTokens = db.prepare(`
-      SELECT DISTINCT work_slug AS slug FROM work_search_lines WHERE variant IN (${variantPlaceholders(variants)})
+      SELECT DISTINCT work_slug AS slug FROM work_search_lines WHERE variant IN (${variants.map(() => "?").join(",")})
     `).all(...variants).reduce((sum, row) => sum + (totals.get(row.slug) || 0), 0);
 
     const glossary = resolveGlossary(db, {
@@ -404,6 +283,7 @@ r.get("/:word/lines", (req, res) => {
   const word = normalizeWord(req.params.word);
   if (!word || word.length < 2) return res.status(400).json({ error: "Word too short." });
 
+  res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=3600");
   const scope = req.query.scope === "all" ? "all" : "canon";
   const variants = scopeVariants(scope);
   const forms = parseForms(req.query.forms, word);
@@ -413,8 +293,8 @@ r.get("/:word/lines", (req, res) => {
   const pageSize = Math.min(100, Math.max(10, parseInt(req.query.pageSize || "50", 10) || 50));
 
   try {
-    const total = countMatchingLines(forms, variants, { workSlug, speaker });
-    const rows = fetchMatchingLines(forms, variants, {
+    const total = countLines(db, forms, variants, { workSlug, speaker });
+    const rows = fetchLines(db, forms, variants, {
       workSlug,
       speaker,
       limit: pageSize,
