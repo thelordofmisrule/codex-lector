@@ -148,7 +148,7 @@ function SearchMatchButton({ resultSlug, match, query, exact, nav, semantic = fa
     <button
       key={match.id}
       className="btn btn-ghost"
-      onClick={() => nav(`/read/${match.resultSlug || resultSlug}${match.lineNumber ? `?line=${match.lineNumber}` : ""}`)}
+      onClick={() => nav(`/read/${match.resultSlug || resultSlug}${(match.displayLineNumber || match.lineNumber) ? `?line=${match.displayLineNumber || match.lineNumber}` : ""}`)}
       style={{
         display: "block",
         width: "100%",
@@ -517,7 +517,7 @@ export default function SearchPage() {
                 <div>
                   <button
                     className="btn btn-ghost"
-                    onClick={() => nav(`/read/${result.slug}${result.matches[0]?.lineNumber ? `?line=${result.matches[0].lineNumber}` : ""}`)}
+                    onClick={() => nav(`/read/${result.slug}${(result.matches[0]?.displayLineNumber || result.matches[0]?.lineNumber) ? `?line=${result.matches[0].displayLineNumber || result.matches[0].lineNumber}` : ""}`)}
                     style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 500, color: "var(--accent)", padding: 0, marginBottom: 4 }}
                   >
                     {result.title}

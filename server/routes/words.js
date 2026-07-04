@@ -67,7 +67,7 @@ r.get("/:word", (req, res) => {
     examples.push({
       work: row.title,
       slug: row.slug,
-      lineNumber: row.lineNumber,
+      lineNumber: row.displayLineNumber || row.lineNumber,
       snippet: buildSnippet(row.lineText, word),
     });
   });
@@ -79,7 +79,7 @@ r.get("/:word", (req, res) => {
       examples.push({
         work: line.title,
         slug: line.slug,
-        lineNumber: line.lineNumber,
+        lineNumber: line.displayLineNumber || line.lineNumber,
         snippet: buildSnippet(line.lineText, word),
       });
     });

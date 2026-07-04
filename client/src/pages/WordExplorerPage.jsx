@@ -290,7 +290,7 @@ function KwicLine({ line, formSet, workSlug }) {
         </div>
         <Link
           className="btn btn-ghost btn-sm"
-          to={`/read/${line.slug}?line=${Math.max(1, line.lineNumber || 1)}`}
+          to={`/read/${line.slug}?line=${Math.max(1, line.displayLineNumber || line.lineNumber || 1)}`}
           style={{ color: "var(--accent)", whiteSpace: "nowrap" }}
         >
           Open Text →
@@ -323,6 +323,13 @@ export default function WordExplorerPage() {
   const [linesData, setLinesData] = useState(null);
   const [linesLoading, setLinesLoading] = useState(false);
   const [error, setError] = useState("");
+  const linesSectionRef = useRef(null);
+
+  // Picking a work or speaker filters the line list, which lives below the
+  // fold — bring it into view so the click visibly does something.
+  function snapToLines() {
+    setTimeout(() => linesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  }
 
   function updateParams(changes) {
     const next = new URLSearchParams(searchParams);
@@ -530,7 +537,10 @@ export default function WordExplorerPage() {
             <TimelineChart
               perWork={summary.perWork}
               selectedWork={workFilter}
-              onSelectWork={(slug) => updateParams({ work: slug, speaker: "" })}
+              onSelectWork={(slug) => {
+                updateParams({ work: slug, speaker: "" });
+                if (slug) snapToLines();
+              }}
             />
           </div>
 
@@ -544,7 +554,10 @@ export default function WordExplorerPage() {
                   return (
                     <button
                       key={work.slug}
-                      onClick={() => updateParams({ work: active ? "" : work.slug, speaker: "" })}
+                      onClick={() => {
+                        updateParams({ work: active ? "" : work.slug, speaker: "" });
+                        if (!active) snapToLines();
+                      }}
                       style={{
                         position: "relative",
                         display: "flex",
@@ -587,7 +600,10 @@ export default function WordExplorerPage() {
                   return (
                     <button
                       key={entry.speaker}
-                      onClick={() => updateParams({ speaker: active ? "" : entry.speaker })}
+                      onClick={() => {
+                        updateParams({ speaker: active ? "" : entry.speaker });
+                        if (!active) snapToLines();
+                      }}
                       style={{
                         position: "relative",
                         display: "flex",
@@ -652,14 +668,14 @@ export default function WordExplorerPage() {
             </div>
           )}
 
-          <div style={{ display: "grid", gap: 10 }}>
+          <div ref={linesSectionRef} style={{ display: "grid", gap: 10, scrollMarginTop: 80 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontFamily: "var(--font-display)", fontSize: 20, color: "var(--accent)" }}>
                   Every Line
                 </div>
                 <div style={{ fontSize: 13.5, color: "var(--text-muted)" }}>
-                  {linesData ? `${linesData.total.toLocaleString()} lines` : "…"}
+                  {linesData ? `${linesData.total.toLocaleString()} ${linesData.total === 1 ? "line" : "lines"}` : "…"}
                   {selectedWorkTitle && workFilter ? ` in ${selectedWorkTitle}` : ""}
                   {speakerFilter ? ` spoken by ${speakerFilter}` : ""}
                 </div>

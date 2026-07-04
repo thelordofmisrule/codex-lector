@@ -650,6 +650,23 @@ function countRenderableLines(data) {
   }, 0);
 }
 
+/* Final printed line number (XML @n aware) — the unit used by ?line= links
+   and reading progress, as opposed to the renderable-line count above. */
+function lastPrintedLineNumber(data) {
+  if (!data) return 0;
+  const lineGroups = data.type === "poetry"
+    ? (data.sections || []).map((section) => section.lines || [])
+    : (data.lines || []).filter((item) => item.type === "speech").map((item) => item.lines || []);
+  let lineNum = 0;
+  lineGroups.forEach((lines) => {
+    lines.forEach((line) => {
+      if (line.type === "stagedir" || !line.text) return;
+      lineNum = Number.isFinite(line.n) ? line.n : lineNum + 1;
+    });
+  });
+  return lineNum;
+}
+
 function getInitialPlayItemCount(data, resumeLine, bookmark) {
   if (!data?.lines?.length) return 0;
   let target = Math.min(INITIAL_READER_ITEMS, data.lines.length);
@@ -660,15 +677,20 @@ function getInitialPlayItemCount(data, resumeLine, bookmark) {
   }
 
   if (resumeLine > 0) {
-    let renderedLines = 0;
+    // Walk with the same printed-number logic the renderer uses (XML @n when
+    // present), so the requested line is actually rendered before we scroll.
+    let lineNum = 0;
     let foundTarget = false;
     for (let index = 0; index < data.lines.length; index += 1) {
       const item = data.lines[index];
       if (item.type === "speech") {
-        renderedLines += (item.lines || []).filter((line) => line.type !== "stagedir" && line.text).length;
+        for (const line of item.lines || []) {
+          if (line.type === "stagedir" || !line.text) continue;
+          lineNum = Number.isFinite(line.n) ? line.n : lineNum + 1;
+        }
       }
-      if (renderedLines >= resumeLine) {
-        target = Math.max(target, index + 1);
+      if (lineNum >= resumeLine) {
+        target = Math.max(target, Math.min(data.lines.length, index + 2));
         foundTarget = true;
         break;
       }
@@ -1426,7 +1448,7 @@ function AnnotatedLine({ lineId, text, annotsByLine, showAnnots, userId, isAdmin
   const showProsodyTools = prosodyMode && prosodyMode !== "off";
   const hasVisibleAnnotations = lineAnnots.length > 0;
   return (
-    <div className="reader-annotated-line" data-lineid={lineId} id={lineId} style={{ display:"flex", gap:12, alignItems:"flex-start", position:"relative" }}>
+    <div className="reader-annotated-line" data-lineid={lineId} data-linenum={lineNum || undefined} id={lineId} style={{ display:"flex", gap:12, alignItems:"flex-start", position:"relative" }}>
       <div className="reader-line-meta" style={{ width:52, textAlign:"right", flexShrink:0, fontSize:"0.75em", color:"var(--text-light)", fontFamily:"var(--font-mono)", userSelect:"none", paddingTop:2, position:"relative", display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4 }}>
         <div style={{ position:"relative", width:"100%" }}>
           {showNum && lineNum}
@@ -2411,7 +2433,8 @@ export default function ReaderPage() {
         closestIndex = i;
       }
     });
-    return closestIndex + 1;
+    const num = parseInt(lines[closestIndex]?.dataset?.linenum || "", 10);
+    return Number.isFinite(num) ? num : closestIndex + 1;
   }, []);
 
   const getCurrentViewportLineMeta = useCallback(() => {
@@ -2585,7 +2608,8 @@ export default function ReaderPage() {
     if (!user || !work || !parsed) return undefined;
     progressRef.current = {
       maxLine: 0,
-      total: countRenderableLines(parsed),
+      maxLineNumber: 0,
+      total: lastPrintedLineNumber(parsed) || countRenderableLines(parsed),
       slug,
     };
     let frameId = null;
@@ -2608,6 +2632,12 @@ export default function ReaderPage() {
 
       if (maxVisible > progressRef.current.maxLine) {
         progressRef.current.maxLine = maxVisible;
+        // Report progress in printed line numbers so resume links land right.
+        const num = parseInt(lines[maxVisible - 1]?.dataset?.linenum || "", 10);
+        progressRef.current.maxLineNumber = Math.max(
+          progressRef.current.maxLineNumber,
+          Number.isFinite(num) ? num : maxVisible,
+        );
       }
     };
 
@@ -2617,9 +2647,10 @@ export default function ReaderPage() {
     };
 
     const saveProgress = () => {
-      const { maxLine, total, slug: s } = progressRef.current;
-      if (maxLine > 0 && s) {
-        progApi.update(s, { linesRead: maxLine, totalLines: total, maxLineReached: maxLine }).catch(()=>{});
+      const { maxLine, maxLineNumber, total, slug: s } = progressRef.current;
+      const lineNumber = maxLineNumber || maxLine;
+      if (lineNumber > 0 && s) {
+        progApi.update(s, { linesRead: lineNumber, totalLines: total, maxLineReached: lineNumber }).catch(()=>{});
       }
     };
 
@@ -2645,15 +2676,53 @@ export default function ReaderPage() {
     }
   }, [bookmark, loading, resumeLine]);
 
-  // Resume from explicit line number in URL query (?line=123)
+  // Resume from explicit line number in URL query (?line=123). The number is
+  // the printed line number (XML @n), which is what search, the concordance,
+  // and the people pages link with — not the element's position in the DOM.
+  // Late-loading content (virtualized items, illustrations) shifts layout, so
+  // re-assert the scroll until it sticks — unless the user scrolls themselves.
   useEffect(() => {
-    if (loading || !resumeLine) return;
-    setTimeout(() => {
+    if (loading || !resumeLine) return undefined;
+    let cancelled = false;
+    const timers = [];
+    const cancelOnUserScroll = () => { cancelled = true; };
+    const userEvents = ["wheel", "touchmove", "keydown"];
+    userEvents.forEach((type) => window.addEventListener(type, cancelOnUserScroll, { passive: true }));
+
+    const findTarget = () => {
       const lines = document.querySelectorAll("[data-lineid]");
-      if (!lines.length) return;
-      const target = lines[Math.min(lines.length - 1, Math.max(0, resumeLine - 1))];
-      if (target) target.scrollIntoView({ behavior:"smooth", block:"center" });
-    }, 250);
+      if (!lines.length) return null;
+      let target = null;
+      let bestNum = -Infinity;
+      for (const el of lines) {
+        const num = parseInt(el.dataset.linenum || "", 10);
+        if (!Number.isFinite(num)) continue;
+        if (num === resumeLine) return el;
+        if (num < resumeLine && num > bestNum) {
+          bestNum = num;
+          target = el;
+        }
+      }
+      return target || lines[Math.min(lines.length - 1, Math.max(0, resumeLine - 1))];
+    };
+
+    [250, 800, 1600, 2600].forEach((delay, attempt, all) => {
+      timers.push(setTimeout(() => {
+        if (cancelled) return;
+        const target = findTarget();
+        if (!target) return;
+        const rect = target.getBoundingClientRect();
+        const offCenter = Math.abs(rect.top + rect.height / 2 - window.innerHeight / 2);
+        if (attempt > 0 && offCenter < 60) return;
+        target.scrollIntoView({ behavior: attempt === all.length - 1 ? "smooth" : "auto", block: "center" });
+      }, delay));
+    });
+
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+      userEvents.forEach((type) => window.removeEventListener(type, cancelOnUserScroll));
+    };
   }, [loading, slug, resumeLine, work?.id]);
 
   const handleSelect = useCallback(async () => {
